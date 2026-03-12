@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/playwright:v1.40.0-jammy
+
+WORKDIR /tests
+
+COPY . .
+
+RUN npm ci 2>/dev/null || echo "No package.json yet"
+
+CMD ["npx", "playwright", "test"]

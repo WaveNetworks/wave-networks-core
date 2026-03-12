@@ -1,0 +1,89 @@
+<?php
+/**
+ * common_auth.php
+ * Bootstrap for auth pages (login, register, forgot, reset).
+ * Same as common.php but WITHOUT session guard — unauthenticated users can access these.
+ */
+
+// 1. Composer autoload
+require_once __DIR__ . '/../vendor/autoload.php';
+
+// 2. Load config (config.php or env fallback for Docker)
+$configFile = __DIR__ . '/../config/config.php';
+if (file_exists($configFile)) {
+    include($configFile);
+} else {
+    // Docker / CI: read from container environment
+    $dbHostSpec     = getenv('DB_HOST_MAIN')       ?: 'localhost';
+    $dbInstance     = getenv('DB_NAME_MAIN')       ?: 'wncore_main';
+    $dbUserName     = getenv('DB_USER')            ?: 'root';
+    $dbPassword     = getenv('DB_PASSWORD')        ?: '';
+    $hiddenhash     = getenv('HIDDEN_HASH')        ?: 'dev_hash';
+    $app_secret     = getenv('APP_SECRET')         ?: 'dev_secret';
+    $files_location = getenv('FILES_LOCATION')     ?: '/var/files/';
+    $smtp_host      = getenv('SMTP_HOST')          ?: 'mailhog';
+    $smtp_port      = getenv('SMTP_PORT')          ?: 1025;
+    $smtp_user      = getenv('SMTP_USER')          ?: '';
+    $smtp_pass      = getenv('SMTP_PASS')          ?: '';
+    $mail_from      = getenv('MAIL_FROM')          ?: 'noreply@localhost';
+    $mail_from_name = getenv('MAIL_FROM_NAME')     ?: 'Admin';
+
+    $google_client_id     = getenv('GOOGLE_CLIENT_ID')     ?: '';
+    $google_client_secret = getenv('GOOGLE_CLIENT_SECRET') ?: '';
+    $github_client_id     = getenv('GITHUB_CLIENT_ID')     ?: '';
+    $github_client_secret = getenv('GITHUB_CLIENT_SECRET') ?: '';
+    $facebook_app_id      = getenv('FACEBOOK_APP_ID')      ?: '';
+    $facebook_app_secret  = getenv('FACEBOOK_APP_SECRET')  ?: '';
+
+    $grecaptcha_key    = getenv('RECAPTCHA_SITE_KEY')    ?: '';
+    $grecaptcha_secret = getenv('RECAPTCHA_SECRET_KEY')  ?: '';
+
+    $stripe_secret_key = getenv('STRIPE_SECRET_KEY') ?: '';
+    $stripe_public_key = getenv('STRIPE_PUBLIC_KEY') ?: '';
+
+    $vapid_subject     = getenv('VAPID_SUBJECT')     ?: '';
+    $vapid_public_key  = getenv('VAPID_PUBLIC_KEY')   ?: '';
+    $vapid_private_key = getenv('VAPID_PRIVATE_KEY')  ?: '';
+
+    $shardConfigs = [];
+    if (getenv('DB_HOST_SHARD')) {
+        $shardConfigs['shard1'] = [
+            'host' => getenv('DB_HOST_SHARD'),
+            'name' => getenv('DB_NAME_SHARD') ?: 'wncore_shard_1',
+            'user' => getenv('DB_USER') ?: 'root',
+            'pass' => getenv('DB_PASSWORD') ?: '',
+        ];
+    }
+    if (getenv('DB_HOST_SHARD2')) {
+        $shardConfigs['shard2'] = [
+            'host' => getenv('DB_HOST_SHARD2'),
+            'name' => getenv('DB_NAME_SHARD2') ?: 'wncore_shard_2',
+            'user' => getenv('DB_USER') ?: 'root',
+            'pass' => getenv('DB_PASSWORD') ?: '',
+        ];
+    }
+}
+
+// 3. PDO connection
+$db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
+$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// 4. Glob-include all helpers
+foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
+foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
+
+// 5. Migrations
+$db_version    = $db_version ?? 1.8;
+$shard_version = $shard_version ?? 1.1;
+check_and_migrate_main_db();
+check_and_migrate_all_shards();
+
+// 6. Session (start but NO guard — unauthenticated users need these pages)
+session_start();
+
+// 7. definition.php
+include(__DIR__ . '/definition.php');
+
+// 8. Action includes — login actions only for auth pages
+foreach (glob(__DIR__ . '/actions/loginActions/*.php') as $f) { include_once($f); }
+foreach (glob(__DIR__ . '/actions/apiActions/*.php') as $f) { include_once($f); }

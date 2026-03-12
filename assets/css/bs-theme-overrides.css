@@ -1,0 +1,42 @@
+/* Bootstrap theme overrides for wave-networks-core */
+
+/* =============================================
+   Color mode overrides
+   ============================================= */
+
+/*
+ * Sidebar: force dark appearance always.
+ * The sidebar has data-bs-theme="dark" so Bootstrap variables are dark,
+ * but some Bootswatch themes may override specific component styles.
+ * These rules ensure the sidebar stays visually dark regardless of theme.
+ */
+#sidebar {
+    background-color: var(--bs-dark) !important;
+    color: #fff !important;
+}
+
+/*
+ * badge.bg-light in dark mode: prevent bright white rectangle.
+ * Used e.g. for shard badges in the users table.
+ */
+[data-bs-theme="dark"] .badge.bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .badge.text-dark {
+    color: var(--bs-body-color) !important;
+}
+
+/*
+ * Dark navbar form controls: some Bootswatch themes hardcode light
+ * background colors on .form-select / .form-control, overriding the
+ * dark context set by data-bs-theme="dark" on the topnav.
+ * Force these elements to use the dark CSS variables.
+ */
+nav[data-bs-theme="dark"] .form-select,
+nav[data-bs-theme="dark"] .form-control {
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}

@@ -1,0 +1,13 @@
+services:
+  app:
+    environment:
+      - ENVIRONMENT=testing
+      - SEED_TEST_DATA=true
+
+  playwright:
+    profiles: []
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      - BASE_URL=http://app

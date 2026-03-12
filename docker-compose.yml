@@ -1,0 +1,82 @@
+services:
+  app:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - ENVIRONMENT=development
+      - DB_HOST_MAIN=db
+      - DB_NAME_MAIN=wncore_main
+      - DB_USER=root
+      - DB_PASSWORD=dev_root_password_123
+      - DB_HOST_SHARD=db_shard
+      - DB_NAME_SHARD=wncore_shard_1
+      - DB_HOST_SHARD2=db_shard2
+      - DB_NAME_SHARD2=wncore_shard_2
+      - FILES_LOCATION=/var/files/
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - MAIL_FROM=noreply@localhost
+      - MAIL_FROM_NAME=Wave Networks
+      - APP_SECRET=dev_app_secret_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      - HIDDEN_HASH=dev_hidden_hash_xxxxxxxxxxxxxxxxxx
+      - SEED_TEST_DATA=true
+    volumes:
+      - .:/var/www/html/admin
+      - files_vol:/var/files
+    depends_on:
+      db:
+        condition: service_healthy
+      db_shard:
+        condition: service_healthy
+      db_shard2:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: dev_root_password_123
+      MYSQL_DATABASE: wncore_main
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  db_shard:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: dev_root_password_123
+      MYSQL_DATABASE: wncore_shard_1
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  db_shard2:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: dev_root_password_123
+      MYSQL_DATABASE: wncore_shard_2
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "8025:8025"
+
+  playwright:
+    profiles: ["testing"]
+    build:
+      context: tests/
+      dockerfile: Dockerfile.playwright
+    depends_on:
+      - app
+
+volumes:
+  files_vol:

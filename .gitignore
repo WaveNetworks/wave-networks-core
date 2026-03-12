@@ -1,0 +1,21 @@
+# Credentials - config.php is gitignored, config.sample.php is committed
+config/config.php
+
+# Composer
+vendor/
+
+# Logs and temp
+*.log
+/tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Claude Code local settings
+.claude/

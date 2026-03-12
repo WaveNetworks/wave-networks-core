@@ -1,0 +1,352 @@
+/* wave-networks-core custom styles */
+
+/* =============================================
+   Sidebar — responsive 3-state layout
+   Base state (LG+ ≥992px): expanded 224px
+   ============================================= */
+
+#sidebar {
+    width: 224px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    transition: width 0.3s ease;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+/* Let the nav area scroll if it overflows, keep brand + footer pinned */
+#sidebar > nav {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+#sidebar .nav-link {
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+
+#sidebar .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Icon sizing */
+#sidebar .sidebar-icon {
+    font-size: 1.1rem;
+    width: 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Text + badge fade on collapse */
+#sidebar .sidebar-text {
+    margin-left: 0.5rem;
+    transition: opacity 0.2s ease;
+    overflow: hidden;
+}
+
+#sidebar .sidebar-badge {
+    transition: opacity 0.2s ease;
+    margin-left: auto;
+}
+
+/* Brand area + topnav — same height so borders align */
+#wrapper > .flex-grow-1 > .navbar {
+    min-height: 48px;
+    box-sizing: border-box;
+}
+
+#sidebar .sidebar-brand {
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    box-sizing: border-box;
+}
+
+#sidebar .sidebar-brand-icon {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#sidebar .sidebar-brand-icon img {
+    height: 24px;
+    width: 24px;
+    object-fit: contain;
+}
+
+#sidebar .sidebar-brand-text {
+    margin-left: 0.5rem;
+    transition: opacity 0.2s ease;
+    overflow: hidden;
+}
+
+/* Toggle icon rotation */
+#sidebarToggleIcon {
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+
+/* =============================================
+   Collapsed state — icon-only (60px)
+   Applied by JS on LG+ when user clicks toggle
+   ============================================= */
+
+#sidebar.collapsed {
+    width: 60px;
+}
+
+#sidebar.collapsed .sidebar-text,
+#sidebar.collapsed .sidebar-brand-text,
+#sidebar.collapsed .sidebar-badge {
+    opacity: 0;
+    width: 0;
+    margin-left: 0;
+    overflow: hidden;
+}
+
+#sidebar.collapsed .nav-link {
+    justify-content: center;
+    padding: 10px 0;
+}
+
+#sidebar.collapsed .sidebar-brand {
+    justify-content: center;
+}
+
+#sidebar.collapsed .sidebar-icon {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+#sidebar.collapsed #sidebarToggleIcon {
+    transform: rotate(180deg);
+}
+
+/* =============================================
+   XS (<576px) — hidden by default, slide-in overlay
+   ============================================= */
+
+@media (max-width: 575.98px) {
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: -224px;
+        z-index: 1050;
+        height: 100vh;
+        min-height: 0;
+        transition: left 0.3s ease;
+    }
+
+    body.sidebar-visible #sidebar {
+        left: 0;
+    }
+
+    /* Dark backdrop */
+    body.sidebar-visible::after {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+    }
+
+    /* Never icon-only on mobile */
+    #sidebar.collapsed {
+        width: 224px;
+    }
+
+    /* Hide desktop toggle on mobile */
+    #sidebar .sidebar-footer {
+        display: none !important;
+    }
+}
+
+/* =============================================
+   SM-MD (576px – 991px) — collapsed by default
+   ============================================= */
+
+@media (min-width: 576px) and (max-width: 991.98px) {
+    #sidebar {
+        width: 60px;
+    }
+
+    #sidebar .sidebar-text,
+    #sidebar .sidebar-brand-text,
+    #sidebar .sidebar-badge {
+        opacity: 0;
+        width: 0;
+        margin-left: 0;
+        overflow: hidden;
+    }
+
+    #sidebar .nav-link {
+        justify-content: center;
+        padding: 10px 0;
+    }
+
+    #sidebar .sidebar-brand {
+        justify-content: center;
+    }
+
+    #sidebar .sidebar-icon {
+        font-size: 1.25rem;
+        margin: 0;
+    }
+
+    #sidebar #sidebarToggleIcon {
+        transform: rotate(180deg);
+    }
+
+    /* User toggled to expand */
+    #sidebar.expanded {
+        width: 224px;
+    }
+
+    #sidebar.expanded .sidebar-text,
+    #sidebar.expanded .sidebar-brand-text,
+    #sidebar.expanded .sidebar-badge {
+        opacity: 1;
+        width: auto;
+    }
+
+    #sidebar.expanded .nav-link {
+        justify-content: flex-start;
+        padding: 8px 12px;
+    }
+
+    #sidebar.expanded .sidebar-brand {
+        justify-content: flex-start;
+    }
+
+    #sidebar.expanded .sidebar-icon {
+        font-size: 1.1rem;
+    }
+
+    #sidebar.expanded #sidebarToggleIcon {
+        transform: rotate(0deg);
+    }
+}
+
+/* Auth card centering */
+.auth-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 420px;
+}
+
+/* Table improvements */
+.table th {
+    white-space: nowrap;
+}
+
+.table th a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.table th a:hover {
+    text-decoration: underline;
+}
+
+/* Badge spacing in tables */
+.badge + .badge {
+    margin-left: 4px;
+}
+
+/* =============================================
+   Sidebar — collapsible submenu (nested nav)
+   ============================================= */
+
+.sidebar-submenu .nav-link {
+    padding: 6px 12px 6px 2.5rem;
+    font-size: 0.875rem;
+    opacity: 0.85;
+}
+
+.sidebar-submenu .nav-link:hover {
+    opacity: 1;
+}
+
+.sidebar-submenu .nav-link.active {
+    opacity: 1;
+}
+
+/* Caret rotation when expanded */
+.sidebar-caret {
+    transition: transform 0.2s ease;
+    font-size: 0.7rem;
+}
+
+[aria-expanded="true"] .sidebar-caret {
+    transform: rotate(180deg);
+}
+
+/* Hide submenu + caret when sidebar is collapsed (LG+) */
+#sidebar.collapsed .sidebar-submenu,
+#sidebar.collapsed .sidebar-caret {
+    display: none !important;
+}
+
+#sidebar.collapsed .sidebar-parent {
+    cursor: pointer;
+}
+
+#sidebar.collapsed .sidebar-parent .sidebar-icon {
+    margin: 0;
+    pointer-events: none; /* clicks pass through to parent <a> */
+}
+
+/* SM-MD collapsed state: hide submenu + caret */
+@media (min-width: 576px) and (max-width: 991.98px) {
+    #sidebar .sidebar-submenu,
+    #sidebar .sidebar-caret {
+        display: none !important;
+    }
+
+    #sidebar .sidebar-parent {
+        cursor: pointer;
+    }
+
+    #sidebar .sidebar-parent .sidebar-icon {
+        margin: 0;
+        pointer-events: none;
+    }
+
+    #sidebar .sidebar-parent .sidebar-caret {
+        margin-left: 0 !important;
+    }
+
+    /* When expanded at SM-MD, show submenu */
+    #sidebar.expanded .sidebar-submenu,
+    #sidebar.expanded .sidebar-caret {
+        display: flex !important;
+    }
+
+    #sidebar.expanded .sidebar-parent {
+        justify-content: flex-start;
+        padding: 8px 12px;
+        cursor: default;
+    }
+
+    #sidebar.expanded .sidebar-parent .sidebar-icon {
+        pointer-events: auto;
+    }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "wave-networks/wave-networks-core",
+  "description": "Auth and user admin layer for Wave Networks applications",
+  "type": "project",
+  "require": {
+    "php": "^8.2",
+    "phpmailer/phpmailer": "^6.9",
+    "firebase/php-jwt": "^6.10",
+    "league/oauth2-google": "^4.0",
+    "league/oauth2-github": "^3.0",
+    "league/oauth2-facebook": "^2.0",
+    "vlucas/phpdotenv": "^5.6",
+    "stripe/stripe-php": "^16.2",
+    "phpoffice/phpspreadsheet": "^3.0",
+    "robthree/twofactorauth": "^2.0",
+    "onelogin/php-saml": "^4.0",
+    "minishlink/web-push": "^9.0"
+  },
+  "config": {
+    "platform": { "php": "8.2.0" },
+    "audit": { "block-insecure": false }
+  }
+}
