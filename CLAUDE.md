@@ -18,7 +18,8 @@ admin/app/index.php       -> include: ../include/common.php
 admin/api/index.php       -> include: ../include/common_api.php
 admin/views/*.php         -> included BY admin/app/index.php (never directly)
 admin/snippets/*.php      -> included by views and auth pages
-(child-app)/index.php     -> include: ../admin/include/common.php
+(child-app)/app/index.php -> include: ../include/common.php (child's own bootstrap)
+(child-app)/include/common.php -> include: ../../admin/include/common.php (core)
 vendor/autoload.php       -> from admin/*: ../vendor/autoload.php
 
 ## ACTION FILES — TWO INVOCATION METHODS
@@ -163,11 +164,18 @@ Subdirectories (cron/minutes/, days/, weeks/, months/) hold task scripts
 executed by cron.php on their respective intervals.
 
 ## Child app integration
-Child apps reach core via:   ../admin/include/common.php
-Child apps use assets via:   ../admin/assets/
-Child apps define APP_MIGRATION_DIR before including common.php
-Child apps start their own db_version and shard_version at 1.0
-Child apps create their own DB and tables — never write to core tables
+Child apps are separate repos deployed as siblings: public_html/your-app/
+Each child app has its own include path (your-app/include/) with its own
+common.php, helpers, actions, views, config, and db_migrations.
+
+Bootstrap: your-app/include/common.php includes ../admin/include/common.php
+  which provides auth, session, helpers, shard routing, $db.
+Child app then opens its own $app_db connection to its own database.
+
+Child apps define APP_MIGRATION_DIR before including core's common.php.
+Child apps start their own db_version and shard_version at 1.0.
+Child apps create their own DB ($app_db) — never write to core tables.
+Child apps can add tables to shared shard DBs via their own shard migrations.
 Child apps route to shard via: prime_shard($_SESSION['shard_id'])
   (shard_id is already in session from core's login — no extra lookup)
 
@@ -175,6 +183,8 @@ Child apps can use core services after including common.php:
   queue_email($to, $subject, $body)           — send email via core's queue
   send_notification($uid, $shard, ...)        — create user notification
   register_notification_category($slug, ...)  — register app-specific categories
+
+See: CHILD_APP_SPEC.md for full child app structure and patterns.
 
 ## Active coding rules — follow when writing any code in this repo
 
