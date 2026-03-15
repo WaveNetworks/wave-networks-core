@@ -163,6 +163,13 @@ Scripts:
 Subdirectories (cron/minutes/, days/, weeks/, months/) hold task scripts
 executed by cron.php on their respective intervals.
 
+Daily (cron/days/1/):
+  cleanup_error_log.php        — deletes error_log entries older than 30 days
+  cleanup_expired_tokens.php   — deletes forgot tokens > 7 days, api_key > 90 days
+
+Monthly (cron/months/1/):
+  purge_deleted_users.php      — deletes read notifications > 90 days, orphaned devices
+
 ## Shared assets provided to child apps
 Child apps reference core's CSS and JS via ../../admin/assets/ (never copy).
 
@@ -204,6 +211,275 @@ Reference implementation: github.com/WaveNetworks/child-app
   live search, AJAX modals, offcanvas panel, toasts, notifications, Docker env.
 
 See: CHILD_APP_SPEC.md for full child app structure and patterns.
+
+## Error logging system
+Custom error/exception/shutdown handlers capture all PHP errors to the DB.
+errorHandler.php registers three handlers via set_error_handler, set_exception_handler,
+register_shutdown_function. Errors are classified: FATAL, ERROR, WARNING, INFO.
+Falls back to error_log() if DB is unavailable or log_error_to_db() not yet loaded.
+In production, errors are suppressed from display. In development (ENVIRONMENT=development),
+errors render to screen.
+
+DB table: error_log (main DB). Columns: error_id, level, message, file, line,
+  stack_trace, context_json, source_app, page, request_uri, request_method,
+  user_id, ip_address, user_agent, php_version, memory_usage, resolved_at,
+  resolved_by, created.
+
+log_error_to_db() deduplicates per-request via md5(file:line:message).
+Detects source_app from file path (regex matches directory name before include/views/etc).
+context_json captures: GET params, POST action name, session user info, memory stats.
+
+Admin view: views/error_log.php (admin-only, page=error_log).
+  Filterable by level, source_app, status (open/resolved), free-text search.
+  Paginated, expandable detail rows with stack trace and context JSON.
+
+Member actions (include/actions/memberActions/errorLogActions.php):
+  getErrorLogs    — paginated list with filters, stats, sources
+  deleteErrorLog  — delete single entry by error_id
+  clearErrorLogs  — bulk delete older than N days (default 30)
+  resolveErrorLog — mark resolved (sets resolved_at + resolved_by)
+  unresolveErrorLog — reopen
+
+API actions (include/actions/apiActions/errorLogApiActions.php):
+  Authenticated via service API key (Bearer token). Scope-gated.
+  apiGetErrorLogs     — list (scope: error_log:read)
+  apiGetErrorLog      — single entry (scope: error_log:read)
+  apiResolveErrorLog  — resolve (scope: error_log:write)
+  apiUnresolveErrorLog — reopen (scope: error_log:write)
+  apiGetErrorStats    — dashboard stats + source list (scope: error_log:read)
+
+Cron: cron/days/1/cleanup_error_log.php — deletes entries older than 30 days.
+
+Child app benefit: errors from child apps are captured automatically because
+  errorHandler.php is loaded via common.php. source_app is auto-detected from
+  the file path, so child app errors appear in the admin error log tagged by app name.
+
+Helpers: include/common/errorHandler.php, include/common/errorLogFunctions.php
+
+## Service API keys
+Programmatic API access for external tools and agents. Separate from the
+remember-me api_key table used for device cookies.
+
+DB table: service_api_key (main DB). Columns: service_key_id, key_name,
+  key_prefix, key_hash, scopes (JSON array), created_by, created_at,
+  last_used_at, revoked_at, revoked_by.
+
+Key format: wn_sk_ + 58-char random hash. Only the bcrypt hash is stored.
+The full key is returned once at creation and never shown again.
+Validation: prefix lookup (first 12 chars) narrows candidates, then bcrypt verify.
+last_used_at updated on each successful validation.
+
+Scopes: JSON array of scope strings. Available scopes defined in get_available_scopes():
+  error_log:read, error_log:write, users:read.
+  Child apps can extend by adding scopes to this function.
+  require_api_scope($scope) checks the current key's scopes and sets $_SESSION['error']
+  if missing. API action files call this before processing.
+
+Authentication: Bearer token in Authorization header. common_api.php extracts
+  the token, calls validate_service_api_key(), populates global $_SERVICE_API_KEY.
+
+Admin view: views/api_keys.php (admin-only, page=api_keys).
+  Lists keys with name, prefix, scopes, created/last-used timestamps, status.
+  Create modal with name + scope checkboxes. Key revealed once after creation.
+  Revoke button (soft delete via revoked_at).
+
+Member actions (include/actions/memberActions/serviceApiKeyActions.php):
+  createServiceApiKey — name + scopes[] required, returns full_key once
+  revokeServiceApiKey — sets revoked_at, cannot be undone
+  getServiceApiKeys   — list all keys (never returns key_hash)
+
+Helpers: include/common/serviceApiKeyFunctions.php
+
+## MCP server
+JSON-RPC 2.0 over stdio server for AI agent integration.
+Located at: admin/mcp/server.php
+
+Does NOT include common.php — wraps the admin HTTP API via cURL.
+Authenticates using a service API key (Bearer token).
+
+Environment variables:
+  WN_API_URL — Admin API endpoint (default: http://localhost/admin/api/index.php)
+  WN_API_KEY — Service API key (needs error_log:read + error_log:write scopes)
+
+Tools exposed:
+  list_errors    — paginated error list. Params: page, per_page, level, source_app, search, status
+  get_error      — single error entry. Params: error_id (required)
+  resolve_error  — mark resolved. Params: error_id (required)
+  unresolve_error — reopen. Params: error_id (required)
+  get_error_stats — dashboard stats (no params)
+
+Each tool maps to an apiAction: list_errors -> apiGetErrorLogs,
+  get_error -> apiGetErrorLog, resolve_error -> apiResolveErrorLog,
+  unresolve_error -> apiUnresolveErrorLog, get_error_stats -> apiGetErrorStats.
+
+Claude Desktop config:
+  "mcpServers": { "wave-networks-admin": {
+    "command": "php",
+    "args": ["/path/to/admin/mcp/server.php"],
+    "env": { "WN_API_URL": "...", "WN_API_KEY": "wn_sk_..." }
+  }}
+
+Logs to stderr via mcp_log(). Warns if WN_API_KEY is unset.
+
+## Theme management
+Bootswatch themes + registered custom themes. Theme stored in cookie (wn_theme)
+so PHP can render correct stylesheet on first paint — no FOUC.
+
+Built-in themes: 25 Bootswatch themes (cerulean, cosmo, cyborg, darkly, flatly,
+  journal, litera, lumen, lux, materia, minty, morph, pulse, quartz, sandstone,
+  simplex, sketchy, slate, solar, spacelab, superhero, united, vapor, yeti, zephyr).
+  Default: sandstone. Loaded from jsDelivr CDN.
+
+Custom theme registration (for child apps):
+  register_theme($slug, $name, $css_path, $opts)
+  $opts: sidebar_mode (dark|glass), created_by_app, is_active
+  DB table: registered_theme (main DB). Columns: slug (unique), name, css_path,
+    sidebar_mode, created_by_app, is_active. Uses ON DUPLICATE KEY UPDATE.
+  Child apps call register_theme() at bootstrap to add app-specific themes.
+
+Theme resolution: get_active_theme() reads wn_theme cookie, validates against
+  Bootswatch allowed list + registered_theme table. Falls back to sandstone.
+  get_theme_css_url($prefix, $webroot_prefix) returns CDN URL for Bootswatch
+  or relative path for registered themes.
+
+JS: assets/js/theme.js
+  Populates <select id="themeSelector"> from Bootswatch API + registered themes
+  (registered themes passed via data-registered-themes attribute as JSON).
+  On change: saves to localStorage + cookie, swaps stylesheet link href.
+  Custom themes appear under a "Custom" separator in the dropdown.
+  Falls back gracefully if Bootswatch API is down or theme CSS fails to load.
+
+Helpers: include/common/themeFunctions.php, include/common/themeRegistrationFunctions.php
+
+## GDPR compliance system
+Admin core provides all GDPR infrastructure. Child apps consume it via shared
+helper functions loaded through common.php. All GDPR data lives in the admin
+main DB so it's shared across all child apps.
+
+### Database tables (main DB, migrations 2.5 + 2.6)
+
+**consent_version** — versioned legal documents
+| Column | Type | Notes |
+|--------|------|-------|
+| version_id | INT PK AUTO_INCREMENT | |
+| consent_type | VARCHAR(50) | e.g. terms_of_service, privacy_policy, marketing_email |
+| version_label | VARCHAR(20) | e.g. "1.0", "2.0" |
+| effective_date | DATE | When this version takes effect |
+| document_url | VARCHAR(500) NULL | Link to full document |
+| summary | TEXT NULL | Short description shown to users |
+| content | LONGTEXT NULL | Full legal text (for inline display) |
+| is_active | TINYINT(1) DEFAULT 1 | Whether this version is current |
+| created | DATETIME | |
+
+Seeded with 5 initial types: terms_of_service, privacy_policy, marketing_email,
+cookie_analytics, cookie_marketing (all version 1.0).
+
+**user_consent** — immutable audit log of consent events
+| Column | Type | Notes |
+|--------|------|-------|
+| consent_id | BIGINT PK AUTO_INCREMENT | |
+| user_id | INT UNSIGNED | |
+| consent_type | VARCHAR(50) | |
+| consent_version_id | INT NULL | FK to consent_version |
+| action | ENUM('granted','withdrawn') | |
+| ip_address | VARCHAR(45) NULL | |
+| user_agent | VARCHAR(512) NULL | |
+| created | DATETIME | |
+
+NEVER update or delete rows — this is an append-only audit trail.
+
+**account_deletion_request** — GDPR Article 17 right to erasure
+| Column | Type | Notes |
+|--------|------|-------|
+| request_id | INT PK AUTO_INCREMENT | |
+| user_id | INT UNSIGNED UNIQUE | One pending request per user |
+| reason | TEXT NULL | Optional user-provided reason |
+| status | ENUM('pending','completed','cancelled') | |
+| requested_at | DATETIME | |
+| cancel_before | DATETIME | 30 days after requested_at |
+| completed_at | DATETIME NULL | |
+
+**data_export_request** — GDPR Article 20 data portability
+| Column | Type | Notes |
+|--------|------|-------|
+| export_id | INT PK AUTO_INCREMENT | |
+| user_id | INT UNSIGNED | |
+| format | ENUM('json','csv') DEFAULT 'json' | |
+| status | ENUM('pending','processing','ready','expired') | |
+| file_path | VARCHAR(500) NULL | Server path to export file |
+| file_size | INT UNSIGNED NULL | |
+| requested_at | DATETIME | |
+| completed_at | DATETIME NULL | |
+| expires_at | DATETIME NULL | 7 days after completion |
+
+**login_history** — tracks every login attempt (migration 2.6)
+| Column | Type | Notes |
+|--------|------|-------|
+| history_id | BIGINT PK AUTO_INCREMENT | |
+| user_id | INT UNSIGNED | |
+| ip_address | VARCHAR(45) NULL | |
+| user_agent | VARCHAR(512) NULL | |
+| browser | VARCHAR(100) NULL | Parsed from user agent |
+| login_method | ENUM('password','oauth','remember_me','saml','2fa') | |
+| status | ENUM('success','failed') | |
+| created | DATETIME | |
+
+**device table upgrades** (migration 2.6) — added columns:
+  user_id INT UNSIGNED, browser VARCHAR(100), last_used DATETIME, idx_user_id
+
+### Helper functions
+
+Helpers: include/common/gdprFunctions.php
+  record_consent($user_id, $consent_type, $action, $version_id) — append to audit log
+  get_consent_status($user_id, $consent_type) — latest status: 'granted', 'withdrawn', or null
+  get_all_consent_statuses($user_id) — all types with current status
+  get_consent_history($user_id) — full audit trail with version labels
+  get_latest_consent_version($consent_type) — latest version row for a type
+  get_all_consent_versions() — all types with their latest versions
+  request_account_deletion($user_id, $reason) — creates pending request, 30-day cancel_before
+  cancel_account_deletion($user_id) — cancels pending request
+  get_pending_deletion($user_id) — returns active pending deletion or null
+  request_data_export($user_id, $format) — creates export request (blocks duplicates)
+  get_latest_export($user_id) — latest export request
+  build_export_data($user_id, $shard_id) — collects user data from admin main+shard
+  complete_data_export($export_id, $file_path, $file_size) — marks ready, 7-day expiry
+
+Helpers: include/common/loginHistoryFunctions.php
+  record_login($user_id, $method, $status) — insert login_history row
+  get_login_history($user_id, $limit, $offset) — paginated history
+  count_login_history($user_id) — total count
+  check_reconsent_needed($user_id) — checks if user must re-accept terms_of_service
+    or privacy_policy; returns array of types needing re-consent with version info
+
+Helpers: include/common/deviceFunctions.php (rewritten for session management)
+  parse_browser_name($ua) — extracts browser name from user agent
+  register_device($cookie_id, $user_id) — stores browser, last_used
+  touch_device($device_id) — updates last_used timestamp
+  get_user_devices($user_id) — lists all devices with api_key join
+  revoke_device($device_id, $user_id) — deletes device + api_key (user-scoped)
+  revoke_all_other_devices($user_id, $current_cookie_id) — revokes all except current
+
+### Login flow integration
+loginActions.php modifications:
+  LOGIN: records login history (success/failed), registers device with user_id,
+    calls check_reconsent_needed() → redirects to auth/consent.php if needed.
+  REGISTER: validates agree_terms checkbox, records consent for ToS + Privacy Policy.
+  VERIFY 2FA: records login history, checks re-consent.
+
+### Re-consent flow
+When consent_version gets a new row for terms_of_service or privacy_policy,
+check_reconsent_needed() detects users who haven't accepted the latest version.
+On next login, they're redirected to auth/consent.php which displays updated
+policies and requires acceptance before entering the app.
+
+Auth pages: auth/consent.php (admin), auth/consent.php (child-app — same UI,
+  child-app template). Action: consentActions.php → acceptReconsent.
+
+### Child app usage
+Child apps get all GDPR functions for free via common.php include chain.
+Child apps build their own Privacy & Data UI (views/privacy.php) calling
+the shared helper functions. Child apps add app-specific data to exports
+(items, preferences, history) on top of admin's build_export_data() base.
 
 ## Active coding rules — follow when writing any code in this repo
 

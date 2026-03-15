@@ -52,6 +52,13 @@ ob_start();
         <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
     </div>
 
+    <div class="mb-3 form-check">
+        <input type="checkbox" class="form-check-input" id="agree_terms" name="agree_terms" value="1" required>
+        <label class="form-check-label small" for="agree_terms">
+            I agree to the <a href="../site/terms.php" target="_blank">Terms of Service</a> and <a href="../site/privacy.php" target="_blank">Privacy Policy</a>
+        </label>
+    </div>
+
     <?php if (recaptcha_enabled()) { ?>
     <div class="mb-3">
         <div class="g-recaptcha" data-sitekey="<?= h(recaptcha_site_key()) ?>"></div>

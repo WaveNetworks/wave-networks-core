@@ -67,18 +67,37 @@ if (($action ?? null) == 'login') {
         // Login successful
         load_user_session($user);
 
+        // Record login history
+        if (function_exists('record_login')) {
+            record_login($user['user_id'], 'password', 'success');
+        }
+
         // Remember me
         if ($remember === 'yes') {
             $cookie_id = generateHashCode(64);
-            $device_id = register_device($cookie_id);
+            $device_id = register_device($cookie_id, $user['user_id']);
             $api_key   = create_api_key($user['user_id'], $device_id, 'yes');
             setcookie('wn_auto_login', $api_key, time() + (86400 * 30), '/', '', false, true);
+        }
+
+        // Check if user needs to re-consent to updated policies
+        if (function_exists('check_reconsent_needed')) {
+            $reconsent = check_reconsent_needed($user['user_id']);
+            if (!empty($reconsent)) {
+                $_SESSION['reconsent_needed'] = $reconsent;
+                header('Location: consent.php');
+                exit;
+            }
         }
 
         $_SESSION['success'] = 'Welcome back!';
         header('Location: ../app/');
         exit;
     } else {
+        // Record failed login attempt
+        if (function_exists('record_login') && !empty($user['user_id'])) {
+            record_login($user['user_id'], 'password', 'failed');
+        }
         $_SESSION['error'] = implode('<br>', $errs);
     }
 }
@@ -113,6 +132,7 @@ if (($action ?? null) == 'register') {
     if (!valid_email($email))       { $errs['email'] = 'Valid email is required.'; }
     if (!valid_password($password))  { $errs['password'] = 'Password must be at least 8 characters.'; }
     if ($password !== $confirm)      { $errs['confirm'] = 'Passwords do not match.'; }
+    if (empty($_POST['agree_terms'])) { $errs['terms'] = 'You must agree to the Terms of Service and Privacy Policy.'; }
 
     if (count($errs) <= 0) {
         if (recaptcha_enabled() && !recaptcha_verify($_POST['g-recaptcha-response'] ?? '')) {
@@ -149,6 +169,14 @@ if (($action ?? null) == 'register') {
             $_SESSION['shard_id'] = $shard_id;
             create_home_dir_id($new_id);
             unset($_SESSION['shard_id']);
+
+            // Record consent for Terms of Service and Privacy Policy
+            if (function_exists('record_consent')) {
+                $tos_ver = get_latest_consent_version('terms_of_service');
+                $pp_ver  = get_latest_consent_version('privacy_policy');
+                record_consent($new_id, 'terms_of_service', 'granted', $tos_ver ? (int)$tos_ver['version_id'] : null);
+                record_consent($new_id, 'privacy_policy', 'granted', $pp_ver ? (int)$pp_ver['version_id'] : null);
+            }
 
             // Send confirmation email if needed
             if ($mode === 'confirm') {
@@ -345,6 +373,20 @@ if (($action ?? null) == 'verify2FA') {
     if (count($errs) <= 0) {
         unset($_SESSION['2fa_pending'], $_SESSION['2fa_user_id']);
         load_user_session($user);
+        // Record login history
+        if (function_exists('record_login')) {
+            record_login($user['user_id'], '2fa', 'success');
+        }
+
+        // Check re-consent
+        if (function_exists('check_reconsent_needed')) {
+            $reconsent = check_reconsent_needed($user['user_id']);
+            if (!empty($reconsent)) {
+                $_SESSION['reconsent_needed'] = $reconsent;
+                header('Location: consent.php');
+                exit;
+            }
+        }
         $_SESSION['success'] = 'Welcome back!';
         header('Location: ../app/');
         exit;
