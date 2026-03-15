@@ -1,2 +1,4 @@
-# MCP server is CLI-only, deny web access
-Deny from all
+# Pass Authorization header to PHP (Apache strips it by default)
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
