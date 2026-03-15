@@ -60,6 +60,22 @@ def get_all_tracked_files():
     return files
 
 
+def get_vendor_files():
+    """Walk vendor/ directory and return all files (not git-tracked)."""
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    vendor_dir = os.path.join(project_root, "vendor")
+    if not os.path.isdir(vendor_dir):
+        print("[DEPLOY] vendor/ not found. Run 'composer install' first.")
+        return []
+    files = []
+    for root, dirs, filenames in os.walk(vendor_dir):
+        for f in filenames:
+            full = os.path.join(root, f)
+            rel = os.path.relpath(full, project_root).replace("\\", "/")
+            files.append(rel)
+    return files
+
+
 # Files/directories to never upload
 EXCLUDE_PATTERNS = [
     ".git",
@@ -67,7 +83,6 @@ EXCLUDE_PATTERNS = [
     ".claude",
     ".env",
     "node_modules",
-    "vendor",
     "deploy.py",
     "deploy_config.py",
     "deploy_config.sample.py",
@@ -162,6 +177,7 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
             sftp.chdir(config.REMOTE_ROOT)
 
         uploaded = 0
+        skipped = 0
         failed = 0
 
         for filepath in files_to_upload:
@@ -172,10 +188,21 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
                 print(f"  [SKIP] {filepath} (not found locally)")
                 continue
 
+            local_size = os.path.getsize(local_path)
+
             try:
                 remote_dir = os.path.dirname(remote_path).replace("\\", "/")
                 if remote_dir:
                     ensure_remote_dir(sftp, remote_dir)
+
+                # Skip upload if remote file exists with same size
+                try:
+                    remote_stat = sftp.stat(remote_path)
+                    if remote_stat.st_size == local_size:
+                        skipped += 1
+                        continue
+                except FileNotFoundError:
+                    pass
 
                 sftp.put(local_path, remote_path)
                 print(f"  [OK]   {filepath}")
@@ -196,7 +223,7 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
             except Exception as e:
                 print(f"  [FAIL] Could not delete {filepath}: {e}")
 
-        print(f"\n[DEPLOY] Done: {uploaded} uploaded, {deleted} deleted, {failed} failed")
+        print(f"\n[DEPLOY] Done: {uploaded} uploaded, {skipped} unchanged, {deleted} deleted, {failed} failed")
 
     finally:
         sftp.close()
@@ -205,14 +232,18 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Deploy admin to server via SFTP")
-    parser.add_argument("--all", action="store_true", help="Deploy all tracked files")
+    parser.add_argument("--all", action="store_true", help="Deploy all tracked files + vendor")
+    parser.add_argument("--vendor", action="store_true", help="Deploy only vendor/ directory")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be deployed")
     args = parser.parse_args()
 
     print(f"[DEPLOY] Deploying admin to {config.SFTP_HOST}...")
 
-    if args.all:
-        files = get_all_tracked_files()
+    if args.vendor:
+        files = get_vendor_files()
+        deploy(files, dry_run=args.dry_run)
+    elif args.all:
+        files = get_all_tracked_files() + get_vendor_files()
         deploy(files, dry_run=args.dry_run)
     else:
         changed = get_changed_files()
