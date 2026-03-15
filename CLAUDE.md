@@ -363,7 +363,7 @@ main DB so it's shared across all child apps.
 |--------|------|-------|
 | version_id | INT PK AUTO_INCREMENT | |
 | consent_type | VARCHAR(50) | e.g. terms_of_service, privacy_policy, marketing_email |
-| version_label | VARCHAR(20) | e.g. "1.0", "2.0" |
+| version_label | VARCHAR(50) | e.g. "1.0", "2.0" |
 | effective_date | DATE | When this version takes effect |
 | document_url | VARCHAR(500) NULL | Link to full document |
 | summary | TEXT NULL | Short description shown to users |
@@ -392,11 +392,13 @@ NEVER update or delete rows — this is an append-only audit trail.
 | Column | Type | Notes |
 |--------|------|-------|
 | request_id | INT PK AUTO_INCREMENT | |
-| user_id | INT UNSIGNED UNIQUE | One pending request per user |
+| user_id | INT UNSIGNED | Uniqueness enforced in application code |
 | reason | TEXT NULL | Optional user-provided reason |
 | status | ENUM('pending','completed','cancelled') | |
 | requested_at | DATETIME | |
 | cancel_before | DATETIME | 30 days after requested_at |
+| cancelled_at | DATETIME NULL | Set when request is cancelled |
+| completed_by | VARCHAR(50) NULL | Who completed the deletion |
 | completed_at | DATETIME NULL | |
 
 **data_export_request** — GDPR Article 20 data portability
@@ -480,6 +482,16 @@ Child apps get all GDPR functions for free via common.php include chain.
 Child apps build their own Privacy & Data UI (views/privacy.php) calling
 the shared helper functions. Child apps add app-specific data to exports
 (items, preferences, history) on top of admin's build_export_data() base.
+
+### Admin compliance actions
+Action file: include/actions/memberActions/userComplianceActions.php
+  adminResetPassword     — reset user password with optional email notification
+  adminRevokeSession     — revoke a single device session for a user
+  adminRevokeAllSessions — revoke all device sessions for a user
+  adminCancelDeletion    — cancel a pending account deletion request
+
+Admin UI: views/user_edit.php — 5-tab compliance dashboard (Profile, Consent,
+  Login History, Sessions, Data & Deletion) accessed from Users list.
 
 ## Active coding rules — follow when writing any code in this repo
 
