@@ -8,18 +8,10 @@
 // Prevent running if config already exists
 $configPath = __DIR__ . '/../config/config.php';
 if (file_exists($configPath)) {
-    // Already installed — attempt to self-delete
-    $installDir = __DIR__;
-    foreach (glob($installDir . '/*') as $f) {
-        if ($f !== __FILE__) { @unlink($f); }
-    }
-    register_shutdown_function(function() use ($installDir) {
-        @unlink($installDir . '/index.php');
-        @rmdir($installDir);
-    });
+    http_response_code(403);
     echo '<!DOCTYPE html><html><head><title>Already Installed</title></head><body>';
     echo '<h1>Already Installed</h1>';
-    echo '<p>config/config.php already exists. This install directory is being removed.</p>';
+    echo '<p>config/config.php already exists. Delete the install/ directory from the server.</p>';
     echo '</body></html>';
     exit;
 }
@@ -152,17 +144,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (file_put_contents($configPath, $config) !== false) {
             $success = true;
-            // Self-delete install directory after successful setup
-            $installDir = __DIR__;
-            $filesToDelete = glob($installDir . '/*');
-            foreach ($filesToDelete as $f) {
-                if ($f !== __FILE__) { @unlink($f); }
-            }
-            // Schedule this script for deletion after response
-            register_shutdown_function(function() use ($installDir) {
-                @unlink($installDir . '/index.php');
-                @rmdir($installDir);
-            });
         } else {
             $errors[] = 'Could not write config/config.php. Check directory permissions.';
         }
@@ -233,7 +214,8 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
     <p><a href="../auth/login.php">Go to login page</a></p>
 </div>
 <div class="warn">
-    The install directory will be automatically removed. If it persists, delete it manually for security.
+    <strong>Delete the install/ directory from the server now.</strong><br>
+    Leaving it accessible is a security risk.
 </div>
 <?php } else { ?>
 
