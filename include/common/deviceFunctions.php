@@ -62,7 +62,7 @@ function touch_device($device_id) {
  */
 function get_user_devices($user_id) {
     $uid = (int) $user_id;
-    $r = db_query("SELECT d.*, ak.api_key_id
+    $r = db_query("SELECT d.*, ak.key_id AS api_key_id
                     FROM device d
                     LEFT JOIN api_key ak ON d.device_id = ak.device_id AND ak.remember_me = 'yes'
                     WHERE d.user_id = '$uid'
