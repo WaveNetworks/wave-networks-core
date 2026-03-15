@@ -8,11 +8,11 @@
 // Prevent running if config already exists
 $configPath = __DIR__ . '/../config/config.php';
 if (file_exists($configPath)) {
+    // Lock down install directory if still accessible
+    @chmod(__DIR__ . '/index.php', 0000);
+    @chmod(__DIR__ . '/.htaccess', 0000);
+    @chmod(__DIR__, 0000);
     http_response_code(403);
-    echo '<!DOCTYPE html><html><head><title>Already Installed</title></head><body>';
-    echo '<h1>Already Installed</h1>';
-    echo '<p>config/config.php already exists. Delete the install/ directory from the server.</p>';
-    echo '</body></html>';
     exit;
 }
 
@@ -144,6 +144,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (file_put_contents($configPath, $config) !== false) {
             $success = true;
+            // Lock down install directory so it can't be accessed again
+            @chmod(__DIR__ . '/index.php', 0000);
+            @chmod(__DIR__ . '/.htaccess', 0000);
+            @chmod(__DIR__, 0000);
         } else {
             $errors[] = 'Could not write config/config.php. Check directory permissions.';
         }
@@ -214,8 +218,7 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
     <p><a href="../auth/login.php">Go to login page</a></p>
 </div>
 <div class="warn">
-    <strong>Delete the install/ directory from the server now.</strong><br>
-    Leaving it accessible is a security risk.
+    The install directory has been locked down (permissions removed).
 </div>
 <?php } else { ?>
 
