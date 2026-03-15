@@ -55,9 +55,12 @@
     margin-left: auto;
 }
 
-/* Brand area + topnav — same height so borders align */
-#wrapper > .flex-grow-1 > .navbar {
+/* Brand area + topnav — locked to same height so borders align */
+#wrapper > .flex-grow-1 > .navbar,
+#sidebar .sidebar-brand {
+    height: 48px;
     min-height: 48px;
+    max-height: 48px;
     box-sizing: border-box;
 }
 
@@ -65,8 +68,6 @@
     white-space: nowrap;
     display: flex;
     align-items: center;
-    min-height: 48px;
-    box-sizing: border-box;
 }
 
 #sidebar .sidebar-brand-icon {

@@ -40,6 +40,23 @@ if (($action ?? null) == 'saveBranding') {
         }
     }
 
+    // Handle dark mode logo upload
+    $logo_dark_path = null;
+    $logo_dark_updated = false;
+    if (!empty($_POST['remove_logo_dark'])) {
+        $logo_dark_updated = true;
+    } elseif (!empty($_FILES['logo_dark']['name']) && $_FILES['logo_dark']['error'] === UPLOAD_ERR_OK) {
+        if (!in_array($_FILES['logo_dark']['type'], $allowed_image_types)) {
+            $errs['logo_dark'] = 'Dark logo must be PNG, JPG, SVG, ICO, or WebP.';
+        } elseif ($_FILES['logo_dark']['size'] > $max_file_size) {
+            $errs['logo_dark'] = 'Dark logo must be under 2 MB.';
+        } else {
+            $ext = strtolower(pathinfo($_FILES['logo_dark']['name'], PATHINFO_EXTENSION));
+            $logo_dark_path = 'branding_logo_dark.' . $ext;
+            $logo_dark_updated = true;
+        }
+    }
+
     // Handle favicon upload
     $favicon_path = null;
     $favicon_updated = false;
@@ -91,6 +108,12 @@ if (($action ?? null) == 'saveBranding') {
             foreach (glob($uploads_dir . '/branding_logo.*') as $old) { unlink($old); }
             move_uploaded_file($_FILES['logo']['tmp_name'], $uploads_dir . '/' . $logo_path);
         }
+        if ($logo_dark_updated) {
+            foreach (glob($uploads_dir . '/branding_logo_dark.*') as $old) { unlink($old); }
+            if ($logo_dark_path) {
+                move_uploaded_file($_FILES['logo_dark']['tmp_name'], $uploads_dir . '/' . $logo_dark_path);
+            }
+        }
         if ($favicon_updated) {
             foreach (glob($uploads_dir . '/branding_favicon.*') as $old) { unlink($old); }
             move_uploaded_file($_FILES['favicon']['tmp_name'], $uploads_dir . '/' . $favicon_path);
@@ -123,6 +146,14 @@ if (($action ?? null) == 'saveBranding') {
         if ($logo_updated) {
             $safe_logo = sanitize($logo_path, SQL);
             $sql .= ", logo_path = '$safe_logo'";
+        }
+        if ($logo_dark_updated) {
+            if ($logo_dark_path) {
+                $safe_logo_dark = sanitize($logo_dark_path, SQL);
+                $sql .= ", logo_dark_path = '$safe_logo_dark'";
+            } else {
+                $sql .= ", logo_dark_path = NULL";
+            }
         }
         if ($favicon_updated) {
             $safe_favicon = sanitize($favicon_path, SQL);

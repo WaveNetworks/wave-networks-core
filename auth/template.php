@@ -22,7 +22,7 @@
     <link rel="apple-touch-icon" href="../uploads/<?= h($b['favicon_path']) ?>">
     <?php } ?>
     <link rel="manifest" href="../manifest.php">
-    <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>">
+    <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>" id="themeStylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/bs-theme-overrides.css">
     <style>
@@ -37,7 +37,7 @@
     <div class="auth-card">
         <div class="text-center mb-4">
             <?php if (!empty($b['logo_path'])) { ?>
-            <img src="../uploads/<?= h($b['logo_path']) ?>" alt="<?= h($b['site_name']) ?>" style="max-height: 64px;" class="mb-2">
+            <img src="../uploads/<?= h($b['logo_path']) ?>" alt="<?= h($b['site_name']) ?>" style="max-height: 64px;" class="mb-2"<?php if (!empty($b['logo_dark_path'])) { ?> data-logo-dark="../uploads/<?= h($b['logo_dark_path']) ?>" data-logo-light="../uploads/<?= h($b['logo_path']) ?>"<?php } ?>>
             <?php } ?>
             <h2><?= h($b['site_name']) ?></h2>
         </div>

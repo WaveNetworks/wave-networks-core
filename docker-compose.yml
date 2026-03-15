@@ -22,7 +22,7 @@ services:
       - HIDDEN_HASH=dev_hidden_hash_xxxxxxxxxxxxxxxxxx
       - SEED_TEST_DATA=true
     volumes:
-      - .:/var/www/html/admin
+      - .:/var/www/public_html/admin
       - files_vol:/var/files
     depends_on:
       db:
@@ -37,6 +37,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: dev_root_password_123
       MYSQL_DATABASE: wncore_main
+    volumes:
+      - wn_db_main:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -48,6 +50,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: dev_root_password_123
       MYSQL_DATABASE: wncore_shard_1
+    volumes:
+      - wn_db_shard1:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -59,6 +63,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: dev_root_password_123
       MYSQL_DATABASE: wncore_shard_2
+    volumes:
+      - wn_db_shard2:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -78,5 +84,14 @@ services:
     depends_on:
       - app
 
+# Named volumes with explicit names (no project prefix) so child apps
+# can share the same database volumes. See CHILD_APP_SPEC.md.
 volumes:
   files_vol:
+    name: wn_files
+  wn_db_main:
+    name: wn_db_main
+  wn_db_shard1:
+    name: wn_db_shard1
+  wn_db_shard2:
+    name: wn_db_shard2

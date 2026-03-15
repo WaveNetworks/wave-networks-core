@@ -1,6 +1,12 @@
 # Credentials - config.php is gitignored, config.sample.php is committed
 config/config.php
 
+# Deploy credentials (sample is committed)
+deploy_config.py
+
+# Docker local overrides
+docker-compose.override.yml
+
 # Composer
 vendor/
 

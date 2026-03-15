@@ -19,6 +19,7 @@ function get_branding() {
         'site_description'      => '',
         'theme_color'           => '#212529',
         'logo_path'             => null,
+        'logo_dark_path'        => null,
         'favicon_path'          => null,
         'pwa_screenshot_wide'   => null,
         'pwa_screenshot_mobile' => null,
@@ -26,7 +27,7 @@ function get_branding() {
 
     $row = db_fetch(db_query(
         "SELECT site_name, site_short_name, site_description, theme_color,
-                logo_path, favicon_path, pwa_screenshot_wide, pwa_screenshot_mobile
+                logo_path, logo_dark_path, favicon_path, pwa_screenshot_wide, pwa_screenshot_mobile
          FROM auth_settings WHERE setting_id = 1"
     ));
 

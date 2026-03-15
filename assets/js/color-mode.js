@@ -23,8 +23,17 @@
         btn.setAttribute('title', mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
     }
 
-    // Sync icon to whatever the head script already set
+    function updateLogos(mode) {
+        document.querySelectorAll('img[data-logo-dark]').forEach(function (img) {
+            // If the logo is inside a forced-dark container, always use the dark variant
+            var forcedDark = img.closest('[data-bs-theme="dark"]');
+            img.src = (mode === 'dark' || forcedDark) ? img.dataset.logoDark : img.dataset.logoLight;
+        });
+    }
+
+    // Sync icon and logos to whatever the head script already set
     syncIcon(getMode());
+    updateLogos(getMode());
 
     btn.addEventListener('click', function () {
         var current = getMode();
@@ -32,6 +41,7 @@
         document.documentElement.setAttribute('data-bs-theme', next);
         localStorage.setItem(STORAGE_KEY, next);
         syncIcon(next);
+        updateLogos(next);
     });
 
     // Live system preference tracking (only when user hasn't set explicit preference)
@@ -40,5 +50,6 @@
         var mode = e.matches ? 'dark' : 'light';
         document.documentElement.setAttribute('data-bs-theme', mode);
         syncIcon(mode);
+        updateLogos(mode);
     });
 })();

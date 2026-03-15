@@ -6,7 +6,7 @@
     RewriteEngine On
 
     # Block access to sensitive directories
-    RewriteRule ^(vendor|db_migrations|cron|tests|include|config|views|snippets)(/|$) - [F,L]
+    RewriteRule ^(vendor|db_migrations|cron|tests|include|config|views|snippets|install|docker)(/|$) - [F,L]
 
     # Pretty URLs (optional - index.php handles routing)
     RewriteCond %{REQUEST_FILENAME} !-f
@@ -25,7 +25,7 @@
 </FilesMatch>
 
 # Deny access to composer files
-<FilesMatch "^(composer\.(json|lock)|package\.json)$">
+<FilesMatch "^(composer\.(json|lock)|package\.json|package-lock\.json|deploy\.py|deploy_config\.py|deploy_config\.sample\.py|Dockerfile|docker-compose.*\.yml|CLAUDE\.md|CHILD_APP_SPEC\.md)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>

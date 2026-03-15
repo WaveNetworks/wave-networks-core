@@ -2,23 +2,23 @@
 // Copy to admin/config/config.php
 // Fill in real values. NEVER commit config.php
 
-$dbHostSpec  = 'localhost';
+$dbHostSpec  = 'your_main_db_host';
 $dbInstance  = 'wncore_main';
-$dbUserName  = 'dbuser';
-$dbPassword  = 'dbpassword';
+$dbUserName  = 'your_main_db_user';
+$dbPassword  = 'your_main_db_password';
 
 $shardConfigs = [
     'shard1' => [
-        'host' => 'localhost',
+        'host' => 'your_shard1_db_host',
         'name' => 'wncore_shard_1',
-        'user' => 'dbuser',
-        'pass' => 'dbpassword',
+        'user' => 'your_shard1_db_user',
+        'pass' => 'your_shard1_db_password',
     ],
     'shard2' => [
-        'host' => 'localhost',
+        'host' => 'your_shard2_db_host',
         'name' => 'wncore_shard_2',
-        'user' => 'dbuser',
-        'pass' => 'dbpassword',
+        'user' => 'your_shard2_db_user',
+        'pass' => 'your_shard2_db_password',
     ],
 ];
 

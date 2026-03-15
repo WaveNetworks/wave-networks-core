@@ -27,6 +27,8 @@ $views = [
     'notification_preferences' => __DIR__ . '/../views/notification_preferences.php',
     'notification_admin'       => __DIR__ . '/../views/notification_admin.php',
     'email'                    => __DIR__ . '/../views/email.php',
+    'error_log'                => __DIR__ . '/../views/error_log.php',
+    'api_keys'                 => __DIR__ . '/../views/api_keys.php',
 ];
 
 if (isset($views[$page]) && file_exists($views[$page])) {

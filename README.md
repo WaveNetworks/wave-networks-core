@@ -178,14 +178,36 @@ See [docs/SSO.md](docs/SSO.md) for step-by-step instructions on configuring OAut
 
 See [docs/Migration.md](docs/Migration.md) for parallel auth migration from legacy systems with transparent password rehash.
 
+## Shared Assets
+
+Core provides CSS and JS that child apps reference directly (never copy):
+
+### CSS (loaded in child app `<head>`)
+
+| File | Purpose |
+|------|---------|
+| `assets/css/style.css` | Sidebar, navbar, layout structure, collapse behavior |
+| `assets/css/bs-theme-overrides.css` | Dark/light mode overrides for Bootstrap components |
+
+### JS (loaded in child app footer)
+
+| File | Purpose |
+|------|---------|
+| `assets/js/bs-init.js` | `apiPost()` AJAX helper, Bootstrap component initialization |
+| `assets/js/sidebar.js` | Sidebar collapse/expand, mobile toggle, localStorage persistence |
+| `assets/js/color-mode.js` | Dark/light mode toggle with localStorage and system preference detection |
+| `assets/js/notifications.js` | Notification bell polling, dropdown rendering, mark-read, Web Push |
+
+Child apps reference these via relative paths (`../../admin/assets/...`) and add their own app-specific JS on top.
+
 ## Child App Integration
 
 Child apps include core's common file to get auth, sessions, shard routing, email, and notifications:
 
 ```php
 <?php
-define('APP_MIGRATION_DIR', __DIR__ . '/db_migrations');
-include(__DIR__ . '/../admin/include/common.php');
+// child-app/include/common.php
+include(__DIR__ . '/../../admin/include/common.php');
 
 // Session is loaded, shard is primed
 // Access $_SESSION['user_id'], $_SESSION['shard_id'], etc.
@@ -194,6 +216,24 @@ include(__DIR__ . '/../admin/include/common.php');
 ```
 
 Child apps create their own databases and tables. They never write to core tables.
+
+### Reference Implementation
+
+The [child-app](https://github.com/WaveNetworks/child-app) repo is a fully working example that demonstrates:
+
+- Three-layer database pattern (core read-only, child main, child shards)
+- Custom SCSS theme pipeline with glassmorphism design
+- D3.js dashboard charts (line chart, donut chart)
+- DataTables with Bootstrap 5 + Responsive extension
+- Live search via debounced AJAX (`apiPost`)
+- AJAX modals via `modalView()`
+- Offcanvas settings panel
+- Toast notification system
+- Notification bell integration
+- Branded auth pages
+- Docker development environment (8 services)
+
+Clone it, rename it, and replace the example views with your own.
 
 See [CHILD_APP_SPEC.md](CHILD_APP_SPEC.md) for the full integration specification.
 

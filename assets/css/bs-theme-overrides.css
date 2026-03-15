@@ -5,13 +5,58 @@
    ============================================= */
 
 /*
- * Sidebar: force dark appearance always.
- * The sidebar has data-bs-theme="dark" so Bootstrap variables are dark,
- * but some Bootswatch themes may override specific component styles.
- * These rules ensure the sidebar stays visually dark regardless of theme.
+ * Sidebar: default dark appearance (fallback when no child-app theme loaded).
+ * No !important here — child-app themes load after this and should be able
+ * to override these defaults with their own sidebar styling.
  */
 #sidebar {
-    background-color: var(--bs-dark) !important;
+    background-color: #212529;
+    color: #fff;
+}
+
+#sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+#sidebar .nav-link:hover {
+    color: #fff;
+}
+
+#sidebar .nav-link.active {
+    color: #fff;
+}
+
+/*
+ * Sidebar ADA compliance: when the sidebar has data-bs-theme="dark" (admin app),
+ * force solid dark background and light text to meet WCAG contrast.
+ * Scoped to #sidebar[data-bs-theme="dark"] so child-app themes that don't
+ * set data-bs-theme on the sidebar can style it freely.
+ */
+#sidebar[data-bs-theme="dark"] {
+    background-color: #212529 !important;
+    color: #fff !important;
+}
+
+#sidebar[data-bs-theme="dark"] .sidebar-brand-text,
+#sidebar[data-bs-theme="dark"] .sidebar-brand-icon {
+    color: #fff !important;
+}
+
+#sidebar[data-bs-theme="dark"] .nav-link,
+#sidebar[data-bs-theme="dark"] .nav-link .sidebar-text,
+#sidebar[data-bs-theme="dark"] .nav-link .sidebar-icon {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+#sidebar[data-bs-theme="dark"] .nav-link:hover,
+#sidebar[data-bs-theme="dark"] .nav-link:hover .sidebar-text,
+#sidebar[data-bs-theme="dark"] .nav-link:hover .sidebar-icon {
+    color: #fff !important;
+}
+
+#sidebar[data-bs-theme="dark"] .nav-link.active,
+#sidebar[data-bs-theme="dark"] .nav-link.active .sidebar-text,
+#sidebar[data-bs-theme="dark"] .nav-link.active .sidebar-icon {
     color: #fff !important;
 }
 
@@ -29,14 +74,12 @@
 }
 
 /*
- * Dark navbar form controls: some Bootswatch themes hardcode light
- * background colors on .form-select / .form-control, overriding the
- * dark context set by data-bs-theme="dark" on the topnav.
- * Force these elements to use the dark CSS variables.
+ * Top navbar form controls: ensure legibility in light mode.
+ * Some themes redefine --bs-body-color to white globally, making
+ * form text invisible on a light navbar. Only override in light mode
+ * and only for the navbar controls, not the whole page.
  */
-nav[data-bs-theme="dark"] .form-select,
-nav[data-bs-theme="dark"] .form-control {
-    background-color: var(--bs-body-bg) !important;
-    color: var(--bs-body-color) !important;
-    border-color: var(--bs-border-color) !important;
+[data-bs-theme="light"] #topNav .form-select,
+[data-bs-theme="light"] #topNav .form-control {
+    color: #212529 !important;
 }

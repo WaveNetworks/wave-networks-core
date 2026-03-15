@@ -1,0 +1,2 @@
+# MCP server is CLI-only, deny web access
+Deny from all

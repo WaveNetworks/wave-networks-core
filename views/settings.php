@@ -125,6 +125,23 @@ $branding = get_branding();
                             <div class="form-text">Shown in sidebar and auth pages. PNG, JPG, SVG, ICO, or WebP. Max 2 MB.</div>
                         </div>
                         <div class="col-md-6">
+                            <label for="logo_dark" class="form-label">Logo (Dark Mode)</label>
+                            <?php if (!empty($branding['logo_dark_path'])) { ?>
+                            <div class="mb-2">
+                                <img src="../uploads/<?= h($branding['logo_dark_path']) ?>" alt="Current dark logo" style="max-height: 48px;" class="border rounded p-1 bg-dark">
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" id="remove_logo_dark" name="remove_logo_dark" value="1">
+                                    <label class="form-check-label small" for="remove_logo_dark">Remove dark logo</label>
+                                </div>
+                            </div>
+                            <?php } ?>
+                            <input type="file" class="form-control" id="logo_dark" name="logo_dark" accept="image/png,image/jpeg,image/svg+xml,image/x-icon,image/webp">
+                            <div class="form-text">Light-colored variant for dark backgrounds. Falls back to the main logo if not set.</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
                             <label for="favicon" class="form-label">Favicon</label>
                             <?php if (!empty($branding['favicon_path'])) { ?>
                             <div class="mb-2">

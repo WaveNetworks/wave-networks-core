@@ -1,7 +1,7 @@
 <?php
 /**
  * themeFunctions.php
- * Bootswatch theme management.
+ * Bootswatch + registered theme management.
  * Theme is stored in a cookie (wn_theme) set by theme.js so PHP can
  * render the correct stylesheet on first paint — no FOUC.
  */
@@ -14,8 +14,9 @@ $GLOBALS['_bootswatch_allowed'] = [
 ];
 
 /**
- * Get the active Bootswatch theme name.
- * Reads from cookie (set by theme.js), validated against allowed list.
+ * Get the active theme name.
+ * Reads from cookie (set by theme.js), validated against Bootswatch
+ * allowed list and registered custom themes.
  *
  * @return string
  */
@@ -24,18 +25,31 @@ function get_active_theme() {
     if (in_array($theme, $GLOBALS['_bootswatch_allowed'])) {
         return $theme;
     }
+    if (function_exists('get_registered_theme') && get_registered_theme($theme)) {
+        return $theme;
+    }
     return 'sandstone';
 }
 
 /**
  * Get the CSS URL for the active theme.
- * Returns a Bootswatch CDN URL or the local bootstrap path.
+ * Returns a Bootswatch CDN URL, local bootstrap path, or registered theme CSS.
  *
- * @param string $prefix Path prefix to local assets (e.g. '../' from views/)
+ * @param string $prefix         Path prefix to admin assets (e.g. '../' from admin views)
+ * @param string $webroot_prefix Path prefix from current app to webroot (e.g. '../' from admin, '../../' from child)
  * @return string
  */
-function get_theme_css_url($prefix = '../') {
+function get_theme_css_url($prefix = '../', $webroot_prefix = '../../') {
     $theme = get_active_theme();
+
+    // Check registered custom themes
+    if (function_exists('get_registered_theme')) {
+        $registered = get_registered_theme($theme);
+        if ($registered) {
+            return $webroot_prefix . $registered['css_path'];
+        }
+    }
+
     if ($theme === 'sandstone') {
         return $prefix . 'assets/bootstrap/css/bootstrap.min.css';
     }

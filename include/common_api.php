@@ -73,13 +73,25 @@ foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 
 // 5. Migrations
-$db_version    = $db_version ?? 1.8;
+$db_version    = $db_version ?? 2.3;
 $shard_version = $shard_version ?? 1.1;
 check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
 // 6. Session
 session_start();
+
+// 6b. Service API key authentication (Bearer token)
+$_SERVICE_API_KEY = null;
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+if (preg_match('/^Bearer\s+(wn_sk_.+)$/i', $authHeader, $m)) {
+    $_SERVICE_API_KEY = validate_service_api_key($m[1]);
+    if (!$_SERVICE_API_KEY) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid or revoked API key.', 'success' => '', 'info' => '', 'warning' => '', 'results' => []]);
+        exit;
+    }
+}
 
 // 7. definition.php
 include(__DIR__ . '/definition.php');

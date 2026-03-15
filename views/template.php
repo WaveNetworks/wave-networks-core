@@ -22,9 +22,9 @@
     <link rel="apple-touch-icon" href="../uploads/<?= h($b['favicon_path']) ?>">
     <?php } ?>
     <link rel="manifest" href="../manifest.php">
-    <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>">
+    <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>" id="themeStylesheet">
     <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/bs-theme-overrides.css">
+    <link rel="stylesheet" href="../assets/css/bs-theme-overrides.css?v=2">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
@@ -35,7 +35,7 @@
     <div class="bg-dark text-white d-flex flex-column" id="sidebar" data-bs-theme="dark">
         <div class="sidebar-brand px-3 py-2">
             <?php if (!empty($b['logo_path'])) { ?>
-            <span class="sidebar-brand-icon"><img src="../uploads/<?= h($b['logo_path']) ?>" alt=""></span>
+            <span class="sidebar-brand-icon"><img src="../uploads/<?= h($b['logo_path']) ?>" alt=""<?php if (!empty($b['logo_dark_path'])) { ?> data-logo-dark="../uploads/<?= h($b['logo_dark_path']) ?>" data-logo-light="../uploads/<?= h($b['logo_path']) ?>"<?php } ?>></span>
             <?php } else { ?>
             <span class="sidebar-brand-icon"><i class="bi bi-broadcast"></i></span>
             <?php } ?>
@@ -57,7 +57,7 @@
                 <i class="bi bi-people sidebar-icon"></i>
                 <span class="sidebar-text">Users</span>
             </a>
-            <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration']); ?>
+            <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration', 'error_log', 'api_keys']); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#settingsMenu" role="button"
                aria-expanded="<?= $settingsOpen ? 'true' : 'false' ?>" aria-controls="settingsMenu">
@@ -81,6 +81,12 @@
                     </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'migration' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=migration">
                         <span class="sidebar-text">Migration</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'error_log' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=error_log">
+                        <span class="sidebar-text">Error Log</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'api_keys' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=api_keys">
+                        <span class="sidebar-text">API Keys</span>
                     </a>
                 </nav>
             </div>
@@ -126,15 +132,15 @@
     <div class="flex-grow-1">
 
         <!-- REGION: topnav -->
-        <nav class="navbar navbar-expand-lg bg-dark border-bottom border-secondary border-opacity-25 px-3 py-2" data-bs-theme="dark">
-            <button class="btn btn-sm btn-outline-light me-2 d-md-none" id="sidebarToggleTop" type="button">
+        <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom px-3 py-2" id="topNav">
+            <button class="btn btn-sm btn-outline-secondary me-2 d-md-none" id="sidebarToggleTop" type="button">
                 <i class="bi bi-list"></i>
             </button>
             <span class="navbar-brand mb-0 h6">&nbsp;</span>
             <div class="ms-auto d-flex align-items-center">
                 <!-- Notification bell -->
                 <div class="dropdown me-2" id="notificationBell">
-                    <button class="btn btn-sm btn-outline-light position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Notifications">
+                    <button class="btn btn-sm btn-outline-secondary position-relative" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Notifications">
                         <i class="bi bi-bell"></i>
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notifBadge">0</span>
                     </button>
@@ -151,18 +157,19 @@
                 </div>
 
                 <!-- Color mode toggle -->
-                <button class="btn btn-sm btn-outline-light me-2" id="colorModeToggle" type="button" title="Toggle dark mode">
+                <button class="btn btn-sm btn-outline-secondary me-2" id="colorModeToggle" type="button" title="Toggle dark mode">
                     <i class="bi bi-moon-fill"></i>
                 </button>
 
                 <!-- Theme switcher -->
-                <select class="form-select form-select-sm me-3" id="themeSelector" style="width: auto;">
+                <select class="form-select form-select-sm me-3" id="themeSelector" style="width: auto;"
+                        data-registered-themes='<?= get_registered_themes_json() ?>'>
                     <option value="sandstone">Sandstone</option>
                 </select>
 
                 <!-- User dropdown -->
                 <div class="dropdown">
-                    <a class="btn btn-sm btn-outline-light dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                    <a class="btn btn-sm btn-outline-secondary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <?= h($_SESSION['first_name'] ?? '') ?><span class="d-none d-md-inline"> <?= h($_SESSION['last_name'] ?? '') ?></span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">

@@ -14,7 +14,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 
-WORKDIR /var/www/html/admin
+WORKDIR /var/www/public_html/admin
 
 COPY composer.json composer.lock* ./
 RUN composer install --no-dev --optimize-autoloader --no-scripts 2>/dev/null || true
@@ -24,6 +24,6 @@ COPY . .
 RUN if [ -f composer.json ]; then composer install --no-dev --optimize-autoloader; fi
 
 RUN mkdir -p /var/files/home \
-    && chown -R www-data:www-data /var/files /var/www/html
+    && chown -R www-data:www-data /var/files /var/www/public_html
 
 EXPOSE 80
