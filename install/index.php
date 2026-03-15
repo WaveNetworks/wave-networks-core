@@ -8,10 +8,8 @@
 // Prevent running if config already exists
 $configPath = __DIR__ . '/../config/config.php';
 if (file_exists($configPath)) {
-    // Lock down install directory if still accessible
-    @chmod(__DIR__ . '/index.php', 0600);
-    @chmod(__DIR__ . '/.htaccess', 0600);
-    @chmod(__DIR__, 0700);
+    // Lock down install directory via .htaccess deny-all
+    @file_put_contents(__DIR__ . '/.htaccess', "# Locked after install\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
     http_response_code(403);
     exit;
 }
@@ -144,10 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (file_put_contents($configPath, $config) !== false) {
             $success = true;
-            // Lock down install directory so it can't be accessed again
-            @chmod(__DIR__ . '/index.php', 0000);
-            @chmod(__DIR__ . '/.htaccess', 0000);
-            @chmod(__DIR__, 0000);
+            // Lock down install directory via .htaccess deny-all
+            @file_put_contents(__DIR__ . '/.htaccess', "# Locked after install\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
         } else {
             $errors[] = 'Could not write config/config.php. Check directory permissions.';
         }
