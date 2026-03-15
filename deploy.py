@@ -103,6 +103,7 @@ EXCLUDE_PATTERNS = [
     "package-lock.json",
     ".gitignore",
     "cert/",
+    "install/",
 ]
 
 
@@ -234,8 +235,13 @@ def main():
     parser = argparse.ArgumentParser(description="Deploy admin to server via SFTP")
     parser.add_argument("--all", action="store_true", help="Deploy all tracked files + vendor")
     parser.add_argument("--vendor", action="store_true", help="Deploy only vendor/ directory")
+    parser.add_argument("--with-install", action="store_true", help="Include install/ directory (first-time setup only)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be deployed")
     args = parser.parse_args()
+
+    if args.with_install and "install/" in EXCLUDE_PATTERNS:
+        EXCLUDE_PATTERNS.remove("install/")
+        print("[DEPLOY] Including install/ directory for first-time setup")
 
     print(f"[DEPLOY] Deploying admin to {config.SFTP_HOST}...")
 
