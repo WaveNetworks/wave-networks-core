@@ -9,9 +9,9 @@
 $configPath = __DIR__ . '/../config/config.php';
 if (file_exists($configPath)) {
     // Lock down install directory if still accessible
-    @chmod(__DIR__ . '/index.php', 0000);
-    @chmod(__DIR__ . '/.htaccess', 0000);
-    @chmod(__DIR__, 0000);
+    @chmod(__DIR__ . '/index.php', 0600);
+    @chmod(__DIR__ . '/.htaccess', 0600);
+    @chmod(__DIR__, 0700);
     http_response_code(403);
     exit;
 }
