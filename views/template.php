@@ -23,7 +23,7 @@
     <?php } ?>
     <link rel="manifest" href="../manifest.php">
     <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>" id="themeStylesheet">
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/style.css?v=20260316">
     <link rel="stylesheet" href="../assets/css/bs-theme-overrides.css?v=2">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
@@ -33,14 +33,14 @@
 
     <!-- REGION: sidebar -->
     <div class="bg-dark text-white d-flex flex-column" id="sidebar" data-bs-theme="dark">
-        <div class="sidebar-brand px-3 py-2">
+        <a href="../../" class="sidebar-brand px-3 py-2 text-white text-decoration-none">
             <?php if (!empty($b['logo_path'])) { ?>
             <span class="sidebar-brand-icon"><img src="../uploads/<?= h($b['logo_path']) ?>" alt=""<?php if (!empty($b['logo_dark_path'])) { ?> data-logo-dark="../uploads/<?= h($b['logo_dark_path']) ?>" data-logo-light="../uploads/<?= h($b['logo_path']) ?>"<?php } ?>></span>
             <?php } else { ?>
             <span class="sidebar-brand-icon"><i class="bi bi-broadcast"></i></span>
             <?php } ?>
             <span class="sidebar-brand-text"><?= h($b['site_name']) ?></span>
-        </div>
+        </a>
         <hr class="text-secondary my-0">
         <nav class="nav flex-column p-2 flex-grow-1">
             <a class="nav-link text-white <?= ($page ?? '') === 'dashboard' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=dashboard">
@@ -175,6 +175,8 @@
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><span class="dropdown-item-text small text-muted"><?= h($_SESSION['email'] ?? '') ?></span></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="index.php?page=account_security"><i class="bi bi-shield-lock me-2"></i>Account & Security</a></li>
+                        <li><hr class="dropdown-divider"></li>
                         <li>
                             <form method="post" class="d-inline">
                                 <input type="hidden" name="action" value="logout">
@@ -214,12 +216,36 @@
                 include($current_page_file);
             } ?>
         </div>
+
+        <!-- REGION: footer -->
+        <?php
+        $childApps = [];
+        $publicHtml = __DIR__ . '/../../';
+        if (is_dir($publicHtml)) {
+            foreach (scandir($publicHtml) as $dir) {
+                if ($dir === '.' || $dir === '..' || $dir === 'admin') continue;
+                if (is_dir($publicHtml . $dir) && file_exists($publicHtml . $dir . '/app/index.php')) {
+                    $childApps[] = $dir;
+                }
+            }
+        }
+        ?>
+        <?php if (!empty($childApps)) { ?>
+        <footer class="app-footer px-4 py-2 d-flex align-items-center border-top border-secondary border-opacity-25">
+            <nav class="small">
+                <?php foreach ($childApps as $appDir) { ?>
+                <a href="../../<?= h($appDir) ?>/app/" class="badge bg-primary bg-opacity-75 text-decoration-none me-1"><i class="bi bi-box-arrow-up-right me-1"></i><?= h(ucwords(str_replace('-', ' ', $appDir))) ?></a>
+                <?php } ?>
+            </nav>
+        </footer>
+        <?php } ?>
     </div>
 </div>
 
 <!-- REGION: footer-scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="../assets/js/bs-init.js"></script>
+<script src="../assets/js/error-reporter.js"></script>
 <script src="../assets/js/sidebar.js"></script>
 <script src="../assets/js/color-mode.js"></script>
 <script src="../assets/js/theme.js"></script>
