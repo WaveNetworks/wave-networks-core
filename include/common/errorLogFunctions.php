@@ -72,32 +72,48 @@ function log_error_to_db($level, $message, $file = null, $line = null, $trace = 
 
         $context_json = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
 
-        $stmt = $db->prepare(
-            "INSERT INTO error_log
-                (level, message, file, line, stack_trace, context_json, source_app, page,
-                 request_uri, request_method, user_id, ip_address, user_agent, php_version, memory_usage)
-             VALUES
-                (:level, :message, :file, :line, :trace, :context, :source, :page,
-                 :uri, :method, :uid, :ip, :ua, :phpver, :mem)"
+        // Check for existing unresolved error with same hash — increment count instead of inserting
+        $existing = $db->prepare(
+            "SELECT error_id FROM error_log WHERE error_hash = :hash AND resolved_at IS NULL LIMIT 1"
         );
+        $existing->execute([':hash' => $hash]);
+        $existing_row = $existing->fetch(\PDO::FETCH_ASSOC);
 
-        $stmt->execute([
-            ':level'   => $level,
-            ':message' => mb_substr($message, 0, 65535),
-            ':file'    => $file ? mb_substr($file, 0, 500) : null,
-            ':line'    => $line,
-            ':trace'   => $trace,
-            ':context' => $context_json,
-            ':source'  => mb_substr($source_app, 0, 50),
-            ':page'    => $page ? mb_substr($page, 0, 100) : null,
-            ':uri'     => isset($_SERVER['REQUEST_URI']) ? mb_substr($_SERVER['REQUEST_URI'], 0, 500) : null,
-            ':method'  => $_SERVER['REQUEST_METHOD'] ?? null,
-            ':uid'     => $_SESSION['user_id'] ?? null,
-            ':ip'      => $_SERVER['REMOTE_ADDR'] ?? null,
-            ':ua'      => isset($_SERVER['HTTP_USER_AGENT']) ? mb_substr($_SERVER['HTTP_USER_AGENT'], 0, 500) : null,
-            ':phpver'  => phpversion(),
-            ':mem'     => memory_get_usage(),
-        ]);
+        if ($existing_row) {
+            $update = $db->prepare(
+                "UPDATE error_log SET occurrence_count = occurrence_count + 1, last_seen_at = NOW() WHERE error_id = :id"
+            );
+            $update->execute([':id' => $existing_row['error_id']]);
+        } else {
+            $stmt = $db->prepare(
+                "INSERT INTO error_log
+                    (level, message, file, line, stack_trace, context_json, source_app, page,
+                     request_uri, request_method, user_id, ip_address, user_agent, php_version,
+                     memory_usage, occurrence_count, last_seen_at, error_hash)
+                 VALUES
+                    (:level, :message, :file, :line, :trace, :context, :source, :page,
+                     :uri, :method, :uid, :ip, :ua, :phpver, :mem, 1, NOW(), :hash)"
+            );
+
+            $stmt->execute([
+                ':level'   => $level,
+                ':message' => mb_substr($message, 0, 65535),
+                ':file'    => $file ? mb_substr($file, 0, 500) : null,
+                ':line'    => $line,
+                ':trace'   => $trace,
+                ':context' => $context_json,
+                ':source'  => mb_substr($source_app, 0, 50),
+                ':page'    => $page ? mb_substr($page, 0, 100) : null,
+                ':uri'     => isset($_SERVER['REQUEST_URI']) ? mb_substr($_SERVER['REQUEST_URI'], 0, 500) : null,
+                ':method'  => $_SERVER['REQUEST_METHOD'] ?? null,
+                ':uid'     => $_SESSION['user_id'] ?? null,
+                ':ip'      => $_SERVER['REMOTE_ADDR'] ?? null,
+                ':ua'      => isset($_SERVER['HTTP_USER_AGENT']) ? mb_substr($_SERVER['HTTP_USER_AGENT'], 0, 500) : null,
+                ':phpver'  => phpversion(),
+                ':mem'     => memory_get_usage(),
+                ':hash'    => $hash,
+            ]);
+        }
     } catch (\Throwable $e) {
         // DB logging failed — fall back to standard error_log
         error_log("[$level] $message in $file on line $line");

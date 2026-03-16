@@ -29,6 +29,7 @@ $views = [
     'email'                    => __DIR__ . '/../views/email.php',
     'error_log'                => __DIR__ . '/../views/error_log.php',
     'api_keys'                 => __DIR__ . '/../views/api_keys.php',
+    'account_security'         => __DIR__ . '/../views/account_security.php',
 ];
 
 if (isset($views[$page]) && file_exists($views[$page])) {

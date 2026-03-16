@@ -139,9 +139,9 @@
     transform: rotate(180deg);
 }
 
-/* Sidebar backdrop — hidden globally, real element kept for legacy compat */
+/* Sidebar backdrop — hidden by default, shown on mobile when sidebar is open */
 #sidebarBackdrop {
-    display: none !important;
+    display: none;
 }
 
 /* =============================================
@@ -149,7 +149,23 @@
    ============================================= */
 
 @media (max-width: 575.98px) {
-    #sidebar {
+    /* Break #wrapper's stacking context so sidebar z-index works at root level.
+       Without this, wrapper's inline z-index:1 traps sidebar (even at 1050)
+       and any backdrop element/pseudo covers the sidebar, blocking clicks. */
+    #wrapper {
+        z-index: auto !important;
+    }
+
+    /* Keep main content above the canvas background (z-index:0) */
+    #wrapper > .flex-grow-1 {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* body prefix boosts specificity above theme CSS (custom.css loads after
+       style.css and uses !important on #sidebar background-color — with equal
+       specificity last-loaded wins. body #sidebar beats #sidebar). */
+    body #sidebar {
         position: fixed;
         top: 0;
         left: -224px;
@@ -157,33 +173,35 @@
         height: 100vh;
         min-height: 0;
         transition: left 0.3s ease;
-        /* Solid background so sidebar is readable over content.
-           Theme CSS may set glass/transparent bg — override it on mobile. */
+        /* Solid opaque background — theme CSS sets transparent bg + backdrop-filter.
+           -webkit-backdrop-filter on iOS Safari creates stacking contexts that
+           break touch events AND makes the sidebar see-through. */
         background: #1a1a2e !important;
+        background-color: #1a1a2e !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
 
-    [data-bs-theme="light"] #sidebar {
+    [data-bs-theme="light"] body #sidebar {
         background: #f0f0f3 !important;
+        background-color: #f0f0f3 !important;
     }
 
     body.sidebar-visible #sidebar {
         left: 0;
-        overflow: visible; /* Allow ::before backdrop to extend beyond sidebar */
     }
 
-    /* Backdrop as pseudo-element on sidebar itself — inherits sidebar's
-       stacking position within #wrapper, avoids all z-index/stacking issues.
-       Positioned fixed to cover viewport; z-index:-1 puts it behind sidebar
-       content but at sidebar's paint level (above main content). */
-    body.sidebar-visible #sidebar::before {
-        content: '';
+    /* Backdrop: real element at z-index just below sidebar.
+       Now works correctly because #wrapper no longer traps stacking. */
+    body.sidebar-visible #sidebarBackdrop {
+        display: block !important;
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
         background: rgba(0, 0, 0, 0.5);
-        z-index: -1;
+        z-index: 1049;
     }
 
     /* Never icon-only on mobile */

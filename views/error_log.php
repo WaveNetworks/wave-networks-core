@@ -19,7 +19,7 @@ $sources = get_error_log_sources();
 <div class="card mb-4">
     <div class="card-header">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <h6 class="mb-0"><i class="bi bi-journal-text me-1"></i> PHP Errors</h6>
+            <h6 class="mb-0"><i class="bi bi-journal-text me-1"></i> PHP & JS Errors</h6>
             <div class="d-flex flex-wrap gap-1 align-items-center">
                 <span class="badge bg-dark" id="badgeFatals"><?= $stats['fatals_today'] ?> fatal</span>
                 <span class="badge bg-danger" id="badgeErrors"><?= $stats['errors_today'] ?> errors today</span>
@@ -67,12 +67,13 @@ $sources = get_error_log_sources();
                     <th>Source</th>
                     <th>Page</th>
                     <th>User</th>
+                    <th>Count</th>
                     <th>Created</th>
                     <th style="width: 90px;"></th>
                 </tr>
             </thead>
             <tbody id="errorTable">
-                <tr><td colspan="8" class="text-center text-muted py-3">Loading...</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-3">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -140,7 +141,7 @@ function loadErrors() {
         }
 
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No errors found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">No errors found.</td></tr>';
         } else {
             var html = '';
             items.forEach(function(item) {
@@ -161,6 +162,12 @@ function loadErrors() {
                 html += '<td><span class="badge bg-light text-dark">' + escHtml(item.source_app || '') + '</span></td>';
                 html += '<td class="small">' + escHtml(item.page || '') + '</td>';
                 html += '<td class="small">' + (item.user_id || '—') + '</td>';
+                var count = parseInt(item.occurrence_count) || 1;
+                if (count > 1) {
+                    html += '<td><span class="badge bg-warning text-dark" title="Last seen: ' + escHtml(item.last_seen_at || '') + '">' + count + 'x</span></td>';
+                } else {
+                    html += '<td class="small text-muted">1</td>';
+                }
                 html += '<td class="small">' + escHtml(item.created || '') + '</td>';
                 html += '<td class="text-end text-nowrap">';
                 if (isResolved) {
@@ -174,7 +181,7 @@ function loadErrors() {
 
                 // Detail row (hidden by default)
                 html += '<tr id="detail-' + item.error_id + '" style="display:none;">';
-                html += '<td colspan="8" class="p-3 bg-body-tertiary">';
+                html += '<td colspan="9" class="p-3 bg-body-tertiary">';
                 html += '<div class="row">';
 
                 // Left column: message + file + request
@@ -183,6 +190,10 @@ function loadErrors() {
                 html += '<p class="small">' + msg + '</p>';
                 html += '<p class="mb-1"><strong>File:</strong> <code>' + escHtml(item.file || '?') + ':' + (item.line || '?') + '</code></p>';
                 html += '<p class="mb-1"><strong>Request:</strong> <code>' + escHtml(item.request_method || '') + ' ' + escHtml(item.request_uri || '') + '</code></p>';
+                if (count > 1) {
+                    html += '<p class="mb-1"><strong>Occurrences:</strong> <span class="badge bg-warning text-dark">' + count + '</span>';
+                    html += ' &mdash; <strong>Last seen:</strong> ' + escHtml(item.last_seen_at || '') + '</p>';
+                }
                 html += '<p class="mb-1"><strong>IP:</strong> ' + escHtml(item.ip_address || '—') + '</p>';
                 html += '<p class="mb-1"><strong>User Agent:</strong> <span class="small text-muted">' + escHtml(item.user_agent || '—') + '</span></p>';
                 if (isResolved) {
