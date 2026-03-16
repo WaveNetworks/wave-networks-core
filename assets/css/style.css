@@ -15,11 +15,15 @@
     flex-shrink: 0;
 }
 
-/* Let the nav area scroll if it overflows, keep brand + footer pinned */
+/* Let the nav area scroll if it overflows, keep brand + footer pinned.
+   flex-wrap: nowrap overrides Bootstrap .nav's flex-wrap:wrap — without it,
+   flex-direction:column + wrap causes items to flow into adjacent columns
+   when they overflow vertically (instead of scrolling). */
 #sidebar > nav {
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
+    flex-wrap: nowrap !important;
 }
 
 #sidebar .nav-link {
@@ -159,9 +163,15 @@
         left: 0;
     }
 
-    /* Dark backdrop — uses real element inside #wrapper so it shares the same
-       stacking context as #sidebar (body::after sits outside #wrapper's z-index:1
-       context and would cover the sidebar). */
+    /* Break #wrapper's stacking context so sidebar z-index:1050 applies
+       in the root context, above the backdrop. When sidebar is closed,
+       wrapper regains its z-index (from inline style) to stay above canvas. */
+    body.sidebar-visible #wrapper {
+        z-index: auto !important;
+    }
+
+    /* Dark backdrop — real element, z-index in root context now that
+       wrapper's stacking context is broken when sidebar is visible. */
     body.sidebar-visible #sidebarBackdrop {
         display: block;
         position: fixed;
