@@ -106,12 +106,15 @@
 }
 
 #sidebar.collapsed .sidebar-text,
-#sidebar.collapsed .sidebar-brand-text,
-#sidebar.collapsed .sidebar-badge {
+#sidebar.collapsed .sidebar-brand-text {
     opacity: 0;
     width: 0;
     margin-left: 0;
     overflow: hidden;
+}
+
+#sidebar.collapsed .sidebar-badge {
+    display: none;
 }
 
 #sidebar.collapsed .nav-link {
@@ -130,6 +133,11 @@
 
 #sidebar.collapsed #sidebarToggleIcon {
     transform: rotate(180deg);
+}
+
+/* Sidebar backdrop — hidden globally, shown only on xs mobile via media query */
+#sidebarBackdrop {
+    display: none;
 }
 
 /* =============================================
@@ -151,9 +159,11 @@
         left: 0;
     }
 
-    /* Dark backdrop */
-    body.sidebar-visible::after {
-        content: '';
+    /* Dark backdrop — uses real element inside #wrapper so it shares the same
+       stacking context as #sidebar (body::after sits outside #wrapper's z-index:1
+       context and would cover the sidebar). */
+    body.sidebar-visible #sidebarBackdrop {
+        display: block;
         position: fixed;
         top: 0;
         left: 0;
@@ -168,7 +178,8 @@
         width: 224px;
     }
 
-    /* Hide desktop toggle on mobile */
+    /* Hide collapse toggle on mobile (hamburger button handles it) */
+    #sidebar .sidebar-toggle-area,
     #sidebar .sidebar-footer {
         display: none !important;
     }
@@ -184,12 +195,15 @@
     }
 
     #sidebar .sidebar-text,
-    #sidebar .sidebar-brand-text,
-    #sidebar .sidebar-badge {
+    #sidebar .sidebar-brand-text {
         opacity: 0;
         width: 0;
         margin-left: 0;
         overflow: hidden;
+    }
+
+    #sidebar .sidebar-badge {
+        display: none;
     }
 
     #sidebar .nav-link {
