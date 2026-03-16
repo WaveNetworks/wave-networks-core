@@ -1,5 +1,7 @@
 # Credentials - config.php is gitignored, config.sample.php is committed
 config/config.php
+config/config.php.prod
+config/_notes/
 
 # Deploy credentials (sample is committed)
 deploy_config.py
@@ -13,6 +15,12 @@ vendor/
 # Logs and temp
 *.log
 /tmp/
+
+# Uploaded content
+uploads/screenshots/
+
+# Python cache
+__pycache__/
 
 # OS
 .DS_Store
