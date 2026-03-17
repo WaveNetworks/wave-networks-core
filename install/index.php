@@ -57,13 +57,12 @@ if ($shardCount < 1) $shardCount = 1;
 if ($shardCount > $maxShards) $shardCount = $maxShards;
 
 // ─── Auto-detect files_location ─────────────────────────────────────────────
-$detectedFilesPath = '';
+// Default: one level above public_html, using __DIR__-relative path in config
+// config.php is at admin/config/, so ../../../files/ = above public_html
+$resolvedFilesPath = '';
 $publicHtml = realpath(__DIR__ . '/../../');
 if ($publicHtml) {
-    $parentDir = dirname($publicHtml);
-    $detectedFilesPath = $parentDir . '/files/';
-    // Normalize to forward slashes
-    $detectedFilesPath = str_replace('\\', '/', $detectedFilesPath);
+    $resolvedFilesPath = str_replace('\\', '/', dirname($publicHtml) . '/files/');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -180,7 +179,10 @@ if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST
         $shards[$i] = $shard;
     }
 
-    $filesLoc     = rtrim(trim($_POST['files_location'] ?? ''), '/') . '/';
+    // files_location is always __DIR__-relative (one level above public_html)
+    // config.php is at admin/config/ → ../../../files/ = above public_html
+    $configDir   = realpath(__DIR__ . '/../config') ?: __DIR__ . '/../config';
+    $filesLoc    = str_replace('\\', '/', $configDir . '/../../../files/');
     $smtpHost     = trim($_POST['smtp_host'] ?? '');
     $smtpPort     = (int)($_POST['smtp_port'] ?? 587);
     $smtpUser     = trim($_POST['smtp_user'] ?? '');
@@ -191,7 +193,6 @@ if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST
     // Validate required fields
     if (!$dbName) $errors[] = 'Main database name is required.';
     if (!$dbUser) $errors[] = 'Main database user is required.';
-    if (!$filesLoc || $filesLoc === '/') $errors[] = 'Files directory path is required.';
 
     // Test DB connections
     if (empty($errors)) {
@@ -216,16 +217,18 @@ if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST
         }
     }
 
-    // Auto-create files directory
+    // Auto-create files directory (one level above public_html)
     if (empty($errors) && $filesLoc) {
         if (!is_dir($filesLoc)) {
             if (!@mkdir($filesLoc, 0755, true)) {
                 $errors[] = "Could not create files directory: {$filesLoc}. Create it manually and ensure it's writable.";
             }
         }
-        $homeDir = $filesLoc . 'home/';
-        if (empty($errors) && !is_dir($homeDir)) {
-            @mkdir($homeDir, 0755, true);
+        foreach (['home/', 'branding/'] as $subdir) {
+            $sub = $filesLoc . $subdir;
+            if (empty($errors) && !is_dir($sub)) {
+                @mkdir($sub, 0755, true);
+            }
         }
     }
 
@@ -256,7 +259,7 @@ if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST
         $config .= "];\n\n";
         $config .= "\$hiddenhash     = " . var_export($hiddenHash, true) . ";\n";
         $config .= "\$app_secret     = " . var_export($appSecret, true) . ";\n\n";
-        $config .= "\$files_location = " . var_export($filesLoc, true) . ";\n\n";
+        $config .= "\$files_location = __DIR__ . '/../../../files/';\n\n";
         $config .= "\$smtp_host      = " . var_export($smtpHost, true) . ";\n";
         $config .= "\$smtp_port      = " . var_export($smtpPort, true) . ";\n";
         $config .= "\$smtp_user      = " . var_export($smtpUser, true) . ";\n";
@@ -294,7 +297,7 @@ $v = [
     'db_name'        => $_POST['db_name'] ?? '',
     'db_user'        => $_POST['db_user'] ?? '',
     'db_pass'        => $_POST['db_pass'] ?? '',
-    'files_location' => $_POST['files_location'] ?? $detectedFilesPath,
+    'files_location' => $resolvedFilesPath,
     'smtp_host'      => $_POST['smtp_host'] ?? '',
     'smtp_port'      => $_POST['smtp_port'] ?? '587',
     'smtp_user'      => $_POST['smtp_user'] ?? '',
@@ -499,9 +502,9 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
     <?php } ?>
 
     <h2>File Storage</h2>
-    <label>Files Directory (absolute path)</label>
-    <input type="text" name="files_location" value="<?= e($v['files_location']) ?>" required placeholder="/home/username/files/">
-    <p class="hint">Must be outside public_html. The directory will be created automatically if it doesn't exist.</p>
+    <label>Files Directory</label>
+    <input type="text" value="<?= e($v['files_location']) ?>" readonly disabled>
+    <p class="hint">Auto-detected: one level above public_html. Created automatically on first request.</p>
 
     <h2>Email (SMTP)</h2>
     <fieldset>

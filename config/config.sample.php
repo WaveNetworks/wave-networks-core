@@ -25,7 +25,7 @@ $shardConfigs = [
 $hiddenhash     = 'your_random_secret';   // salts all passwords
 $app_secret     = 'your_64_char_secret';  // signs JWTs
 
-$files_location = '/home/username/files/'; // trailing slash required
+$files_location = __DIR__ . '/../../../files/'; // one level above public_html
 
 $smtp_host      = 'smtp.yourdomain.com';
 $smtp_port      = 587;

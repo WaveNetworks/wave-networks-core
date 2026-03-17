@@ -16,8 +16,8 @@ vendor/
 *.log
 /tmp/
 
-# Uploaded content
-uploads/screenshots/
+# Uploaded content (branding now served from $files_location/branding/ outside webroot)
+uploads/
 
 # Python cache
 __pycache__/

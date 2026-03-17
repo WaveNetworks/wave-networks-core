@@ -84,7 +84,7 @@ shard_id NEVER changes after registration.
 common.php loads: __DIR__ . '/../config/config.php'
 Falls back to getenv() for Docker/CI.
 config.php is gitignored. config.sample.php is committed as reference.
-$files_location must be absolute path with trailing slash.
+$files_location uses __DIR__-relative path: __DIR__ . '/../../../files/' (resolves to one level above public_html).
 $shardConfigs array maps shard names to connection details.
 
 ## User homedir system
@@ -114,8 +114,8 @@ Branding uploads (logos, favicons, PWA icons) are stored in $files_location/bran
 ## Docker vs shared hosting
 Docker:  All config via environment variables. FILES_LOCATION=/var/files/
          Two shard containers: db_shard (shard1) + db_shard2 (shard2)
-Hosting: admin/config/config.php with absolute $files_location path.
-         ../files/ must be created manually by operator.
+Hosting: admin/config/config.php with __DIR__-relative $files_location.
+         ../files/ is auto-created on first request by bootstrap.
 
 ## Email queue system
 Main DB stores: email_settings (SMTP config, throttle limits, allowed senders)

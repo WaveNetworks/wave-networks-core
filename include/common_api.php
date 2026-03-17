@@ -68,6 +68,7 @@ if (file_exists($configFile)) {
 if (!empty($files_location)) {
     if (!is_dir($files_location)) { @mkdir($files_location, 0755, true); }
     if (!is_dir($files_location . 'home/')) { @mkdir($files_location . 'home/', 0755, true); }
+    if (!is_dir($files_location . 'branding/')) { @mkdir($files_location . 'branding/', 0755, true); }
 }
 
 // 3. PDO connection

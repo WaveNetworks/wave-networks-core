@@ -19,8 +19,10 @@ if (!$file || preg_match('/[\/\\\\]|\.\./', $file)) {
 $configFile = __DIR__ . '/config/config.php';
 if (file_exists($configFile)) {
     include($configFile);
+} elseif (getenv('FILES_LOCATION')) {
+    $files_location = getenv('FILES_LOCATION');
 } else {
-    $files_location = getenv('FILES_LOCATION') ?: '';
+    $files_location = __DIR__ . '/../../files/';
 }
 
 if (empty($files_location)) {
