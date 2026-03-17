@@ -50,10 +50,18 @@ $mime_map = [
 ];
 $mime = $mime_map[$ext] ?? (mime_content_type($path) ?: 'application/octet-stream');
 
-// Cache for 1 hour, revalidate
-header('Content-Type: ' . $mime);
-header('Content-Length: ' . filesize($path));
+// ETag based on file modification time for cache revalidation
+$etag = '"' . md5($path . filemtime($path)) . '"';
+header('ETag: ' . $etag);
 header('Cache-Control: public, max-age=3600, must-revalidate');
 header('X-Content-Type-Options: nosniff');
 
+// Return 304 if browser has current version
+if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
+    http_response_code(304);
+    exit;
+}
+
+header('Content-Type: ' . $mime);
+header('Content-Length: ' . filesize($path));
 readfile($path);

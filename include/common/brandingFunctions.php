@@ -37,6 +37,19 @@ function get_branding() {
         $branding = $defaults;
     }
 
+    // Append cache-busting version param to branding file paths
+    $file_fields = ['logo_path', 'logo_dark_path', 'favicon_path'];
+    $branding_dir = rtrim($GLOBALS['files_location'] ?? (__DIR__ . '/../../../files/'), '/') . '/branding/';
+    foreach ($file_fields as $field) {
+        if (!empty($branding[$field])) {
+            $full_path = $branding_dir . $branding[$field];
+            $mtime = @filemtime($full_path);
+            if ($mtime) {
+                $branding[$field] .= '?v=' . $mtime;
+            }
+        }
+    }
+
     return $branding;
 }
 
