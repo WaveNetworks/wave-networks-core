@@ -51,8 +51,8 @@ public_html/                       <- webroot (NOT a repo)
       seeds/
         dev_seed.sql
     assets/                        <- child app CSS/JS (optional, app-specific only)
-      scss/                        <- SCSS source for custom Bootstrap themes
-      css/                         <- compiled CSS output
+      themes/glassmorphism/        <- self-contained theme (SCSS + compiled CSS)
+      js/                          <- app-specific JavaScript
     CLAUDE.md
     .htaccess
     .gitignore
@@ -280,14 +280,17 @@ Use for: mark read, delete row, live search, load more.
 Child app-specific CSS/JS goes in your-app/assets/.
 
 ## SCSS theme customization
-Child apps can compile custom Bootstrap themes from SCSS:
+Child apps compile custom Bootstrap themes from SCSS. Each theme is a
+self-contained folder in `assets/themes/`:
 ```
-assets/scss/custom.scss          — main entry (imports _variables + bootstrap)
-assets/scss/_variables.scss      — Bootstrap variable overrides
-assets/scss/themes/my-theme/     — full Bootswatch-style theme
+assets/themes/glassmorphism/
+  _variables.scss      — Bootstrap variable overrides
+  custom.scss          — Entry point: imports _variables → bootstrap → _bootswatch
+  _bootswatch.scss     — Post-Bootstrap overrides, component styles
+  custom.css           — Compiled output (git-tracked)
 ```
-Build: `npm run build:css` compiles custom.scss to assets/css/custom.css.
-The compiled CSS is loaded by template.php if the file exists.
+Build: `npm run build:css` compiles to `assets/themes/{name}/custom.css`.
+Themes auto-register on next request via `themeRegistration.php`.
 
 ## Sending email from a child app
 Core provides a shared email queue. Child apps never configure SMTP themselves.
@@ -336,18 +339,35 @@ Users control frequency and push preferences per category from core's UI.
 System categories (is_system=1) cannot be turned off by users.
 
 ## Docker development
-Child app's docker-compose.yml runs 8 services:
-- `app` — PHP 8.2 Apache with both /admin/ and /child-app/ volume-mounted
-- `db`, `db_shard`, `db_shard2` — admin core databases
-- `db_child`, `db_child_shard`, `db_child_shard2` — child app's own databases
-- `mailhog` — SMTP testing
+Child app's docker-compose.yml runs 3 services:
+- `app` — PHP 8.2 Apache. Source COPIED into image at build time from both
+  repos via Compose `additional_contexts`. Composer deps installed at build.
+  Config auto-generated from env vars on first start (entrypoint.sh).
+- `db` — Single MySQL 8.0 server hosting all 6 databases (created by
+  `docker/init-databases.sql` mounted into `/docker-entrypoint-initdb.d/`).
+- `mailhog` — SMTP testing on port 8025.
 
-Source code is volume-mounted for live reload — edit PHP, refresh browser.
-Admin repo must be checked out as a sibling directory.
+Source is COPIED into the image — your working directory is never mounted.
+Changes require `docker compose up -d --build` to take effect.
+The public-facing website (webroot-level files) is also COPIED via a
+`website: ..` additional context.
 
-Child app config is read from environment variables (CHILD_DB_HOST, etc.)
-when config.php doesn't exist. Admin's env vars (DB_HOST_MAIN, etc.) are
-also set because admin's bootstrap reads them when its config.php is absent.
+### First run
+1. `docker compose up -d` — builds image, starts containers
+2. Visit `/admin/app/` to trigger migrations
+3. Visit `/admin/install/` to create admin user (step 2 — config pre-generated)
+
+### Database naming
+All databases are namespaced by child app name on a single MySQL server:
+`{app}_admin_main`, `{app}_admin_shard_1`, `{app}_admin_shard_2`,
+`{app}_main`, `{app}_shard_1`, `{app}_shard_2`.
+
+### Migration DDL caveat
+MySQL DDL (CREATE TABLE, ALTER TABLE, DROP TABLE) causes implicit commits.
+Do NOT wrap DDL in START TRANSACTION / COMMIT in migration files — the
+runner handles transactions automatically and detects when DDL has already
+auto-committed. Migration failures are logged to the admin error_log DB
+table as WARNING level.
 
 ## .htaccess (child app needs its own — does NOT inherit core's)
 Deny: include/, config/, views/, snippets/, db_migrations/
@@ -367,14 +387,15 @@ Deny: include/, config/, views/, snippets/, db_migrations/
 - Reuse core's database name for your app DB
 - Write to admin's shard tables from child app code
 
-## SCSS theme customization
-Child apps compile custom Bootstrap themes from SCSS:
+## SCSS theme customization (detailed)
+Themes live in `assets/themes/{theme-name}/` — each folder is self-contained:
 ```
-assets/scss/
-├── custom.scss          Entry point (imports _variables → bootstrap → _bootswatch)
+assets/themes/glassmorphism/
 ├── _variables.scss      Bootstrap variable overrides (colors, fonts, spacing)
-├── _bootswatch.scss     Theme overrides (glassmorphism, dark/light mode, all components)
-└── themes/              Additional Bootswatch-style theme variants
+├── custom.scss          Entry point (imports _variables → bootstrap → _bootswatch)
+├── _bootswatch.scss     Post-Bootstrap overrides (glassmorphism, dark/light mode)
+├── custom.css           Compiled output (git-tracked, not gitignored)
+└── CLAUDE.md            Theme-specific design rules
 ```
 
 Build: `npm run build:css` compiles to assets/css/custom.css.

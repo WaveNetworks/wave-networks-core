@@ -50,13 +50,30 @@ Concurrent logins are safe — transaction isolation prevents double-apply.
 -- [Brief description of changes]
 -- ⚠️ REMINDER: Update admin/include/common.php $db_version = X.X;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-START TRANSACTION;
 SET time_zone = "+00:00";
 
 -- Your SQL here
 ALTER TABLE tablename ADD COLUMN col datatype;
 
-COMMIT;
+## MySQL DDL and transactions
+Do NOT wrap migrations in START TRANSACTION / COMMIT. The migration runner
+manages transactions automatically via PDO beginTransaction()/commit().
+
+MySQL DDL statements (CREATE TABLE, ALTER TABLE, DROP TABLE) cause an
+**implicit commit** — they silently end any active transaction. The runner
+detects this via `$conn->inTransaction()` and skips the explicit commit
+if DDL already auto-committed. This prevents the "There is no active
+transaction" error that would otherwise occur.
+
+If a migration fails, the error is:
+  1. Set in `$_SESSION['error']` (shown as toast on next page load)
+  2. Written to PHP `error_log()` (Apache/container logs)
+  3. Logged to the admin `error_log` DB table as WARNING level
+     (visible in Settings → Error Log, filterable by source app)
+
+Old migration files may still contain START TRANSACTION / COMMIT — the runner
+strips these automatically (lines 63-65 of migrationFunctions.php). New
+migrations should omit them.
 
 ## Common migration patterns
 Add column:    ALTER TABLE t ADD COLUMN col datatype;
@@ -67,7 +84,7 @@ Modify column: ALTER TABLE t MODIFY COLUMN col new_datatype;
 
 ## Rules
 - Always create a NEW file (never edit existing migrations)
-- Always wrap in START TRANSACTION / COMMIT
+- Do NOT wrap in START TRANSACTION / COMMIT (runner handles transactions)
 - Always update $db_version or $shard_version in common.php
 - Use IF NOT EXISTS for CREATE TABLE (idempotent on retry)
 - Add reminder comment at top of every migration file
@@ -80,6 +97,6 @@ Modify column: ALTER TABLE t MODIFY COLUMN col new_datatype;
 [ ] SQL file exists in correct directory (main/ or shard/)
 [ ] $db_version or $shard_version updated in common.php
 [ ] Version in common.php MATCHES the new filename (e.g. 1.1.sql → $db_version = 1.1)
-[ ] Migration wraps statements in START TRANSACTION / COMMIT
+[ ] No START TRANSACTION / COMMIT wrapping DDL statements
 [ ] Reminder comment included at top of migration file
 [ ] Tested on development database
