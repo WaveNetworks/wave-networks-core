@@ -190,21 +190,17 @@
 
         <div class="container-fluid p-4">
 
-            <!-- Auto-delete install/ directory if it still exists after setup -->
+            <!-- Restrict install/ directory permissions after setup -->
             <?php
             $installDir = __DIR__ . '/../install';
-            if (is_dir($installDir)) {
-                // Recursively delete the install directory
+            if (is_dir($installDir) && is_readable($installDir)) {
+                // Remove read/execute for group+others so Apache cannot serve install pages
+                @chmod($installDir, 0700);
                 $it = new RecursiveDirectoryIterator($installDir, RecursiveDirectoryIterator::SKIP_DOTS);
                 $files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
                 foreach ($files as $file) {
-                    if ($file->isDir()) {
-                        @rmdir($file->getRealPath());
-                    } else {
-                        @unlink($file->getRealPath());
-                    }
+                    @chmod($file->getRealPath(), $file->isDir() ? 0700 : 0600);
                 }
-                @rmdir($installDir);
             }
             ?>
 
