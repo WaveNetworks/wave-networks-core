@@ -22,7 +22,7 @@ if (($action ?? null) == 'saveBranding') {
 
     $allowed_image_types = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/webp'];
     $max_file_size = 2 * 1024 * 1024; // 2 MB
-    $uploads_dir = __DIR__ . '/../../../uploads';
+    $uploads_dir = rtrim($files_location, '/') . '/branding';
     if (!is_dir($uploads_dir)) { mkdir($uploads_dir, 0755, true); }
 
     // Handle logo upload

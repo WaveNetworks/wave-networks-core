@@ -8,6 +8,9 @@
     # Block access to sensitive directories
     RewriteRule ^(vendor|db_migrations|cron|tests|include|config|views|snippets|docker)(/|$) - [F,L]
 
+    # Serve branding assets from files directory via branding.php proxy
+    RewriteRule ^branding/(.+)$ branding.php?f=$1 [L,QSA]
+
     # Pretty URLs (optional - index.php handles routing)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

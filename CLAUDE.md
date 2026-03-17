@@ -107,7 +107,9 @@ snippets/
 ## View and snippet paths
 Views: admin/views/ — loaded by admin/app/index.php via include()
 Snippets: admin/snippets/ — included by views and auth pages
-admin/uploads/ is WEB-ACCESSIBLE — logos, favicons, public binary assets only
+Branding uploads (logos, favicons, PWA icons) are stored in $files_location/branding/
+  (outside webroot) and served via admin/branding.php proxy with .htaccess rewrite.
+  URL pattern: /admin/branding/filename — e.g. /admin/branding/branding_logo.svg
 
 ## Docker vs shared hosting
 Docker:  All config via environment variables. FILES_LOCATION=/var/files/

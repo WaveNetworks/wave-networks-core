@@ -118,7 +118,7 @@ $branding = get_branding();
                             <label for="logo" class="form-label">Logo</label>
                             <?php if (!empty($branding['logo_path'])) { ?>
                             <div class="mb-2">
-                                <img src="../uploads/<?= h($branding['logo_path']) ?>" alt="Current logo" style="max-height: 48px;" class="border rounded p-1">
+                                <img src="../branding/<?= h($branding['logo_path']) ?>" alt="Current logo" style="max-height: 48px;" class="border rounded p-1">
                             </div>
                             <?php } ?>
                             <input type="file" class="form-control" id="logo" name="logo" accept="image/png,image/jpeg,image/svg+xml,image/x-icon,image/webp">
@@ -128,7 +128,7 @@ $branding = get_branding();
                             <label for="logo_dark" class="form-label">Logo (Dark Mode)</label>
                             <?php if (!empty($branding['logo_dark_path'])) { ?>
                             <div class="mb-2">
-                                <img src="../uploads/<?= h($branding['logo_dark_path']) ?>" alt="Current dark logo" style="max-height: 48px;" class="border rounded p-1 bg-dark">
+                                <img src="../branding/<?= h($branding['logo_dark_path']) ?>" alt="Current dark logo" style="max-height: 48px;" class="border rounded p-1 bg-dark">
                                 <div class="form-check mt-1">
                                     <input class="form-check-input" type="checkbox" id="remove_logo_dark" name="remove_logo_dark" value="1">
                                     <label class="form-check-label small" for="remove_logo_dark">Remove dark logo</label>
@@ -145,7 +145,7 @@ $branding = get_branding();
                             <label for="favicon" class="form-label">Favicon</label>
                             <?php if (!empty($branding['favicon_path'])) { ?>
                             <div class="mb-2">
-                                <img src="../uploads/<?= h($branding['favicon_path']) ?>" alt="Current favicon" style="max-height: 32px;" class="border rounded p-1">
+                                <img src="../branding/<?= h($branding['favicon_path']) ?>" alt="Current favicon" style="max-height: 32px;" class="border rounded p-1">
                             </div>
                             <?php } ?>
                             <input type="file" class="form-control" id="favicon" name="favicon" accept="image/png,image/jpeg,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,image/webp">
@@ -160,7 +160,7 @@ $branding = get_branding();
                             <label for="pwa_screenshot_wide" class="form-label">Desktop Screenshot</label>
                             <?php if (!empty($branding['pwa_screenshot_wide'])) { ?>
                             <div class="mb-2">
-                                <img src="../uploads/<?= h($branding['pwa_screenshot_wide']) ?>" alt="Desktop screenshot" style="max-height: 80px;" class="border rounded p-1">
+                                <img src="../branding/<?= h($branding['pwa_screenshot_wide']) ?>" alt="Desktop screenshot" style="max-height: 80px;" class="border rounded p-1">
                             </div>
                             <?php } ?>
                             <input type="file" class="form-control" id="pwa_screenshot_wide" name="pwa_screenshot_wide" accept="image/png,image/jpeg,image/webp">
@@ -170,7 +170,7 @@ $branding = get_branding();
                             <label for="pwa_screenshot_mobile" class="form-label">Mobile Screenshot</label>
                             <?php if (!empty($branding['pwa_screenshot_mobile'])) { ?>
                             <div class="mb-2">
-                                <img src="../uploads/<?= h($branding['pwa_screenshot_mobile']) ?>" alt="Mobile screenshot" style="max-height: 80px;" class="border rounded p-1">
+                                <img src="../branding/<?= h($branding['pwa_screenshot_mobile']) ?>" alt="Mobile screenshot" style="max-height: 80px;" class="border rounded p-1">
                             </div>
                             <?php } ?>
                             <input type="file" class="form-control" id="pwa_screenshot_mobile" name="pwa_screenshot_mobile" accept="image/png,image/jpeg,image/webp">

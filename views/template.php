@@ -18,8 +18,8 @@
     <title><?= h($page_title ?? 'Admin') ?> — <?= h($b['site_name']) ?></title>
     <meta name="theme-color" content="<?= h($b['theme_color']) ?>">
     <?php if (!empty($b['favicon_path'])) { ?>
-    <link rel="icon" href="../uploads/<?= h($b['favicon_path']) ?>">
-    <link rel="apple-touch-icon" href="../uploads/<?= h($b['favicon_path']) ?>">
+    <link rel="icon" href="../branding/<?= h($b['favicon_path']) ?>">
+    <link rel="apple-touch-icon" href="../branding/<?= h($b['favicon_path']) ?>">
     <?php } ?>
     <link rel="manifest" href="../manifest.php">
     <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>" id="themeStylesheet">
@@ -35,7 +35,7 @@
     <div class="bg-dark text-white d-flex flex-column" id="sidebar" data-bs-theme="dark">
         <a href="../../" class="sidebar-brand px-3 py-2 text-white text-decoration-none">
             <?php if (!empty($b['logo_path'])) { ?>
-            <span class="sidebar-brand-icon"><img src="../uploads/<?= h($b['logo_path']) ?>" alt=""<?php if (!empty($b['logo_dark_path'])) { ?> data-logo-dark="../uploads/<?= h($b['logo_dark_path']) ?>" data-logo-light="../uploads/<?= h($b['logo_path']) ?>"<?php } ?>></span>
+            <span class="sidebar-brand-icon"><img src="../branding/<?= h($b['logo_path']) ?>" alt=""<?php if (!empty($b['logo_dark_path'])) { ?> data-logo-dark="../branding/<?= h($b['logo_dark_path']) ?>" data-logo-light="../branding/<?= h($b['logo_path']) ?>"<?php } ?>></span>
             <?php } else { ?>
             <span class="sidebar-brand-icon"><i class="bi bi-broadcast"></i></span>
             <?php } ?>
