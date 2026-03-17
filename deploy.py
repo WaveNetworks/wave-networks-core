@@ -14,6 +14,8 @@ import sys
 import os
 import subprocess
 import argparse
+import hashlib
+import io
 
 # Add project root to path so we can import the config
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -189,17 +191,19 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
                 print(f"  [SKIP] {filepath} (not found locally)")
                 continue
 
-            local_size = os.path.getsize(local_path)
-
             try:
                 remote_dir = os.path.dirname(remote_path).replace("\\", "/")
                 if remote_dir:
                     ensure_remote_dir(sftp, remote_dir)
 
-                # Skip upload if remote file exists with same size
+                # Skip upload if remote file has identical MD5 checksum
                 try:
-                    remote_stat = sftp.stat(remote_path)
-                    if remote_stat.st_size == local_size:
+                    remote_buf = io.BytesIO()
+                    sftp.getfo(remote_path, remote_buf)
+                    remote_md5 = hashlib.md5(remote_buf.getvalue()).hexdigest()
+                    with open(local_path, "rb") as lf:
+                        local_md5 = hashlib.md5(lf.read()).hexdigest()
+                    if remote_md5 == local_md5:
                         skipped += 1
                         continue
                 except FileNotFoundError:
