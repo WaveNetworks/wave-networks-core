@@ -70,15 +70,27 @@ function run_migration($conn, $file, $type, $version) {
         // Update db_version table
         $conn->exec("UPDATE db_version SET version = $version WHERE version_id = 1");
 
-        $conn->commit();
+        // DDL statements (CREATE TABLE, ALTER TABLE, DROP TABLE) cause an implicit
+        // commit in MySQL, ending any active transaction. If that happened, commit()
+        // would throw "There is no active transaction." This is expected — the DDL
+        // already committed successfully, so we just move on.
+        if ($conn->inTransaction()) {
+            $conn->commit();
+        }
         return true;
 
     } catch (PDOException $e) {
         if ($conn->inTransaction()) {
             $conn->rollBack();
         }
-        $_SESSION['error'] = "Migration $type/$version failed: " . $e->getMessage();
-        error_log("Migration $type/$version failed: " . $e->getMessage());
+        $msg = "Migration $type/$version failed: " . $e->getMessage();
+        $_SESSION['error'] = $msg;
+        error_log($msg);
+
+        // Log to admin error_log DB table as a system-level warning
+        if (function_exists('log_error_to_db')) {
+            log_error_to_db('WARNING', $msg, $file, 0, $e->getTraceAsString());
+        }
         return false;
     }
 }

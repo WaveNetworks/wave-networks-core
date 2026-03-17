@@ -113,15 +113,17 @@ Branding uploads (logos, favicons, PWA icons) are stored in $files_location/bran
 
 ## Docker vs shared hosting
 Docker:  All config via environment variables. FILES_LOCATION=/var/files/
-         Source mounted read-only (:ro). vendor/ as named volume.
-         DB services: db_admin (main), db_admin_shard1, db_admin_shard2
+         Source COPIED into image at build time (no bind mounts).
+         Single MySQL server hosts all databases. Config auto-generated
+         from env vars by entrypoint on first start.
 Hosting: admin/config/config.php with __DIR__-relative $files_location.
          ../files/ is auto-created on first request by bootstrap.
 
 ### Docker naming convention
 Admin is always started through a child app's docker-compose.yml (not standalone).
-All databases are namespaced by child app name:
+All 6 databases live on a single MySQL server, namespaced by child app name:
   {child_app}_admin_main, {child_app}_admin_shard_1, {child_app}_admin_shard_2
+  {child_app}_main, {child_app}_shard_1, {child_app}_shard_2
 This ensures multiple child apps on the same machine never collide.
 See child-app CLAUDE.md Docker section for full naming table.
 
@@ -529,7 +531,7 @@ DO:
 - Always set $_SESSION['success'] when an action completes successfully
 - New helpers go in admin/include/common/ — glob picks them up automatically
 - New actions go in admin/include/actions/[memberActions|apiActions|loginActions]/
-- Migration files: decimal versioning (1.0, 1.1, 2.0), START TRANSACTION + COMMIT
+- Migration files: decimal versioning (1.0, 1.1, 2.0), no START TRANSACTION/COMMIT (runner handles it)
 - Update $db_version or $shard_version in common.php WITH EVERY MIGRATION
 - Use IF NOT EXISTS in CREATE TABLE statements (makes migrations rerunnable)
 - Asset paths: relative not absolute (../admin/assets/ from child, assets/ from admin)
@@ -582,10 +584,14 @@ if ($_POST['action'] == 'addUser') {
 -- Brief description of changes
 -- ⚠️ REMINDER: Update admin/include/common.php $db_version = X.X;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-START TRANSACTION;
 SET time_zone = "+00:00";
 -- SQL here
-COMMIT;
+
+Note: Do NOT wrap DDL (CREATE TABLE, ALTER TABLE, DROP TABLE) in
+START TRANSACTION / COMMIT — MySQL DDL causes implicit commits.
+The migration runner handles transactions automatically and gracefully
+skips commit if DDL already auto-committed. Migration failures are
+logged to the admin error_log DB table as WARNING level.
 
 ## Specialized sub-CLAUDE.md files
 db_migrations/CLAUDE.md            — migration version rules (read before any DB work)
