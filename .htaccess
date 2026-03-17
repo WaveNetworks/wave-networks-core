@@ -1,9 +1,17 @@
 # wave-networks-core .htaccess
 # Security & Routing
 
+# Custom error pages — logged to DB for security monitoring
+ErrorDocument 403 /admin/error.php
+ErrorDocument 404 /admin/error.php
+ErrorDocument 500 /admin/error.php
+
 # Deny direct web access to sensitive folders via rewrite
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # /admin/ directory index → redirect to login
+    RewriteRule ^$ /admin/auth/login.php [R=302,L]
 
     # Block access to sensitive directories
     RewriteRule ^(vendor|db_migrations|cron|tests|include|config|views|snippets|docker)(/|$) - [F,L]
