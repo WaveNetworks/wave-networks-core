@@ -13,17 +13,12 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-WORKDIR /var/www/public_html/admin
-
-COPY composer.json composer.lock* ./
-RUN composer install --no-dev --optimize-autoloader --no-scripts 2>/dev/null || true
-
-COPY . .
-
-RUN if [ -f composer.json ]; then composer install --no-dev --optimize-autoloader; fi
-
-RUN mkdir -p /var/files/home \
-    && chown -R www-data:www-data /var/files /var/www/public_html
+WORKDIR /var/www/public_html
 
 EXPOSE 80
+
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["apache2-foreground"]

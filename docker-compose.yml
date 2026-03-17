@@ -1,3 +1,12 @@
+# docker-compose.yml (admin standalone — for admin-only development/testing)
+#
+# IMPORTANT: In normal use, admin is started through a child app's
+# docker-compose.yml, NOT this file. This standalone config exists
+# for admin-only development (e.g. working on admin core without a child app).
+#
+# If you have a child app, use its docker-compose.yml instead — it includes
+# admin as a read-only mount with all databases properly namespaced.
+
 services:
   app:
     build: .
@@ -6,13 +15,13 @@ services:
     environment:
       - ENVIRONMENT=development
       - DB_HOST_MAIN=db
-      - DB_NAME_MAIN=wncore_main
+      - DB_NAME_MAIN=admin_standalone_main
       - DB_USER=root
       - DB_PASSWORD=dev_root_password_123
       - DB_HOST_SHARD=db_shard
-      - DB_NAME_SHARD=wncore_shard_1
+      - DB_NAME_SHARD=admin_standalone_shard_1
       - DB_HOST_SHARD2=db_shard2
-      - DB_NAME_SHARD2=wncore_shard_2
+      - DB_NAME_SHARD2=admin_standalone_shard_2
       - FILES_LOCATION=/var/files/
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
@@ -22,7 +31,8 @@ services:
       - HIDDEN_HASH=dev_hidden_hash_xxxxxxxxxxxxxxxxxx
       - SEED_TEST_DATA=true
     volumes:
-      - .:/var/www/public_html/admin
+      - .:/var/www/public_html/admin:ro
+      - admin_vendor:/var/www/public_html/admin/vendor
       - files_vol:/var/files
     depends_on:
       db:
@@ -36,9 +46,9 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: dev_root_password_123
-      MYSQL_DATABASE: wncore_main
+      MYSQL_DATABASE: admin_standalone_main
     volumes:
-      - wn_db_main:/var/lib/mysql
+      - db_main:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -49,9 +59,9 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: dev_root_password_123
-      MYSQL_DATABASE: wncore_shard_1
+      MYSQL_DATABASE: admin_standalone_shard_1
     volumes:
-      - wn_db_shard1:/var/lib/mysql
+      - db_shard1:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -62,9 +72,9 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: dev_root_password_123
-      MYSQL_DATABASE: wncore_shard_2
+      MYSQL_DATABASE: admin_standalone_shard_2
     volumes:
-      - wn_db_shard2:/var/lib/mysql
+      - db_shard2:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -84,14 +94,9 @@ services:
     depends_on:
       - app
 
-# Named volumes with explicit names (no project prefix) so child apps
-# can share the same database volumes. See CHILD_APP_SPEC.md.
 volumes:
   files_vol:
-    name: wn_files
-  wn_db_main:
-    name: wn_db_main
-  wn_db_shard1:
-    name: wn_db_shard1
-  wn_db_shard2:
-    name: wn_db_shard2
+  admin_vendor:
+  db_main:
+  db_shard1:
+  db_shard2:

@@ -113,9 +113,17 @@ Branding uploads (logos, favicons, PWA icons) are stored in $files_location/bran
 
 ## Docker vs shared hosting
 Docker:  All config via environment variables. FILES_LOCATION=/var/files/
-         Two shard containers: db_shard (shard1) + db_shard2 (shard2)
+         Source mounted read-only (:ro). vendor/ as named volume.
+         DB services: db_admin (main), db_admin_shard1, db_admin_shard2
 Hosting: admin/config/config.php with __DIR__-relative $files_location.
          ../files/ is auto-created on first request by bootstrap.
+
+### Docker naming convention
+Admin is always started through a child app's docker-compose.yml (not standalone).
+All databases are namespaced by child app name:
+  {child_app}_admin_main, {child_app}_admin_shard_1, {child_app}_admin_shard_2
+This ensures multiple child apps on the same machine never collide.
+See child-app CLAUDE.md Docker section for full naming table.
 
 ## Email queue system
 Main DB stores: email_settings (SMTP config, throttle limits, allowed senders)
