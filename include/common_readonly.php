@@ -39,6 +39,12 @@ if (file_exists($configFile)) {
     }
 }
 
+// 2b. Ensure files directory exists
+if (!empty($files_location)) {
+    if (!is_dir($files_location)) { @mkdir($files_location, 0755, true); }
+    if (!is_dir($files_location . 'home/')) { @mkdir($files_location . 'home/', 0755, true); }
+}
+
 // 3. PDO connection
 $db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
