@@ -174,6 +174,7 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
 
     try:
         if config.REMOTE_ROOT and config.REMOTE_ROOT != ".":
+            ensure_remote_dir(sftp, config.REMOTE_ROOT)
             sftp.chdir(config.REMOTE_ROOT)
 
         uploaded = 0
@@ -230,16 +231,39 @@ def deploy(files_to_upload, files_to_delete=None, dry_run=False):
         transport.close()
 
 
+def get_include_files(paths):
+    """Get files from explicit --include paths (can be untracked)."""
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    files = []
+    for p in paths:
+        full = os.path.join(project_root, p.replace("/", os.sep))
+        if os.path.isfile(full):
+            files.append(p.replace("\\", "/"))
+        elif os.path.isdir(full):
+            for root, dirs, filenames in os.walk(full):
+                for f in filenames:
+                    fp = os.path.join(root, f)
+                    rel = os.path.relpath(fp, project_root).replace("\\", "/")
+                    files.append(rel)
+        else:
+            print(f"[DEPLOY] WARNING: --include path not found: {p}")
+    return files
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deploy admin to server via SFTP")
     parser.add_argument("--all", action="store_true", help="Deploy all tracked files + vendor")
     parser.add_argument("--vendor", action="store_true", help="Deploy only vendor/ directory")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be deployed")
+    parser.add_argument("--include", nargs="+", metavar="PATH", help="Include specific files/dirs (even if untracked)")
     args = parser.parse_args()
 
     print(f"[DEPLOY] Deploying admin to {config.SFTP_HOST}...")
 
-    if args.vendor:
+    if args.include:
+        files = get_include_files(args.include)
+        deploy(files, dry_run=args.dry_run)
+    elif args.vendor:
         files = get_vendor_files()
         deploy(files, dry_run=args.dry_run)
     elif args.all:

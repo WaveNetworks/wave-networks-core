@@ -493,6 +493,21 @@ Action file: include/actions/memberActions/userComplianceActions.php
 Admin UI: views/user_edit.php — 5-tab compliance dashboard (Profile, Consent,
   Login History, Sessions, Data & Deletion) accessed from Users list.
 
+## Branding settings
+Admin UI: views/settings.php — branding tab.
+Form field names (important for programmatic updates):
+  logo          — Logo file upload (navbar, login page)
+  logo_dark     — Dark mode logo variant
+  favicon       — Favicon file upload
+  site_name     — Display name shown in navbar and page titles
+  site_short_name — Short name for PWA manifest and browser tabs
+  site_description — Site description for meta tags
+  theme_color   — Hex color for PWA manifest and browser chrome
+
+Storage: auth_settings table in main DB (key-value pairs).
+Access: get_branding() returns all values. Available to child apps and
+  websites via common_auth.php (no session required).
+
 ## Active coding rules — follow when writing any code in this repo
 
 DO:

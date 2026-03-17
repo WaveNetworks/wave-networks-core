@@ -1,14 +1,39 @@
 <?php
 /**
  * install/index.php — Wave Networks Core Installer
- * Collects database credentials, tests connections, generates secrets, writes config.php.
- * DELETE THIS DIRECTORY after installation.
+ * Step 1: Collects database credentials, tests connections, generates secrets, writes config.php.
+ * Step 2: Creates the first admin user.
+ * Locks itself down via .htaccess after completion.
  */
 
-// Prevent running if config already exists
+// ─── PHP version pre-flight check ───────────────────────────────────────────
+if (version_compare(PHP_VERSION, '8.2.0', '<')) {
+    http_response_code(500);
+    echo '<!DOCTYPE html><html><head><title>PHP Version Error</title><style>body{font-family:sans-serif;max-width:600px;margin:60px auto;padding:20px;color:#333}.error{background:#fde8e8;border:1px solid #e74c3c;color:#c0392b;padding:16px;border-radius:8px}code{background:#f0f0f0;padding:2px 6px;border-radius:3px}</style></head><body>';
+    echo '<div class="error"><h2>PHP 8.2+ Required</h2>';
+    echo '<p>Your server is running <strong>PHP ' . PHP_VERSION . '</strong>.</p>';
+    echo '<p>Wave Networks requires <strong>PHP 8.2 or higher</strong>.</p>';
+    echo '<p>Update your PHP version in your hosting control panel (cPanel → MultiPHP Manager, or equivalent) and reload this page.</p>';
+    echo '</div></body></html>';
+    exit;
+}
+
+// ─── Check required extensions ──────────────────────────────────────────────
+$requiredExts = ['pdo_mysql', 'gd', 'mbstring'];
+$missingExts = array_filter($requiredExts, fn($ext) => !extension_loaded($ext));
+if (!empty($missingExts)) {
+    http_response_code(500);
+    echo '<!DOCTYPE html><html><head><title>Missing Extensions</title><style>body{font-family:sans-serif;max-width:600px;margin:60px auto;padding:20px;color:#333}.error{background:#fde8e8;border:1px solid #e74c3c;color:#c0392b;padding:16px;border-radius:8px}code{background:#f0f0f0;padding:2px 6px;border-radius:3px}</style></head><body>';
+    echo '<div class="error"><h2>Missing PHP Extensions</h2>';
+    echo '<p>The following required extensions are not loaded: <strong>' . implode(', ', $missingExts) . '</strong></p>';
+    echo '<p>Enable them in your PHP configuration and reload this page.</p>';
+    echo '</div></body></html>';
+    exit;
+}
+
+// ─── Prevent running if config already exists ───────────────────────────────
 $configPath = __DIR__ . '/../config/config.php';
 if (file_exists($configPath)) {
-    // Lock down install directory via .htaccess deny-all (skip in Docker to avoid dirtying host files)
     if (getenv('ENVIRONMENT') !== 'development') {
         @file_put_contents(__DIR__ . '/.htaccess', "# Locked after install\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
     }
@@ -18,27 +43,144 @@ if (file_exists($configPath)) {
 
 $errors = [];
 $success = false;
+$step = 'config'; // 'config' or 'user'
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// If config was just written (via session flag), go to step 2
+session_start();
+if (isset($_SESSION['install_config_done']) && file_exists($configPath)) {
+    $step = 'user';
+}
 
-    // Collect values
+$maxShards = 20;
+$shardCount = isset($_POST['shard_count']) ? (int)$_POST['shard_count'] : 1;
+if ($shardCount < 1) $shardCount = 1;
+if ($shardCount > $maxShards) $shardCount = $maxShards;
+
+// ─── Auto-detect files_location ─────────────────────────────────────────────
+$detectedFilesPath = '';
+$publicHtml = realpath(__DIR__ . '/../../');
+if ($publicHtml) {
+    $parentDir = dirname($publicHtml);
+    $detectedFilesPath = $parentDir . '/files/';
+    // Normalize to forward slashes
+    $detectedFilesPath = str_replace('\\', '/', $detectedFilesPath);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STEP 2: Create admin user
+// ═══════════════════════════════════════════════════════════════════════════
+if ($step === 'user' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_admin') {
+    $adminEmail    = trim($_POST['admin_email'] ?? '');
+    $adminPassword = $_POST['admin_password'] ?? '';
+    $adminConfirm  = $_POST['admin_password_confirm'] ?? '';
+
+    if (!$adminEmail) $errors[] = 'Email is required.';
+    if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
+    if (strlen($adminPassword) < 8) $errors[] = 'Password must be at least 8 characters.';
+    if ($adminPassword !== $adminConfirm) $errors[] = 'Passwords do not match.';
+
+    if (empty($errors)) {
+        try {
+            // Load config to get DB credentials and hiddenhash
+            include $configPath;
+
+            // Connect to main DB
+            $pdo = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+            // Check if user table exists (migrations may not have run yet)
+            $tables = $pdo->query("SHOW TABLES LIKE 'user'")->fetchAll();
+            if (empty($tables)) {
+                $errors[] = 'The user table does not exist yet. Visit the admin app once to trigger migrations, then come back here.';
+            }
+
+            if (empty($errors)) {
+                // Check if email already exists
+                $stmt = $pdo->prepare("SELECT user_id FROM user WHERE email = ?");
+                $stmt->execute([$adminEmail]);
+                if ($stmt->fetch()) {
+                    $errors[] = 'A user with this email already exists.';
+                }
+            }
+
+            if (empty($errors)) {
+                // Hash password using same method as core
+                $hashedPassword = password_hash($adminPassword . $hiddenhash, PASSWORD_BCRYPT);
+
+                // Assign to shard 1 (first shard — least loaded logic not needed for first user)
+                $shard_id = 'shard1';
+
+                // Insert user as admin
+                $now = date('Y-m-d H:i:s');
+                $stmt = $pdo->prepare("INSERT INTO user (email, password, shard_id, is_admin, is_confirmed, created) VALUES (?, ?, ?, 1, 1, ?)");
+                $stmt->execute([$adminEmail, $hashedPassword, $shard_id, $now]);
+                $userId = $pdo->lastInsertId();
+
+                // Create user_profile on shard 1
+                $shard1 = $shardConfigs['shard1'] ?? null;
+                if ($shard1) {
+                    try {
+                        $shardPdo = new PDO(
+                            "mysql:host={$shard1['host']};dbname={$shard1['name']};charset=utf8mb4",
+                            $shard1['user'], $shard1['pass']
+                        );
+                        $shardPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+                        // Check if user_profile table exists
+                        $profileTable = $shardPdo->query("SHOW TABLES LIKE 'user_profile'")->fetchAll();
+                        if (!empty($profileTable)) {
+                            $stmt = $shardPdo->prepare("INSERT INTO user_profile (user_id, first_name, last_name, created) VALUES (?, '', '', ?)");
+                            $stmt->execute([$userId, $now]);
+                        }
+                        $shardPdo = null;
+                    } catch (PDOException $e) {
+                        // Non-fatal: profile can be created later
+                    }
+                }
+
+                $success = true;
+                unset($_SESSION['install_config_done']);
+                session_destroy();
+
+                // Lock down install directory
+                if (getenv('ENVIRONMENT') !== 'development') {
+                    @file_put_contents(__DIR__ . '/.htaccess', "# Locked after install\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
+                }
+            }
+
+            $pdo = null;
+        } catch (PDOException $e) {
+            $errors[] = 'Database error: ' . $e->getMessage();
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STEP 1: Config + database setup
+// ═══════════════════════════════════════════════════════════════════════════
+if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
+
     $dbHost       = trim($_POST['db_host'] ?? 'localhost');
     $dbName       = trim($_POST['db_name'] ?? '');
     $dbUser       = trim($_POST['db_user'] ?? '');
     $dbPass       = $_POST['db_pass'] ?? '';
 
-    $shard1Host   = trim($_POST['shard1_host'] ?? 'localhost');
-    $shard1Name   = trim($_POST['shard1_name'] ?? '');
-    $shard1User   = trim($_POST['shard1_user'] ?? '');
-    $shard1Pass   = $_POST['shard1_pass'] ?? '';
-
-    $shard2Host   = trim($_POST['shard2_host'] ?? 'localhost');
-    $shard2Name   = trim($_POST['shard2_name'] ?? '');
-    $shard2User   = trim($_POST['shard2_user'] ?? '');
-    $shard2Pass   = $_POST['shard2_pass'] ?? '';
+    // Collect shard credentials dynamically
+    $shards = [];
+    for ($i = 1; $i <= $shardCount; $i++) {
+        $shard = [
+            'host' => trim($_POST["shard{$i}_host"] ?? 'localhost'),
+            'name' => trim($_POST["shard{$i}_name"] ?? ''),
+            'user' => trim($_POST["shard{$i}_user"] ?? ''),
+            'pass' => $_POST["shard{$i}_pass"] ?? '',
+        ];
+        if (!$shard['name']) {
+            $errors[] = "Shard {$i} database name is required.";
+        }
+        $shards[$i] = $shard;
+    }
 
     $filesLoc     = rtrim(trim($_POST['files_location'] ?? ''), '/') . '/';
-
     $smtpHost     = trim($_POST['smtp_host'] ?? '');
     $smtpPort     = (int)($_POST['smtp_port'] ?? 587);
     $smtpUser     = trim($_POST['smtp_user'] ?? '');
@@ -49,13 +191,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validate required fields
     if (!$dbName) $errors[] = 'Main database name is required.';
     if (!$dbUser) $errors[] = 'Main database user is required.';
-    if (!$shard1Name) $errors[] = 'Shard 1 database name is required.';
-    if (!$shard2Name) $errors[] = 'Shard 2 database name is required.';
     if (!$filesLoc || $filesLoc === '/') $errors[] = 'Files directory path is required.';
 
     // Test DB connections
     if (empty($errors)) {
-        // Main DB
         try {
             $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4", $dbUser, $dbPass);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -64,26 +203,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = "Main DB connection failed: " . $e->getMessage();
         }
 
-        // Shard 1
-        $s1User = $shard1User ?: $dbUser;
-        $s1Pass = $shard1Pass !== '' ? $shard1Pass : $dbPass;
-        try {
-            $pdo = new PDO("mysql:host=$shard1Host;dbname=$shard1Name;charset=utf8mb4", $s1User, $s1Pass);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo = null;
-        } catch (PDOException $e) {
-            $errors[] = "Shard 1 DB connection failed: " . $e->getMessage();
+        foreach ($shards as $i => $shard) {
+            $sUser = $shard['user'] !== '' ? $shard['user'] : $dbUser;
+            $sPass = $shard['pass'] !== '' ? $shard['pass'] : $dbPass;
+            try {
+                $pdo = new PDO("mysql:host={$shard['host']};dbname={$shard['name']};charset=utf8mb4", $sUser, $sPass);
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $pdo = null;
+            } catch (PDOException $e) {
+                $errors[] = "Shard {$i} DB connection failed: " . $e->getMessage();
+            }
         }
+    }
 
-        // Shard 2
-        $s2User = $shard2User ?: $dbUser;
-        $s2Pass = $shard2Pass !== '' ? $shard2Pass : $dbPass;
-        try {
-            $pdo = new PDO("mysql:host=$shard2Host;dbname=$shard2Name;charset=utf8mb4", $s2User, $s2Pass);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo = null;
-        } catch (PDOException $e) {
-            $errors[] = "Shard 2 DB connection failed: " . $e->getMessage();
+    // Auto-create files directory
+    if (empty($errors) && $filesLoc) {
+        if (!is_dir($filesLoc)) {
+            if (!@mkdir($filesLoc, 0755, true)) {
+                $errors[] = "Could not create files directory: {$filesLoc}. Create it manually and ensure it's writable.";
+            }
+        }
+        $homeDir = $filesLoc . 'home/';
+        if (empty($errors) && !is_dir($homeDir)) {
+            @mkdir($homeDir, 0755, true);
         }
     }
 
@@ -92,12 +234,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hiddenHash = bin2hex(random_bytes(32));
         $appSecret  = bin2hex(random_bytes(32));
 
-        // Use main DB credentials as defaults for shards if not specified
-        $s1UserOut = $shard1User ?: $dbUser;
-        $s1PassOut = $shard1Pass !== '' ? $shard1Pass : $dbPass;
-        $s2UserOut = $shard2User ?: $dbUser;
-        $s2PassOut = $shard2Pass !== '' ? $shard2Pass : $dbPass;
-
         $config = "<?php\n";
         $config .= "// Generated by installer on " . date('Y-m-d H:i:s') . "\n\n";
         $config .= "\$dbHostSpec  = " . var_export($dbHost, true) . ";\n";
@@ -105,18 +241,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $config .= "\$dbUserName  = " . var_export($dbUser, true) . ";\n";
         $config .= "\$dbPassword  = " . var_export($dbPass, true) . ";\n\n";
         $config .= "\$shardConfigs = [\n";
-        $config .= "    'shard1' => [\n";
-        $config .= "        'host' => " . var_export($shard1Host, true) . ",\n";
-        $config .= "        'name' => " . var_export($shard1Name, true) . ",\n";
-        $config .= "        'user' => " . var_export($s1UserOut, true) . ",\n";
-        $config .= "        'pass' => " . var_export($s1PassOut, true) . ",\n";
-        $config .= "    ],\n";
-        $config .= "    'shard2' => [\n";
-        $config .= "        'host' => " . var_export($shard2Host, true) . ",\n";
-        $config .= "        'name' => " . var_export($shard2Name, true) . ",\n";
-        $config .= "        'user' => " . var_export($s2UserOut, true) . ",\n";
-        $config .= "        'pass' => " . var_export($s2PassOut, true) . ",\n";
-        $config .= "    ],\n";
+
+        foreach ($shards as $i => $shard) {
+            $sUser = $shard['user'] !== '' ? $shard['user'] : $dbUser;
+            $sPass = $shard['pass'] !== '' ? $shard['pass'] : $dbPass;
+            $config .= "    'shard{$i}' => [\n";
+            $config .= "        'host' => " . var_export($shard['host'], true) . ",\n";
+            $config .= "        'name' => " . var_export($shard['name'], true) . ",\n";
+            $config .= "        'user' => " . var_export($sUser, true) . ",\n";
+            $config .= "        'pass' => " . var_export($sPass, true) . ",\n";
+            $config .= "    ],\n";
+        }
+
         $config .= "];\n\n";
         $config .= "\$hiddenhash     = " . var_export($hiddenHash, true) . ";\n";
         $config .= "\$app_secret     = " . var_export($appSecret, true) . ";\n\n";
@@ -143,39 +279,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $config .= "\$vapid_private_key = '';\n";
 
         if (file_put_contents($configPath, $config) !== false) {
-            $success = true;
-            // Lock down install directory via .htaccess deny-all (skip in Docker)
-            if (getenv('ENVIRONMENT') !== 'development') {
-                @file_put_contents(__DIR__ . '/.htaccess', "# Locked after install\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n");
-            }
+            $_SESSION['install_config_done'] = true;
+            $step = 'user';
+            // Don't lock down yet — need to create admin user first
         } else {
             $errors[] = 'Could not write config/config.php. Check directory permissions.';
         }
     }
 }
 
-// Prefill values on error
+// Preserve submitted values for re-display
 $v = [
     'db_host'        => $_POST['db_host'] ?? 'localhost',
     'db_name'        => $_POST['db_name'] ?? '',
     'db_user'        => $_POST['db_user'] ?? '',
     'db_pass'        => $_POST['db_pass'] ?? '',
-    'shard1_host'    => $_POST['shard1_host'] ?? 'localhost',
-    'shard1_name'    => $_POST['shard1_name'] ?? '',
-    'shard1_user'    => $_POST['shard1_user'] ?? '',
-    'shard1_pass'    => $_POST['shard1_pass'] ?? '',
-    'shard2_host'    => $_POST['shard2_host'] ?? 'localhost',
-    'shard2_name'    => $_POST['shard2_name'] ?? '',
-    'shard2_user'    => $_POST['shard2_user'] ?? '',
-    'shard2_pass'    => $_POST['shard2_pass'] ?? '',
-    'files_location' => $_POST['files_location'] ?? '',
+    'files_location' => $_POST['files_location'] ?? $detectedFilesPath,
     'smtp_host'      => $_POST['smtp_host'] ?? '',
     'smtp_port'      => $_POST['smtp_port'] ?? '587',
     'smtp_user'      => $_POST['smtp_user'] ?? '',
     'smtp_pass'      => $_POST['smtp_pass'] ?? '',
     'mail_from'      => $_POST['mail_from'] ?? '',
     'mail_from_name' => $_POST['mail_from_name'] ?? 'Admin',
+    'admin_email'    => $_POST['admin_email'] ?? '',
 ];
+for ($i = 1; $i <= $maxShards; $i++) {
+    $v["shard{$i}_host"] = $_POST["shard{$i}_host"] ?? 'localhost';
+    $v["shard{$i}_name"] = $_POST["shard{$i}_name"] ?? '';
+    $v["shard{$i}_user"] = $_POST["shard{$i}_user"] ?? '';
+    $v["shard{$i}_pass"] = $_POST["shard{$i}_pass"] ?? '';
+}
 function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 ?><!DOCTYPE html>
 <html lang="en">
@@ -194,18 +327,28 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
         .success { background: #e8fde8; border: 1px solid #27ae60; color: #1e8449; padding: 16px; border-radius: 6px; }
         .success h2 { color: #1e8449; border: none; margin: 0 0 8px; }
         .warn { background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin-top: 12px; color: #856404; }
+        .info { background: #cfe2ff; border: 1px solid #6ea8fe; padding: 12px; border-radius: 6px; margin-bottom: 16px; color: #084298; }
+        .hint { font-size: 0.8em; color: #888; margin-top: 2px; }
         label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 0.9em; }
-        input[type="text"], input[type="password"], input[type="number"] {
+        input[type="text"], input[type="password"], input[type="email"], input[type="number"], select {
             width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em;
         }
-        input:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
-        .hint { font-size: 0.8em; color: #888; margin-top: 2px; }
+        input:focus, select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
         .row { display: flex; gap: 12px; }
         .row > div { flex: 1; }
         button { background: #3498db; color: #fff; border: none; padding: 12px 32px; border-radius: 6px; font-size: 1em; cursor: pointer; margin-top: 24px; }
         button:hover { background: #2980b9; }
         fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; background: #fff; }
         legend { font-weight: 600; color: #2c3e50; padding: 0 6px; }
+        .shard-count-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .shard-count-row label { margin: 0; white-space: nowrap; }
+        .shard-count-row select { width: auto; min-width: 80px; }
+        .step-indicator { display: flex; gap: 8px; margin-bottom: 24px; }
+        .step-indicator .step { padding: 6px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }
+        .step-indicator .step.active { background: #3498db; color: #fff; }
+        .step-indicator .step.done { background: #27ae60; color: #fff; }
+        .step-indicator .step.pending { background: #e9ecef; color: #adb5bd; }
+        .php-info { background: #e8fde8; border: 1px solid #27ae60; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px; font-size: 0.85em; color: #1e8449; }
     </style>
 </head>
 <body>
@@ -213,16 +356,67 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 <?php if ($success) { ?>
 <div class="success">
     <h2>Installation Complete</h2>
-    <p><code>config/config.php</code> has been created. Secrets have been auto-generated.</p>
+    <p><code>config/config.php</code> has been created and the first admin user has been set up.</p>
     <p>Migrations will run automatically on first page load.</p>
-    <p><a href="../auth/login.php">Go to login page</a></p>
+    <p style="margin-top: 12px;"><a href="../auth/login.php"><strong>Go to login page &rarr;</strong></a></p>
 </div>
 <div class="warn">
     The install directory has been locked down (permissions removed).
 </div>
+<?php } elseif ($step === 'user') { ?>
+
+<h1>Wave Networks Core — Install</h1>
+<div class="step-indicator">
+    <span class="step done">1. Database</span>
+    <span class="step active">2. Admin User</span>
+</div>
+
+<p class="sub">Config saved. Now create the first admin user.</p>
+
+<div class="info">
+    <strong>Note:</strong> If the <code>user</code> table doesn't exist yet, visit
+    <a href="../app/index.php">/admin/app/</a> once to trigger migrations, then come back here.
+</div>
+
+<?php if (!empty($errors)) { ?>
+<div class="error">
+    <ul>
+    <?php foreach ($errors as $err) { ?>
+        <li><?= e($err) ?></li>
+    <?php } ?>
+    </ul>
+</div>
+<?php } ?>
+
+<form method="post">
+    <input type="hidden" name="action" value="create_admin">
+
+    <h2>First Admin Account</h2>
+    <fieldset>
+        <legend>Admin User</legend>
+        <label>Email</label>
+        <input type="email" name="admin_email" value="<?= e($v['admin_email']) ?>" required placeholder="admin@yourdomain.com">
+
+        <label>Password</label>
+        <input type="password" name="admin_password" required minlength="8" placeholder="Minimum 8 characters">
+
+        <label>Confirm Password</label>
+        <input type="password" name="admin_password_confirm" required minlength="8">
+    </fieldset>
+
+    <button type="submit">Create Admin User &amp; Finish</button>
+</form>
+
 <?php } else { ?>
 
 <h1>Wave Networks Core — Install</h1>
+<div class="step-indicator">
+    <span class="step active">1. Database</span>
+    <span class="step pending">2. Admin User</span>
+</div>
+
+<div class="php-info">PHP <?= PHP_VERSION ?> &mdash; All required extensions loaded.</div>
+
 <p class="sub">Fill in your database credentials. All connections will be tested before saving.</p>
 
 <?php if (!empty($errors)) { ?>
@@ -263,60 +457,51 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
     </fieldset>
 
     <h2>Shard Databases</h2>
-    <p class="hint">If shard user/pass are blank, the main DB credentials are used.</p>
 
-    <fieldset>
-        <legend>Shard 1</legend>
+    <div class="shard-count-row">
+        <label for="shard_count">Number of Shards</label>
+        <select name="shard_count" id="shard_count">
+            <?php for ($i = 1; $i <= $maxShards; $i++) { ?>
+            <option value="<?= $i ?>"<?php if ($i === $shardCount) { ?> selected<?php } ?>><?= $i ?></option>
+            <?php } ?>
+        </select>
+    </div>
+    <p class="hint" style="margin-bottom: 8px;">
+        Start with 1 shard for small deployments. You can add more later.
+        Users are distributed across shards automatically at registration.
+    </p>
+    <p class="hint" style="margin-bottom: 12px;">If shard user/pass are left blank, the main DB credentials are used.</p>
+
+    <?php for ($i = 1; $i <= $maxShards; $i++) { ?>
+    <fieldset class="shard-fieldset" id="shard-fieldset-<?= $i ?>" data-shard="<?= $i ?>"<?php if ($i > $shardCount) { ?> style="display:none"<?php } ?>>
+        <legend>Shard <?= $i ?></legend>
         <div class="row">
             <div>
                 <label>Host</label>
-                <input type="text" name="shard1_host" value="<?= e($v['shard1_host']) ?>">
+                <input type="text" name="shard<?= $i ?>_host" value="<?= e($v["shard{$i}_host"]) ?>">
             </div>
             <div>
                 <label>Database Name</label>
-                <input type="text" name="shard1_name" value="<?= e($v['shard1_name']) ?>" required>
+                <input type="text" name="shard<?= $i ?>_name" value="<?= e($v["shard{$i}_name"]) ?>"<?php if ($i <= $shardCount) { ?> required<?php } ?>>
             </div>
         </div>
         <div class="row">
             <div>
                 <label>Username</label>
-                <input type="text" name="shard1_user" value="<?= e($v['shard1_user']) ?>" placeholder="(same as main)">
+                <input type="text" name="shard<?= $i ?>_user" value="<?= e($v["shard{$i}_user"]) ?>" placeholder="(same as main)">
             </div>
             <div>
                 <label>Password</label>
-                <input type="password" name="shard1_pass" value="<?= e($v['shard1_pass']) ?>" placeholder="(same as main)">
+                <input type="password" name="shard<?= $i ?>_pass" value="<?= e($v["shard{$i}_pass"]) ?>" placeholder="(same as main)">
             </div>
         </div>
     </fieldset>
-
-    <fieldset>
-        <legend>Shard 2</legend>
-        <div class="row">
-            <div>
-                <label>Host</label>
-                <input type="text" name="shard2_host" value="<?= e($v['shard2_host']) ?>">
-            </div>
-            <div>
-                <label>Database Name</label>
-                <input type="text" name="shard2_name" value="<?= e($v['shard2_name']) ?>" required>
-            </div>
-        </div>
-        <div class="row">
-            <div>
-                <label>Username</label>
-                <input type="text" name="shard2_user" value="<?= e($v['shard2_user']) ?>" placeholder="(same as main)">
-            </div>
-            <div>
-                <label>Password</label>
-                <input type="password" name="shard2_pass" value="<?= e($v['shard2_pass']) ?>" placeholder="(same as main)">
-            </div>
-        </div>
-    </fieldset>
+    <?php } ?>
 
     <h2>File Storage</h2>
     <label>Files Directory (absolute path)</label>
     <input type="text" name="files_location" value="<?= e($v['files_location']) ?>" required placeholder="/home/username/files/">
-    <p class="hint">Must be outside public_html. The directory will be created if it doesn't exist.</p>
+    <p class="hint">Must be outside public_html. The directory will be created automatically if it doesn't exist.</p>
 
     <h2>Email (SMTP)</h2>
     <fieldset>
@@ -353,8 +538,32 @@ function e($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
         </div>
     </fieldset>
 
-    <button type="submit">Test Connections &amp; Install</button>
+    <button type="submit">Test Connections &amp; Save Config</button>
 </form>
+
+<script>
+(function() {
+    var sel = document.getElementById('shard_count');
+    sel.addEventListener('change', function() {
+        var count = parseInt(this.value, 10);
+        var fieldsets = document.querySelectorAll('.shard-fieldset');
+        for (var i = 0; i < fieldsets.length; i++) {
+            var shardNum = parseInt(fieldsets[i].getAttribute('data-shard'), 10);
+            var show = shardNum <= count;
+            fieldsets[i].style.display = show ? '' : 'none';
+            var nameInput = fieldsets[i].querySelector('input[name$="_name"]');
+            if (nameInput) {
+                if (show) {
+                    nameInput.setAttribute('required', 'required');
+                } else {
+                    nameInput.removeAttribute('required');
+                    nameInput.value = '';
+                }
+            }
+        }
+    });
+})();
+</script>
 
 <?php } ?>
 
