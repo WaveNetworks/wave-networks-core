@@ -5,6 +5,9 @@
  * Prevents undefined variable notices and documents expected input/output.
  */
 
+// ─── VERSION ────────────────────────────────────────────────────────────────
+define('WN_ADMIN_VERSION', '1.0.0');
+
 // ─── SESSION VARIABLES ───────────────────────────────────────────────────────
 
 $_SESSION['user_id']      = $_SESSION['user_id'] ?? null;

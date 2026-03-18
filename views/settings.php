@@ -67,6 +67,8 @@ $branding = get_branding();
             <div class="card-header"><strong>System Info</strong></div>
             <div class="card-body">
                 <p><strong>PHP Version:</strong> <?= h(PHP_VERSION) ?></p>
+                <p><strong>Admin Version:</strong> <?= h(defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : 'unknown') ?></p>
+                <p><strong>Child App Version:</strong> <?= h(defined('WN_CHILD_APP_VERSION') ? WN_CHILD_APP_VERSION : 'unknown') ?></p>
                 <p><strong>Shards Configured:</strong> <?= count($shardConfigs ?? []) ?></p>
                 <p><strong>SMTP:</strong> <?= !empty($smtp_host) ? h($smtp_host) : '<span class="text-muted">Not configured</span>' ?></p>
                 <p><strong>reCAPTCHA:</strong> <?= recaptcha_enabled() ? 'Enabled' : '<span class="text-muted">Disabled</span>' ?></p>
@@ -185,6 +187,41 @@ $branding = get_branding();
     </div>
 </div>
 
+<!-- Updates -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>Updates</strong>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btnCheckUpdates" onclick="checkForUpdates()">
+                    <i class="bi bi-arrow-clockwise"></i> Check for Updates
+                </button>
+            </div>
+            <div class="card-body" id="updateCheckResults">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Admin Core</h6>
+                        <p class="mb-1"><strong>Installed:</strong> <?= h(defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : 'unknown') ?></p>
+                        <p class="mb-0 text-muted" id="adminLatest">Click "Check for Updates" to see the latest version.</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Child App Template</h6>
+                        <p class="mb-1"><strong>Installed:</strong> <?= h(defined('WN_CHILD_APP_VERSION') ? WN_CHILD_APP_VERSION : 'unknown') ?></p>
+                        <p class="mb-0 text-muted" id="childAppLatest">Click "Check for Updates" to see the latest version.</p>
+                    </div>
+                </div>
+                <div id="updateCheckMeta" class="mt-2" style="display:none;">
+                    <small class="text-muted">Last checked: <span id="updateCheckTime"></span></small>
+                    <span class="mx-2">|</span>
+                    <a href="https://subtheme.com/docs/changelog" target="_blank" class="small">
+                        View Full Changelog <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
     var picker = document.getElementById('theme_color_picker');
@@ -196,4 +233,40 @@ $branding = get_branding();
         });
     }
 })();
+
+function checkForUpdates() {
+    var btn = document.getElementById('btnCheckUpdates');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Checking...';
+
+    apiPost('checkForUpdates', {}, function(resp) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Check for Updates';
+
+        if (resp.results && resp.results.updates) {
+            var u = resp.results.updates;
+            renderVersionStatus('adminLatest', u.admin);
+            renderVersionStatus('childAppLatest', u.child_app);
+
+            var meta = document.getElementById('updateCheckMeta');
+            meta.style.display = '';
+            document.getElementById('updateCheckTime').textContent =
+                new Date(u.checked_at).toLocaleString();
+        }
+    });
+}
+
+function renderVersionStatus(elementId, info) {
+    var el = document.getElementById(elementId);
+    if (!info) { el.textContent = 'Could not check.'; return; }
+
+    if (info.outdated) {
+        el.innerHTML = '<strong class="text-warning">Latest: ' + info.latest + '</strong>' +
+            (info.date ? ' <small class="text-muted">(' + info.date + ')</small>' : '') +
+            (info.migration_required ? ' <span class="badge bg-warning text-dark">migration required</span>' : '') +
+            ' <span class="badge bg-info">update available</span>';
+    } else {
+        el.innerHTML = '<strong class="text-success">Up to date</strong> (' + info.latest + ')';
+    }
+}
 </script>
