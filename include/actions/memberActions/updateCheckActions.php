@@ -4,7 +4,7 @@
  * AJAX action to check for Wave Networks updates.
  */
 
-if ($_POST['action'] == 'checkForUpdates') {
+if (($action ?? null) == 'checkForUpdates') {
     $errs = array();
     if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
     if (!has_role('admin'))    { $errs['role'] = 'Admin access required.'; }

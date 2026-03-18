@@ -290,14 +290,14 @@ function loadGrouped(groupBy) {
             var gid = 'group-' + idx;
 
             // Group header row
-            html += '<tr class="table-light" style="cursor:pointer;" onclick="toggleGroupExpand(\'' + gid + '\', \'' + escAttr(groupBy) + '\', \'' + escAttr(String(g.group_key || '')) + '\')">';
+            html += '<tr class="error-group-header" onclick="toggleGroupExpand(\'' + gid + '\', \'' + escAttr(groupBy) + '\', \'' + escAttr(String(g.group_key || '')) + '\')" style="cursor:pointer;">';
             html += '<td colspan="2">';
             html += '<i class="bi bi-chevron-right me-1" id="chevron-' + gid + '"></i>';
             html += '<strong>' + label + '</strong>';
             html += '</td>';
             html += '<td class="small">' + escHtml(g.sources || '') + '</td>';
             html += '<td colspan="2" class="small">';
-            if (parseInt(g.fatal_count)) html += '<span class="badge bg-dark me-1">' + g.fatal_count + ' fatal</span>';
+            if (parseInt(g.fatal_count)) html += '<span class="badge text-bg-dark me-1">' + g.fatal_count + ' fatal</span>';
             if (parseInt(g.error_count)) html += '<span class="badge bg-danger me-1">' + g.error_count + ' error</span>';
             if (parseInt(g.warning_count)) html += '<span class="badge bg-warning text-dark me-1">' + g.warning_count + ' warn</span>';
             if (parseInt(g.info_count)) html += '<span class="badge bg-info text-dark me-1">' + g.info_count + ' info</span>';
@@ -307,7 +307,7 @@ function loadGrouped(groupBy) {
             if (parseInt(g.resolved_count)) html += '<span class="badge bg-success">' + g.resolved_count + ' resolved</span>';
             html += '</td>';
             html += '<td class="small"><strong>' + g.total_errors + '</strong> total</td>';
-            html += '<td class="small text-muted" title="First: ' + escHtml(g.first_seen || '') + '">' + escHtml(g.last_seen || '') + '</td>';
+            html += '<td class="small" title="First: ' + escHtml(g.first_seen || '') + '">' + escHtml(g.last_seen || '') + '</td>';
             html += '<td></td>';
             html += '</tr>';
 
