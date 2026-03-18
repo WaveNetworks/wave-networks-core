@@ -68,7 +68,9 @@ $branding = get_branding();
             <div class="card-body">
                 <p><strong>PHP Version:</strong> <?= h(PHP_VERSION) ?></p>
                 <p><strong>Admin Version:</strong> <?= h(defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : 'unknown') ?></p>
-                <p><strong>Child App Version:</strong> <?= h(detect_child_app_version() ?: 'unknown') ?></p>
+                <?php foreach (detect_child_app_versions() as $appName => $appVer) { ?>
+                <p><strong><?= h($appName) ?>:</strong> <?= h($appVer) ?></p>
+                <?php } ?>
                 <p><strong>Shards Configured:</strong> <?= count($shardConfigs ?? []) ?></p>
                 <p><strong>SMTP:</strong> <?= !empty($smtp_host) ? h($smtp_host) : '<span class="text-muted">Not configured</span>' ?></p>
                 <p><strong>reCAPTCHA:</strong> <?= recaptcha_enabled() ? 'Enabled' : '<span class="text-muted">Disabled</span>' ?></p>
@@ -198,17 +200,23 @@ $branding = get_branding();
                 </button>
             </div>
             <div class="card-body" id="updateCheckResults">
+                <?php $detectedApps = detect_child_app_versions(); ?>
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-<?= $detectedApps ? '6' : '12' ?>">
                         <h6>Admin Core</h6>
                         <p class="mb-1"><strong>Installed:</strong> <?= h(defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : 'unknown') ?></p>
                         <p class="mb-0 text-muted" id="adminLatest">Click "Check for Updates" to see the latest version.</p>
                     </div>
+                    <?php if ($detectedApps) { ?>
                     <div class="col-md-6">
-                        <h6>Child App Template</h6>
-                        <p class="mb-1"><strong>Installed:</strong> <?= h(detect_child_app_version() ?: 'unknown') ?></p>
-                        <p class="mb-0 text-muted" id="childAppLatest">Click "Check for Updates" to see the latest version.</p>
+                        <h6>Child Apps</h6>
+                        <?php foreach ($detectedApps as $appName => $appVer) { ?>
+                        <p class="mb-1"><strong><?= h($appName) ?>:</strong> <?= h($appVer) ?>
+                            <span class="text-muted" id="childApp_<?= h($appName) ?>"></span>
+                        </p>
+                        <?php } ?>
                     </div>
+                    <?php } ?>
                 </div>
                 <div id="updateCheckMeta" class="mt-2" style="display:none;">
                     <small class="text-muted">Last checked: <span id="updateCheckTime"></span></small>
@@ -246,7 +254,13 @@ function checkForUpdates() {
         if (resp.results && resp.results.updates) {
             var u = resp.results.updates;
             renderVersionStatus('adminLatest', u.admin);
-            renderVersionStatus('childAppLatest', u.child_app);
+
+            // Render each child app
+            if (u.child_apps) {
+                for (var appName in u.child_apps) {
+                    renderVersionStatus('childApp_' + appName, u.child_apps[appName]);
+                }
+            }
 
             var meta = document.getElementById('updateCheckMeta');
             meta.style.display = '';

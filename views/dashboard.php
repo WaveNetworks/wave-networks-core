@@ -14,7 +14,13 @@ $updateInfo = null;
 if (has_role('admin')) {
     $updateInfo = check_for_updates();
 }
-$hasUpdates = $updateInfo && ($updateInfo['admin']['outdated'] || $updateInfo['child_app']['outdated']);
+$hasUpdates = false;
+if ($updateInfo) {
+    $hasUpdates = $updateInfo['admin']['outdated'];
+    foreach ($updateInfo['child_apps'] ?? [] as $appInfo) {
+        if ($appInfo['outdated']) { $hasUpdates = true; break; }
+    }
+}
 ?>
 
 <!-- REGION: page-header -->
@@ -43,18 +49,20 @@ $hasUpdates = $updateInfo && ($updateInfo['admin']['outdated'] || $updateInfo['c
                     <?php } ?>
                 </li>
                 <?php } ?>
-                <?php if ($updateInfo['child_app']['outdated']) { ?>
+                <?php foreach ($updateInfo['child_apps'] ?? [] as $appName => $appInfo) { ?>
+                <?php if ($appInfo['outdated']) { ?>
                 <li>
-                    Child App: <strong><?= h($updateInfo['child_app']['current']) ?></strong>
+                    <?= h($appName) ?>: <strong><?= h($appInfo['current']) ?></strong>
                     <i class="bi bi-arrow-right"></i>
-                    <strong><?= h($updateInfo['child_app']['latest']) ?></strong>
-                    <?php if ($updateInfo['child_app']['date']) { ?>
-                    <small class="text-muted">(<?= h($updateInfo['child_app']['date']) ?>)</small>
+                    <strong><?= h($appInfo['latest']) ?></strong>
+                    <?php if ($appInfo['date']) { ?>
+                    <small class="text-muted">(<?= h($appInfo['date']) ?>)</small>
                     <?php } ?>
-                    <?php if ($updateInfo['child_app']['migration_required']) { ?>
+                    <?php if ($appInfo['migration_required']) { ?>
                     <span class="badge bg-warning text-dark ms-1">migration required</span>
                     <?php } ?>
                 </li>
+                <?php } ?>
                 <?php } ?>
             </ul>
             <a href="https://subtheme.com/docs/changelog" target="_blank" class="btn btn-sm btn-outline-info">

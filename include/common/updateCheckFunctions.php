@@ -11,8 +11,11 @@
  * @param bool $force  If true, bypass cache and fetch fresh data
  * @return array|null  Update info or null on failure
  *   [
- *     'admin'     => ['current' => '1.0.0', 'latest' => '1.2.0', 'outdated' => true, 'date' => '...', 'summary' => '...'],
- *     'child_app' => ['current' => '1.0.0', 'latest' => '1.1.0', 'outdated' => true, 'date' => '...', 'summary' => '...'],
+ *     'admin'      => ['current' => '1.0.0', 'latest' => '1.2.0', 'outdated' => true, ...],
+ *     'child_apps' => [
+ *       'child-app' => ['current' => '1.0.0', 'latest' => '1.1.0', 'outdated' => true, ...],
+ *       'p3sig'     => ['current' => '1.0.0', 'latest' => '1.1.0', 'outdated' => true, ...],
+ *     ],
  *     'checked_at' => '2026-03-17T10:00:00+00:00',
  *   ]
  */
@@ -49,12 +52,25 @@ function check_for_updates($force = false) {
 
     // Build comparison
     $currentAdmin = defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : '0.0.0';
-    $currentChildApp = detect_child_app_version();
+    $detectedApps = detect_child_app_versions();
 
     $components = $result['components'] ?? [];
 
     $latestAdmin = $components['admin']['version'] ?? '0.0.0';
     $latestChildApp = $components['child-app']['version'] ?? '0.0.0';
+
+    // Build child apps comparison — each detected app compared against the template version
+    $childApps = [];
+    foreach ($detectedApps as $appName => $appVersion) {
+        $childApps[$appName] = [
+            'current' => $appVersion,
+            'latest' => $latestChildApp,
+            'outdated' => version_compare($appVersion, $latestChildApp, '<'),
+            'date' => $components['child-app']['date'] ?? null,
+            'summary' => $components['child-app']['summary'] ?? null,
+            'migration_required' => $components['child-app']['migration_required'] ?? false,
+        ];
+    }
 
     $updateInfo = [
         'admin' => [
@@ -65,14 +81,7 @@ function check_for_updates($force = false) {
             'summary' => $components['admin']['summary'] ?? null,
             'migration_required' => $components['admin']['migration_required'] ?? false,
         ],
-        'child_app' => [
-            'current' => $currentChildApp,
-            'latest' => $latestChildApp,
-            'outdated' => version_compare($currentChildApp, $latestChildApp, '<'),
-            'date' => $components['child-app']['date'] ?? null,
-            'summary' => $components['child-app']['summary'] ?? null,
-            'migration_required' => $components['child-app']['migration_required'] ?? false,
-        ],
+        'child_apps' => $childApps,
         'checked_at' => date('c'),
         'stale' => false,
     ];
@@ -143,36 +152,45 @@ function fetch_changelog($component, $fromVersion = null) {
 }
 
 /**
- * Detect the child app version by reading sibling definition.php files.
- * Admin doesn't include child-app's definition.php, so WN_CHILD_APP_VERSION
- * is never defined in admin context. This function scans sibling directories
- * for the constant.
+ * Detect all child app versions by scanning sibling directories.
+ * Admin doesn't include child-app definition files, so this reads them
+ * directly via file_get_contents + regex.
  *
- * @return string  Version string or '0.0.0' if not found
+ * @return array  ['child-app' => '1.0.0', 'p3sig' => '1.0.0', ...]
  */
-function detect_child_app_version() {
-    // If already defined (e.g. running in child-app context), use it
-    if (defined('WN_CHILD_APP_VERSION')) {
-        return WN_CHILD_APP_VERSION;
-    }
-
-    // Scan sibling directories of admin/ for child app definition.php
+function detect_child_app_versions() {
     $adminDir = realpath(__DIR__ . '/../../');       // admin/
     $webroot  = dirname($adminDir);                  // public_html/
-    $found    = '0.0.0';
+    $apps     = [];
+
+    // Skip known non-app directories
+    $skip = ['.' => 1, '..' => 1, 'admin' => 1, 'site' => 1, '.claude' => 1];
 
     foreach (scandir($webroot) as $dir) {
-        if ($dir === '.' || $dir === '..' || $dir === 'admin' || $dir === 'site') continue;
+        if (isset($skip[$dir])) continue;
         $defFile = $webroot . DIRECTORY_SEPARATOR . $dir . DIRECTORY_SEPARATOR . 'include' . DIRECTORY_SEPARATOR . 'definition.php';
         if (!file_exists($defFile)) continue;
 
         // Read the file and extract the version constant
         $contents = file_get_contents($defFile);
         if ($contents && preg_match("/define\s*\(\s*['\"]WN_CHILD_APP_VERSION['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/", $contents, $matches)) {
-            $found = $matches[1];
-            break;
+            $apps[$dir] = $matches[1];
         }
     }
 
-    return $found;
+    return $apps;
+}
+
+/**
+ * Detect a single child app version (convenience wrapper).
+ * Returns the first found version, or '0.0.0' if none.
+ *
+ * @return string
+ */
+function detect_child_app_version() {
+    if (defined('WN_CHILD_APP_VERSION')) {
+        return WN_CHILD_APP_VERSION;
+    }
+    $apps = detect_child_app_versions();
+    return $apps ? reset($apps) : '0.0.0';
 }
