@@ -58,6 +58,19 @@ public_html/                       <- webroot (NOT a repo)
     .gitignore
 ```
 
+## Version constant
+Child apps MUST define a version constant in their include/definition.php:
+```php
+define('WN_CHILD_APP_VERSION', '1.0.0');
+```
+This is read by the admin update check system. Semantic versioning (MAJOR.MINOR.PATCH).
+Bump the constant + create a git tag (e.g. `git tag -a v1.0.0 -m "Release"`) on each release.
+
+The admin dashboard auto-checks https://subtheme.com/api/versions and shows a
+banner when the installed version is behind the latest. The settings page also
+shows a "Check for Updates" button. If WN_CHILD_APP_VERSION is not defined,
+admin reports the child app version as "unknown".
+
 ## Bootstrap pattern (your-app/include/common.php)
 
 IMPORTANT: Do NOT define APP_MIGRATION_DIR or set $db_version/$shard_version
