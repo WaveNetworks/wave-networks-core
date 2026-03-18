@@ -73,6 +73,53 @@ if (($_POST['action'] ?? '') == 'resolveErrorLog') {
     }
 }
 
+if (($_POST['action'] ?? '') == 'getErrorLogsGrouped') {
+    $errs = array();
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))    { $errs['role'] = 'Admin access required.'; }
+
+    if (count($errs) <= 0) {
+        $group_by = in_array($_POST['group_by'] ?? '', ['device', 'user', 'ip']) ? $_POST['group_by'] : 'ip';
+
+        $filters = [];
+        if (!empty($_POST['level']))      { $filters['level'] = $_POST['level']; }
+        if (!empty($_POST['source_app'])) { $filters['source_app'] = $_POST['source_app']; }
+        if (!empty($_POST['search']))     { $filters['search'] = $_POST['search']; }
+        if (isset($_POST['status']) && $_POST['status'] !== '') { $filters['status'] = $_POST['status']; }
+
+        $result = get_error_logs_grouped($group_by, $filters);
+        $data['groups']   = $result['groups'];
+        $data['group_by'] = $result['group_by'];
+        $data['stats']    = get_error_log_stats();
+        $data['sources']  = get_error_log_sources();
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
+if (($_POST['action'] ?? '') == 'getErrorLogsForGroup') {
+    $errs = array();
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))    { $errs['role'] = 'Admin access required.'; }
+
+    if (count($errs) <= 0) {
+        $group_by  = in_array($_POST['group_by'] ?? '', ['device', 'user', 'ip']) ? $_POST['group_by'] : 'ip';
+        $group_key = $_POST['group_key'] ?? '';
+
+        $filters = [];
+        if (!empty($_POST['level']))      { $filters['level'] = $_POST['level']; }
+        if (!empty($_POST['source_app'])) { $filters['source_app'] = $_POST['source_app']; }
+        if (!empty($_POST['search']))     { $filters['search'] = $_POST['search']; }
+        if (isset($_POST['status']) && $_POST['status'] !== '') { $filters['status'] = $_POST['status']; }
+
+        $result = get_error_logs_for_group($group_by, $group_key, $filters);
+        $data['items'] = $result['items'];
+        $data['total'] = $result['total'];
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
 if (($_POST['action'] ?? '') == 'unresolveErrorLog') {
     $errs = array();
     if (!$_SESSION['user_id'])     { $errs['auth'] = 'Login required.'; }

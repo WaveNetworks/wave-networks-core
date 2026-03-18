@@ -67,16 +67,24 @@ if (($action ?? null) == 'login') {
         // Login successful
         load_user_session($user);
 
+        // Associate device with this user (device was created on page load)
+        if (function_exists('get_or_create_device')) {
+            get_or_create_device();
+        }
+
         // Record login history
         if (function_exists('record_login')) {
             record_login($user['user_id'], 'password', 'success');
         }
 
-        // Remember me
+        // Remember me — reuse existing device from tracking cookie
         if ($remember === 'yes') {
-            $cookie_id = generateHashCode(64);
-            $device_id = register_device($cookie_id, $user['user_id']);
-            $api_key   = create_api_key($user['user_id'], $device_id, 'yes');
+            $device_id = $_SESSION['device_id'] ?? null;
+            if (!$device_id) {
+                $cookie_id = generateHashCode(64);
+                $device_id = register_device($cookie_id, $user['user_id']);
+            }
+            $api_key = create_api_key($user['user_id'], $device_id, 'yes');
             setcookie('wn_auto_login', $api_key, time() + (86400 * 30), '/', '', false, true);
         }
 

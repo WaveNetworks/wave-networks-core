@@ -106,6 +106,11 @@ if (empty($_SESSION['user_id'])) {
     }
 }
 
+// 6b. Device tracking — identify all visitors via persistent cookie
+if (function_exists('get_or_create_device')) {
+    try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }
+}
+
 // 7. definition.php
 include(__DIR__ . '/definition.php');
 

@@ -88,6 +88,11 @@ check_and_migrate_all_shards();
 // 6. Session (start but NO guard — unauthenticated users need these pages)
 session_start();
 
+// 6b. Device tracking — identify all visitors via persistent cookie
+if (function_exists('get_or_create_device')) {
+    try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }
+}
+
 // 7. definition.php
 include(__DIR__ . '/definition.php');
 

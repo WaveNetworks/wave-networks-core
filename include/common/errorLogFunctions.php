@@ -63,6 +63,10 @@ function log_error_to_db($level, $message, $file = null, $line = null, $trace = 
                 'shard_id' => $_SESSION['shard_id'] ?? null,
             ];
         }
+        // Device tracking
+        if (!empty($_SESSION['device_id'])) {
+            $context['device_id'] = (int)$_SESSION['device_id'];
+        }
         // Server/memory info
         $context['memory'] = [
             'usage'      => memory_get_usage(),
@@ -250,4 +254,195 @@ function resolve_error_log($error_id, $user_id) {
 function unresolve_error_log($error_id) {
     $id = (int)$error_id;
     return (bool)db_query("UPDATE error_log SET resolved_at = NULL, resolved_by = NULL WHERE error_id = '$id'");
+}
+
+/**
+ * Get error logs grouped by device, user, or IP with rollup summaries.
+ *
+ * @param string $group_by  'device', 'user', or 'ip'
+ * @param array  $filters   Same filters as get_error_logs_paginated
+ * @return array ['groups' => [...]]
+ */
+function get_error_logs_grouped($group_by = 'ip', $filters = []) {
+    $where = '1=1';
+    $params = [];
+
+    if (!empty($filters['level'])) {
+        $where .= ' AND level = :level';
+        $params[':level'] = $filters['level'];
+    }
+    if (!empty($filters['source_app'])) {
+        $where .= ' AND source_app = :source_app';
+        $params[':source_app'] = $filters['source_app'];
+    }
+    if (!empty($filters['search'])) {
+        $where .= ' AND (message LIKE :search OR file LIKE :search2)';
+        $params[':search'] = '%' . $filters['search'] . '%';
+        $params[':search2'] = '%' . $filters['search'] . '%';
+    }
+    if (isset($filters['status'])) {
+        if ($filters['status'] === 'resolved') {
+            $where .= ' AND resolved_at IS NOT NULL';
+        } elseif ($filters['status'] === 'open') {
+            $where .= ' AND resolved_at IS NULL';
+        }
+    }
+
+    // Determine GROUP BY column and select expression
+    switch ($group_by) {
+        case 'device':
+            $group_col = "CAST(JSON_UNQUOTE(JSON_EXTRACT(context_json, '$.device_id')) AS UNSIGNED)";
+            $group_alias = 'device_id';
+            $where .= " AND JSON_EXTRACT(context_json, '$.device_id') IS NOT NULL";
+            break;
+        case 'user':
+            $group_col = 'user_id';
+            $group_alias = 'user_id';
+            break;
+        case 'ip':
+        default:
+            $group_col = 'ip_address';
+            $group_alias = 'ip_address';
+            break;
+    }
+
+    $sql = "SELECT
+                $group_col AS group_key,
+                COUNT(*) AS total_errors,
+                SUM(CASE WHEN level = 'FATAL' THEN 1 ELSE 0 END) AS fatal_count,
+                SUM(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS error_count,
+                SUM(CASE WHEN level = 'WARNING' THEN 1 ELSE 0 END) AS warning_count,
+                SUM(CASE WHEN level = 'INFO' THEN 1 ELSE 0 END) AS info_count,
+                SUM(CASE WHEN resolved_at IS NULL THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN resolved_at IS NOT NULL THEN 1 ELSE 0 END) AS resolved_count,
+                MIN(created) AS first_seen,
+                MAX(created) AS last_seen,
+                GROUP_CONCAT(DISTINCT source_app ORDER BY source_app SEPARATOR ', ') AS sources,
+                GROUP_CONCAT(DISTINCT level ORDER BY level SEPARATOR ', ') AS levels
+            FROM error_log
+            WHERE $where
+            GROUP BY $group_col
+            ORDER BY MAX(created) DESC
+            LIMIT 200";
+
+    $r = db_query_prepared($sql, $params);
+    $groups = $r ? db_fetch_all($r) : [];
+
+    // For user grouping, fetch email addresses
+    if ($group_by === 'user' && !empty($groups)) {
+        $user_ids = array_filter(array_column($groups, 'group_key'));
+        if ($user_ids) {
+            $id_list = implode(',', array_map('intval', $user_ids));
+            $ur = db_query("SELECT user_id, email FROM user WHERE user_id IN ($id_list)");
+            $users = [];
+            if ($ur) {
+                foreach (db_fetch_all($ur) as $u) {
+                    $users[$u['user_id']] = $u['email'];
+                }
+            }
+            foreach ($groups as &$g) {
+                $g['email'] = $users[$g['group_key']] ?? null;
+            }
+            unset($g);
+        }
+    }
+
+    // For device grouping, fetch device info
+    if ($group_by === 'device' && !empty($groups)) {
+        $device_ids = array_filter(array_column($groups, 'group_key'));
+        if ($device_ids) {
+            $id_list = implode(',', array_map('intval', $device_ids));
+            $dr = db_query("SELECT device_id, user_id, browser, last_used FROM device WHERE device_id IN ($id_list)");
+            $devices = [];
+            if ($dr) {
+                foreach (db_fetch_all($dr) as $d) {
+                    $devices[$d['device_id']] = $d;
+                }
+            }
+            foreach ($groups as &$g) {
+                $dev = $devices[$g['group_key']] ?? null;
+                $g['device_user_id'] = $dev['user_id'] ?? null;
+                $g['device_browser'] = $dev['browser'] ?? null;
+                $g['device_last_used'] = $dev['last_used'] ?? null;
+            }
+            unset($g);
+        }
+    }
+
+    return ['groups' => $groups, 'group_by' => $group_by];
+}
+
+/**
+ * Get error log entries for a specific group (device, user, or IP).
+ *
+ * @param string $group_by   'device', 'user', or 'ip'
+ * @param string $group_key  The group key value
+ * @param array  $filters    Same filters as get_error_logs_paginated
+ * @return array ['items' => [...], 'total' => int]
+ */
+function get_error_logs_for_group($group_by, $group_key, $filters = []) {
+    // Add the group filter to existing filters
+    switch ($group_by) {
+        case 'device':
+            $filters['device_id'] = (int)$group_key;
+            break;
+        case 'user':
+            $filters['user_id'] = $group_key;
+            break;
+        case 'ip':
+            $filters['ip_address'] = $group_key;
+            break;
+    }
+
+    $where = '1=1';
+    $params = [];
+
+    if (!empty($filters['level'])) {
+        $where .= ' AND level = :level';
+        $params[':level'] = $filters['level'];
+    }
+    if (!empty($filters['source_app'])) {
+        $where .= ' AND source_app = :source_app';
+        $params[':source_app'] = $filters['source_app'];
+    }
+    if (!empty($filters['search'])) {
+        $where .= ' AND (message LIKE :search OR file LIKE :search2)';
+        $params[':search'] = '%' . $filters['search'] . '%';
+        $params[':search2'] = '%' . $filters['search'] . '%';
+    }
+    if (isset($filters['status'])) {
+        if ($filters['status'] === 'resolved') {
+            $where .= ' AND resolved_at IS NOT NULL';
+        } elseif ($filters['status'] === 'open') {
+            $where .= ' AND resolved_at IS NULL';
+        }
+    }
+    if (isset($filters['device_id'])) {
+        $where .= " AND JSON_EXTRACT(context_json, '$.device_id') = :device_id";
+        $params[':device_id'] = (int)$filters['device_id'];
+    }
+    if (isset($filters['user_id'])) {
+        if ($filters['user_id'] === '' || $filters['user_id'] === null) {
+            $where .= ' AND user_id IS NULL';
+        } else {
+            $where .= ' AND user_id = :user_id';
+            $params[':user_id'] = $filters['user_id'];
+        }
+    }
+    if (isset($filters['ip_address'])) {
+        if ($filters['ip_address'] === '' || $filters['ip_address'] === null) {
+            $where .= ' AND ip_address IS NULL';
+        } else {
+            $where .= ' AND ip_address = :ip_address';
+            $params[':ip_address'] = $filters['ip_address'];
+        }
+    }
+
+    $r = db_query_prepared(
+        "SELECT * FROM error_log WHERE $where ORDER BY created DESC LIMIT 100",
+        $params
+    );
+    $items = $r ? db_fetch_all($r) : [];
+
+    return ['items' => $items, 'total' => count($items)];
 }

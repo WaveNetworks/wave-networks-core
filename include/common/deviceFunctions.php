@@ -50,6 +50,47 @@ function get_device_by_cookie($cookie_id) {
 }
 
 /**
+ * Track the current visitor's device via a persistent cookie.
+ * Creates a new device row if no cookie exists, or touches the existing one.
+ * Associates the device with the logged-in user if session has user_id.
+ *
+ * @return int|null device_id or null on failure
+ */
+function get_or_create_device() {
+    $cookie_name     = 'wn_device';
+    $cookie_lifetime = 86400 * 365; // 1 year
+
+    $user_id = $_SESSION['user_id'] ?? null;
+
+    if (isset($_COOKIE[$cookie_name])) {
+        $cookie_id = $_COOKIE[$cookie_name];
+        $device = get_device_by_cookie($cookie_id);
+
+        if ($device) {
+            touch_device($device['device_id']);
+            // Associate device with user if logged in and device is anonymous
+            if ($user_id && !$device['user_id']) {
+                $did = (int)$device['device_id'];
+                $uid = (int)$user_id;
+                db_query("UPDATE device SET user_id = '$uid' WHERE device_id = '$did'");
+            }
+            $_SESSION['device_id'] = (int)$device['device_id'];
+            return (int)$device['device_id'];
+        }
+        // Cookie exists but device row was deleted — fall through to recreate
+    }
+
+    // Create new device
+    $cookie_id = generateHashCode(64);
+    $device_id = register_device($cookie_id, $user_id);
+
+    setcookie($cookie_name, $cookie_id, time() + $cookie_lifetime, '/', '', false, true);
+    $_SESSION['device_id'] = $device_id;
+
+    return $device_id;
+}
+
+/**
  * Update device last_used timestamp.
  */
 function touch_device($device_id) {
