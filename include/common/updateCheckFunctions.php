@@ -49,7 +49,7 @@ function check_for_updates($force = false) {
 
     // Build comparison
     $currentAdmin = defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : '0.0.0';
-    $currentChildApp = defined('WN_CHILD_APP_VERSION') ? WN_CHILD_APP_VERSION : '0.0.0';
+    $currentChildApp = detect_child_app_version();
 
     $components = $result['components'] ?? [];
 
@@ -140,4 +140,39 @@ function fetch_changelog($component, $fromVersion = null) {
         $url .= '&from=' . urlencode($fromVersion);
     }
     return fetch_version_api($url);
+}
+
+/**
+ * Detect the child app version by reading sibling definition.php files.
+ * Admin doesn't include child-app's definition.php, so WN_CHILD_APP_VERSION
+ * is never defined in admin context. This function scans sibling directories
+ * for the constant.
+ *
+ * @return string  Version string or '0.0.0' if not found
+ */
+function detect_child_app_version() {
+    // If already defined (e.g. running in child-app context), use it
+    if (defined('WN_CHILD_APP_VERSION')) {
+        return WN_CHILD_APP_VERSION;
+    }
+
+    // Scan sibling directories of admin/ for child app definition.php
+    $adminDir = realpath(__DIR__ . '/../../');       // admin/
+    $webroot  = dirname($adminDir);                  // public_html/
+    $found    = '0.0.0';
+
+    foreach (scandir($webroot) as $dir) {
+        if ($dir === '.' || $dir === '..' || $dir === 'admin' || $dir === 'site') continue;
+        $defFile = $webroot . DIRECTORY_SEPARATOR . $dir . DIRECTORY_SEPARATOR . 'include' . DIRECTORY_SEPARATOR . 'definition.php';
+        if (!file_exists($defFile)) continue;
+
+        // Read the file and extract the version constant
+        $contents = file_get_contents($defFile);
+        if ($contents && preg_match("/define\s*\(\s*['\"]WN_CHILD_APP_VERSION['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/", $contents, $matches)) {
+            $found = $matches[1];
+            break;
+        }
+    }
+
+    return $found;
 }

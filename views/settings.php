@@ -68,7 +68,7 @@ $branding = get_branding();
             <div class="card-body">
                 <p><strong>PHP Version:</strong> <?= h(PHP_VERSION) ?></p>
                 <p><strong>Admin Version:</strong> <?= h(defined('WN_ADMIN_VERSION') ? WN_ADMIN_VERSION : 'unknown') ?></p>
-                <p><strong>Child App Version:</strong> <?= h(defined('WN_CHILD_APP_VERSION') ? WN_CHILD_APP_VERSION : 'unknown') ?></p>
+                <p><strong>Child App Version:</strong> <?= h(detect_child_app_version() ?: 'unknown') ?></p>
                 <p><strong>Shards Configured:</strong> <?= count($shardConfigs ?? []) ?></p>
                 <p><strong>SMTP:</strong> <?= !empty($smtp_host) ? h($smtp_host) : '<span class="text-muted">Not configured</span>' ?></p>
                 <p><strong>reCAPTCHA:</strong> <?= recaptcha_enabled() ? 'Enabled' : '<span class="text-muted">Disabled</span>' ?></p>
@@ -206,7 +206,7 @@ $branding = get_branding();
                     </div>
                     <div class="col-md-6">
                         <h6>Child App Template</h6>
-                        <p class="mb-1"><strong>Installed:</strong> <?= h(defined('WN_CHILD_APP_VERSION') ? WN_CHILD_APP_VERSION : 'unknown') ?></p>
+                        <p class="mb-1"><strong>Installed:</strong> <?= h(detect_child_app_version() ?: 'unknown') ?></p>
                         <p class="mb-0 text-muted" id="childAppLatest">Click "Check for Updates" to see the latest version.</p>
                     </div>
                 </div>
