@@ -14,7 +14,7 @@ if (empty($_SESSION['user_id'])) return;
 <button type="button" id="feedbackTabTrigger" class="btn btn-primary shadow"
         data-bs-toggle="offcanvas" data-bs-target="#feedbackOffcanvas"
         style="position:fixed; right:0; top:50%; transform:translateX(calc(50% - 0.75em)) translateY(-50%) rotate(-90deg);
-               z-index:1040; border-radius:0.375rem 0.375rem 0 0; padding:0.35rem 1rem 0.75rem 1rem; font-size:0.85rem; letter-spacing:0.03em;">
+               z-index:1040; border-radius:0.375rem 0.375rem 0 0; padding:0.2rem 1rem 1rem 1rem; font-size:0.85rem; letter-spacing:0.03em;">
     <i class="bi bi-chat-left-text me-1"></i>Feedback
 </button>
 
