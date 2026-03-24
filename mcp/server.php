@@ -7,7 +7,7 @@
  *
  * Configuration via environment variables:
  *   WN_API_URL  — Admin API endpoint (default: http://localhost/admin/api/index.php)
- *   WN_API_KEY  — Service API key with error_log:read + error_log:write scopes
+ *   WN_API_KEY  — Service API key with error_log + feedback scopes
  *
  * Usage:
  *   php server.php
@@ -87,6 +87,113 @@ $tools = [
         'inputSchema' => [
             'type'       => 'object',
             'properties' => (object)[],
+        ],
+    ],
+
+    // ─── Feedback Tools ─────────────────────────────────────────────────────
+    [
+        'name'        => 'list_feedback',
+        'description' => 'List user feedback entries with optional filters. Returns paginated results with user email and role.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'page'              => ['type' => 'integer', 'description' => 'Page number (default 1)'],
+                'per_page'          => ['type' => 'integer', 'description' => 'Items per page (default 25, max 100)'],
+                'feedback_type'     => ['type' => 'string',  'description' => 'Filter by type: bug, suggestion, general'],
+                'source_app'        => ['type' => 'string',  'description' => 'Filter by source application name'],
+                'status'            => ['type' => 'string',  'description' => 'Filter by status: new, reviewed, grouped, dismissed'],
+                'search'            => ['type' => 'string',  'description' => 'Search in feedback message and page URL'],
+                'user_id'           => ['type' => 'integer', 'description' => 'Filter by user ID'],
+                'change_request_id' => ['type' => 'integer', 'description' => 'Filter by linked change request ID'],
+            ],
+        ],
+    ],
+    [
+        'name'        => 'get_feedback',
+        'description' => 'Get a single feedback entry with full details.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'feedback_id' => ['type' => 'integer', 'description' => 'The feedback entry ID'],
+            ],
+            'required' => ['feedback_id'],
+        ],
+    ],
+    [
+        'name'        => 'get_feedback_stats',
+        'description' => 'Get feedback statistics: counts by status and type, total, and available source apps.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => (object)[],
+        ],
+    ],
+    [
+        'name'        => 'list_change_requests',
+        'description' => 'List change requests/additions with optional filters. Returns paginated results with grouped feedback count.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'page'         => ['type' => 'integer', 'description' => 'Page number (default 1)'],
+                'per_page'     => ['type' => 'integer', 'description' => 'Items per page (default 25, max 100)'],
+                'status'       => ['type' => 'string',  'description' => 'Filter: proposed, approved, in_progress, completed, paused, rejected'],
+                'request_type' => ['type' => 'string',  'description' => 'Filter: change, addition'],
+                'priority'     => ['type' => 'string',  'description' => 'Filter: low, medium, high, critical'],
+                'search'       => ['type' => 'string',  'description' => 'Search in title and description'],
+            ],
+        ],
+    ],
+    [
+        'name'        => 'get_change_request',
+        'description' => 'Get a single change request with full details and all grouped feedback entries.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'change_request_id' => ['type' => 'integer', 'description' => 'The change request ID'],
+            ],
+            'required' => ['change_request_id'],
+        ],
+    ],
+    [
+        'name'        => 'create_change_request',
+        'description' => 'Create a new change request or addition. Use after analyzing feedback to group related items.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'title'        => ['type' => 'string', 'description' => 'Short descriptive title'],
+                'description'  => ['type' => 'string', 'description' => 'Detailed description of the change or addition'],
+                'request_type' => ['type' => 'string', 'description' => 'Type: change (modify existing) or addition (new feature)'],
+                'priority'     => ['type' => 'string', 'description' => 'Priority: low, medium, high, critical (default medium)'],
+                'source_app'   => ['type' => 'string', 'description' => 'Related application name'],
+            ],
+            'required' => ['title', 'request_type'],
+        ],
+    ],
+    [
+        'name'        => 'update_change_request',
+        'description' => 'Update a change request status, priority, or details. Use to mark as in_progress when working on it, or completed when done.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'change_request_id' => ['type' => 'integer', 'description' => 'The change request ID'],
+                'title'             => ['type' => 'string',  'description' => 'Updated title'],
+                'description'       => ['type' => 'string',  'description' => 'Updated description'],
+                'status'            => ['type' => 'string',  'description' => 'New status: proposed, approved, in_progress, completed, paused, rejected'],
+                'priority'          => ['type' => 'string',  'description' => 'New priority: low, medium, high, critical'],
+                'request_type'      => ['type' => 'string',  'description' => 'Change type: change, addition'],
+            ],
+            'required' => ['change_request_id'],
+        ],
+    ],
+    [
+        'name'        => 'group_feedback',
+        'description' => 'Link a feedback entry to a change request. The feedback status is set to "grouped". Use after creating a change request to associate related feedback.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'feedback_id'       => ['type' => 'integer', 'description' => 'The feedback entry ID to group'],
+                'change_request_id' => ['type' => 'integer', 'description' => 'The change request ID to group with'],
+            ],
+            'required' => ['feedback_id', 'change_request_id'],
         ],
     ],
 ];
@@ -215,6 +322,98 @@ function handle_tool_call($id, $toolName, $args) {
                 return make_tool_result($id, $resp['error'], true);
             }
             return make_tool_result($id, $resp['results'] ?? []);
+
+        // ─── Feedback Handlers ──────────────────────────────────────────────
+
+        case 'list_feedback':
+            $params = [];
+            foreach (['page','per_page','feedback_type','source_app','status','search','user_id','change_request_id'] as $k) {
+                if (isset($args[$k])) $params[$k] = $args[$k];
+            }
+            $resp = api_call('apiListFeedback', $params);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['results'] ?? []);
+
+        case 'get_feedback':
+            if (!isset($args['feedback_id'])) {
+                return make_tool_result($id, 'feedback_id is required', true);
+            }
+            $resp = api_call('apiGetFeedback', ['feedback_id' => $args['feedback_id']]);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['results']['feedback'] ?? []);
+
+        case 'get_feedback_stats':
+            $resp = api_call('apiGetFeedbackStats');
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['results'] ?? []);
+
+        case 'list_change_requests':
+            $params = [];
+            foreach (['page','per_page','status','request_type','priority','search'] as $k) {
+                if (isset($args[$k])) $params[$k] = $args[$k];
+            }
+            $resp = api_call('apiListChangeRequests', $params);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['results'] ?? []);
+
+        case 'get_change_request':
+            if (!isset($args['change_request_id'])) {
+                return make_tool_result($id, 'change_request_id is required', true);
+            }
+            $resp = api_call('apiGetChangeRequest', ['change_request_id' => $args['change_request_id']]);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['results']['change_request'] ?? []);
+
+        case 'create_change_request':
+            if (!isset($args['title']) || !isset($args['request_type'])) {
+                return make_tool_result($id, 'title and request_type are required', true);
+            }
+            $params = [];
+            foreach (['title','description','request_type','priority','source_app'] as $k) {
+                if (isset($args[$k])) $params[$k] = $args[$k];
+            }
+            $resp = api_call('apiCreateChangeRequest', $params);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['results'] ?? $resp['success'] ?? 'Change request created.');
+
+        case 'update_change_request':
+            if (!isset($args['change_request_id'])) {
+                return make_tool_result($id, 'change_request_id is required', true);
+            }
+            $params = [];
+            foreach (['change_request_id','title','description','status','priority','request_type'] as $k) {
+                if (isset($args[$k])) $params[$k] = $args[$k];
+            }
+            $resp = api_call('apiUpdateChangeRequest', $params);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['success'] ?? 'Change request updated.');
+
+        case 'group_feedback':
+            if (!isset($args['feedback_id']) || !isset($args['change_request_id'])) {
+                return make_tool_result($id, 'feedback_id and change_request_id are required', true);
+            }
+            $resp = api_call('apiGroupFeedback', [
+                'feedback_id'       => $args['feedback_id'],
+                'change_request_id' => $args['change_request_id'],
+            ]);
+            if (!empty($resp['error'])) {
+                return make_tool_result($id, $resp['error'], true);
+            }
+            return make_tool_result($id, $resp['success'] ?? 'Feedback grouped.');
 
         default:
             return make_error($id, -32601, "Unknown tool: $toolName");

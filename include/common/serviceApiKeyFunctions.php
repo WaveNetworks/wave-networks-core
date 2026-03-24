@@ -16,6 +16,11 @@ function get_available_scopes() {
         'error_log:read'  => 'Read error logs',
         'error_log:write' => 'Resolve/unresolve error logs',
         'users:read'      => 'Read user list',
+        'costs:write'     => 'Record cost entries (COGS, CAC, support)',
+        'costs:read'      => 'Read cost data and reports',
+        'feedback:read'   => 'Read user feedback',
+        'feedback:write'  => 'Submit and manage feedback',
+        'feedback:admin'  => 'Manage change requests and feedback status',
     ];
 }
 

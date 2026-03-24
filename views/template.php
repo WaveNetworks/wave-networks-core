@@ -95,6 +95,16 @@
                 <span class="sidebar-text">Notification Admin</span>
             </a>
 
+            <a class="nav-link text-white <?= ($page ?? '') === 'feedback_admin' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=feedback_admin">
+                <i class="bi bi-chat-dots sidebar-icon"></i>
+                <span class="sidebar-text">Feedback</span>
+            </a>
+
+            <a class="nav-link text-white <?= ($page ?? '') === 'costs' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=costs">
+                <i class="bi bi-cash-stack sidebar-icon"></i>
+                <span class="sidebar-text">Costs</span>
+            </a>
+
             <?php $reportsOpen = str_starts_with($page ?? '', 'reports'); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#reportsMenu" role="button"
@@ -246,5 +256,6 @@
 <script src="../assets/js/color-mode.js"></script>
 <script src="../assets/js/theme.js"></script>
 <script src="../assets/js/notifications.js"></script>
+<?php include(__DIR__ . '/../snippets/feedback_tab.php'); ?>
 </body>
 </html>
