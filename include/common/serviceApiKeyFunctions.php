@@ -21,6 +21,8 @@ function get_available_scopes() {
         'feedback:read'   => 'Read user feedback',
         'feedback:write'  => 'Submit and manage feedback',
         'feedback:admin'  => 'Manage change requests and feedback status',
+        'stripe:read'     => 'Read Stripe transactions, revenue, and LTV data',
+        'stripe:write'    => 'Record Stripe transactions',
     ];
 }
 

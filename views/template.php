@@ -105,6 +105,11 @@
                 <span class="sidebar-text">Costs</span>
             </a>
 
+            <a class="nav-link text-white <?= ($page ?? '') === 'stripe' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=stripe">
+                <i class="bi bi-credit-card sidebar-icon"></i>
+                <span class="sidebar-text">Stripe</span>
+            </a>
+
             <?php $reportsOpen = str_starts_with($page ?? '', 'reports'); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#reportsMenu" role="button"

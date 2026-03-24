@@ -19,6 +19,7 @@ $views = [
     'oauth_providers' => __DIR__ . '/../views/oauth_providers.php',
     'saml_providers'       => __DIR__ . '/../views/saml_providers.php',
     'costs'                => __DIR__ . '/../views/costs.php',
+    'stripe'               => __DIR__ . '/../views/stripe.php',
     'feedback_admin'       => __DIR__ . '/../views/feedback_admin.php',
     'reports'              => __DIR__ . '/../views/reports.php',
     'reports_acquisition'  => __DIR__ . '/../views/reports_acquisition.php',
