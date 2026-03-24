@@ -113,7 +113,10 @@ if ($updateInfo) {
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Recent Users</h5>
         <?php if (has_role('admin')) { ?>
-        <a href="index.php?page=users" class="btn btn-sm btn-outline-primary">View All</a>
+        <div>
+            <a href="index.php?page=user_create" class="btn btn-sm btn-primary me-2"><i class="bi bi-plus-lg"></i> Create User</a>
+            <a href="index.php?page=users" class="btn btn-sm btn-outline-primary">View All</a>
+        </div>
         <?php } ?>
     </div>
     <div class="card-body p-0">
@@ -129,6 +132,9 @@ if ($updateInfo) {
                     <th>Email</th>
                     <th>Shard</th>
                     <th>Created</th>
+                    <?php if (has_role('admin')) { ?>
+                    <th></th>
+                    <?php } ?>
                 </tr>
             </thead>
             <tbody>
@@ -138,6 +144,9 @@ if ($updateInfo) {
                     <td><?= h($u['email']) ?></td>
                     <td><span class="badge bg-secondary"><?= h($u['shard_id']) ?></span></td>
                     <td><?= h($u['created_date']) ?></td>
+                    <?php if (has_role('admin')) { ?>
+                    <td><a href="index.php?page=user_edit&id=<?= h($u['user_id']) ?>" class="btn btn-sm btn-outline-secondary">Edit</a></td>
+                    <?php } ?>
                 </tr>
                 <?php } ?>
             </tbody>
