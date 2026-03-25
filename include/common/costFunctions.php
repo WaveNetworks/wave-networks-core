@@ -12,7 +12,7 @@
  * @param string $source_app App name (e.g. 'child-app', 'admin')
  * @param string $description Human-readable description
  * @param float  $amount      Cost amount
- * @param array  $opts        Optional: user_id, currency, metadata (JSON string)
+ * @param array  $opts        Optional: user_id, currency, metadata (JSON string), vendor
  * @return int|false          cost_id on success, false on failure
  */
 function record_cost($cost_type, $source_app, $description, $amount, $opts = []) {
@@ -28,12 +28,14 @@ function record_cost($cost_type, $source_app, $description, $amount, $opts = [])
     $s_currency    = sanitize($opts['currency'] ?? 'USD', SQL);
     $user_id       = isset($opts['user_id']) ? intval($opts['user_id']) : null;
     $metadata      = isset($opts['metadata']) ? sanitize($opts['metadata'], SQL) : null;
+    $vendor        = isset($opts['vendor']) && $opts['vendor'] !== '' ? sanitize($opts['vendor'], SQL) : null;
 
-    $user_col = $user_id !== null ? "'$user_id'" : 'NULL';
-    $meta_col = $metadata !== null ? "'$metadata'" : 'NULL';
+    $user_col   = $user_id !== null ? "'$user_id'" : 'NULL';
+    $meta_col   = $metadata !== null ? "'$metadata'" : 'NULL';
+    $vendor_col = $vendor !== null ? "'$vendor'" : 'NULL';
 
-    $r = db_query("INSERT INTO cost_entry (cost_type, source_app, user_id, description, amount, currency, metadata)
-                    VALUES ('$s_type', '$s_source', $user_col, '$s_desc', '$s_amount', '$s_currency', $meta_col)");
+    $r = db_query("INSERT INTO cost_entry (cost_type, source_app, vendor, user_id, description, amount, currency, metadata)
+                    VALUES ('$s_type', '$s_source', $vendor_col, $user_col, '$s_desc', '$s_amount', '$s_currency', $meta_col)");
 
     if (!$r) {
         return false;
@@ -63,6 +65,7 @@ function record_cost_batch($entries) {
                 'user_id'  => $entry['user_id'] ?? null,
                 'currency' => $entry['currency'] ?? 'USD',
                 'metadata' => $entry['metadata'] ?? null,
+                'vendor'   => $entry['vendor'] ?? null,
             ]
         );
 
@@ -79,7 +82,7 @@ function record_cost_batch($entries) {
 /**
  * Get cost entries with filters and pagination.
  *
- * @param array $filters Optional: cost_type, source_app, user_id, from_date, to_date, page, per_page
+ * @param array $filters Optional: cost_type, source_app, vendor, user_id, from_date, to_date, page, per_page
  * @return array ['items' => array, 'total' => int, 'page' => int, 'per_page' => int]
  */
 function get_cost_entries($filters = []) {
@@ -92,6 +95,10 @@ function get_cost_entries($filters = []) {
     if (!empty($filters['source_app'])) {
         $s = sanitize($filters['source_app'], SQL);
         $where[] = "source_app = '$s'";
+    }
+    if (!empty($filters['vendor'])) {
+        $s = sanitize($filters['vendor'], SQL);
+        $where[] = "vendor = '$s'";
     }
     if (isset($filters['user_id']) && $filters['user_id'] !== '') {
         $uid = intval($filters['user_id']);
@@ -128,7 +135,7 @@ function get_cost_entries($filters = []) {
 /**
  * Get aggregated cost summary by type for a date range.
  *
- * @param array $filters Optional: cost_type, source_app, user_id, from_date, to_date
+ * @param array $filters Optional: cost_type, source_app, vendor, user_id, from_date, to_date
  * @return array Totals by cost type
  */
 function get_cost_summary($filters = []) {
@@ -141,6 +148,10 @@ function get_cost_summary($filters = []) {
     if (!empty($filters['source_app'])) {
         $s = sanitize($filters['source_app'], SQL);
         $where[] = "source_app = '$s'";
+    }
+    if (!empty($filters['vendor'])) {
+        $s = sanitize($filters['vendor'], SQL);
+        $where[] = "vendor = '$s'";
     }
     if (isset($filters['user_id']) && $filters['user_id'] !== '') {
         $uid = intval($filters['user_id']);
@@ -333,6 +344,49 @@ function get_cost_by_source($from = null, $to = null) {
     $r = db_query("SELECT source_app, cost_type, SUM(amount) as total_amount, COUNT(*) as entry_count
                     FROM cost_entry $whereSQL
                     GROUP BY source_app, cost_type
+                    ORDER BY total_amount DESC");
+
+    return $r ? db_fetch_all($r) : [];
+}
+
+/**
+ * Get distinct vendors that have recorded costs.
+ *
+ * @return array List of vendor strings (excludes NULLs)
+ */
+function get_cost_vendors() {
+    $r = db_query("SELECT DISTINCT vendor FROM cost_entry WHERE vendor IS NOT NULL ORDER BY vendor");
+    if (!$r) return [];
+    $vendors = [];
+    foreach (db_fetch_all($r) as $row) {
+        $vendors[] = $row['vendor'];
+    }
+    return $vendors;
+}
+
+/**
+ * Get cost breakdown by vendor.
+ *
+ * @param string $from Date string (Y-m-d)
+ * @param string $to   Date string (Y-m-d)
+ * @return array
+ */
+function get_cost_by_vendor($from = null, $to = null) {
+    $where = [];
+    if ($from) {
+        $s = sanitize($from, SQL);
+        $where[] = "created >= '$s'";
+    }
+    if ($to) {
+        $s = sanitize($to, SQL);
+        $where[] = "created <= '$s 23:59:59'";
+    }
+
+    $whereSQL = count($where) > 0 ? 'WHERE ' . implode(' AND ', $where) : '';
+
+    $r = db_query("SELECT COALESCE(vendor, '(no vendor)') as vendor, cost_type, SUM(amount) as total_amount, COUNT(*) as entry_count
+                    FROM cost_entry $whereSQL
+                    GROUP BY COALESCE(vendor, '(no vendor)'), cost_type
                     ORDER BY total_amount DESC");
 
     return $r ? db_fetch_all($r) : [];

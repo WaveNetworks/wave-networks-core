@@ -16,6 +16,7 @@ if (($action ?? null) == 'getCostData') {
         $filters = [];
         if (!empty($_POST['cost_type']))  $filters['cost_type']  = $_POST['cost_type'];
         if (!empty($_POST['source_app'])) $filters['source_app'] = $_POST['source_app'];
+        if (!empty($_POST['vendor']))     $filters['vendor']     = $_POST['vendor'];
         if (isset($_POST['user_id_filter']) && $_POST['user_id_filter'] !== '') {
             $filters['user_id'] = $_POST['user_id_filter'];
         }
@@ -31,6 +32,7 @@ if (($action ?? null) == 'getCostData') {
         $data['page']     = $result['page'];
         $data['per_page'] = $result['per_page'];
         $data['source_apps'] = get_cost_source_apps();
+        $data['vendors']     = get_cost_vendors();
 
         $_SESSION['success'] = 'OK';
     } else {
@@ -71,6 +73,9 @@ if (($action ?? null) == 'getCostReport') {
 
         // Breakdown by source app (last 30 days)
         $data['by_source'] = get_cost_by_source($from30, $to30);
+
+        // Breakdown by vendor (last 30 days)
+        $data['by_vendor'] = get_cost_by_vendor($from30, $to30);
 
         $_SESSION['success'] = 'OK';
     } else {

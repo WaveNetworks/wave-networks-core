@@ -48,15 +48,20 @@ $recurring = get_recurring_costs();
             </select>
         </div>
         <div class="col-md-2">
+            <select class="form-select form-select-sm" id="filterVendor">
+                <option value="">All Vendors</option>
+            </select>
+        </div>
+        <div class="col-md-2">
             <input type="number" class="form-control form-control-sm" id="filterUserId" placeholder="User ID">
         </div>
         <div class="col-md-2">
             <input type="date" class="form-control form-control-sm" id="filterFrom" placeholder="From">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-1">
             <input type="date" class="form-control form-control-sm" id="filterTo" placeholder="To">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-1">
             <button class="btn btn-sm btn-primary w-100" id="btnFilterCosts">Filter</button>
         </div>
     </div>
@@ -69,6 +74,7 @@ $recurring = get_recurring_costs();
                     <th>ID</th>
                     <th>Type</th>
                     <th>Source</th>
+                    <th>Vendor</th>
                     <th>User</th>
                     <th>Description</th>
                     <th class="text-end">Amount</th>
@@ -77,7 +83,7 @@ $recurring = get_recurring_costs();
                 </tr>
             </thead>
             <tbody id="costLogBody">
-                <tr><td colspan="8" class="text-muted text-center py-4">Loading...</td></tr>
+                <tr><td colspan="9" class="text-muted text-center py-4">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -251,6 +257,40 @@ $recurring = get_recurring_costs();
             </div>
         </div>
     </div>
+
+    <!-- Vendor breakdown -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header"><h6 class="mb-0">Cost by Vendor (30d)</h6></div>
+                <div class="card-body">
+                    <div id="chartByVendor"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header"><h6 class="mb-0">Vendor Breakdown (30d)</h6></div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Vendor</th>
+                                    <th>Type</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-end">Entries</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vendorBreakdownBody">
+                                <tr><td colspan="4" class="text-muted text-center py-3">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 </div><!-- /tab-content -->
@@ -320,6 +360,7 @@ $recurring = get_recurring_costs();
         fd.append('page', currentPage);
         if (document.getElementById('filterType').value)   fd.append('cost_type',  document.getElementById('filterType').value);
         if (document.getElementById('filterSource').value) fd.append('source_app', document.getElementById('filterSource').value);
+        if (document.getElementById('filterVendor').value) fd.append('vendor', document.getElementById('filterVendor').value);
         if (document.getElementById('filterUserId').value) fd.append('user_id_filter', document.getElementById('filterUserId').value);
         if (document.getElementById('filterFrom').value)   fd.append('from_date',  document.getElementById('filterFrom').value);
         if (document.getElementById('filterTo').value)     fd.append('to_date',    document.getElementById('filterTo').value);
@@ -341,10 +382,21 @@ $recurring = get_recurring_costs();
                     sel.appendChild(opt);
                 });
 
+                // Populate vendor filter dropdown
+                var vSel = document.getElementById('filterVendor');
+                var vCurVal = vSel.value;
+                vSel.innerHTML = '<option value="">All Vendors</option>';
+                (d.vendors || []).forEach(function (v) {
+                    var opt = document.createElement('option');
+                    opt.value = v; opt.textContent = v;
+                    if (v === vCurVal) opt.selected = true;
+                    vSel.appendChild(opt);
+                });
+
                 // Populate table
                 var tbody = document.getElementById('costLogBody');
                 if (!d.items || d.items.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center py-4">No cost entries found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-muted text-center py-4">No cost entries found.</td></tr>';
                 } else {
                     tbody.innerHTML = d.items.map(function (row) {
                         var typeBadge = {
@@ -353,6 +405,7 @@ $recurring = get_recurring_costs();
                             support: '<span class="badge bg-primary">Support</span>'
                         }[row.cost_type] || '';
 
+                        var vendorCol = row.vendor ? escHtml(row.vendor) : '<span class="text-muted">—</span>';
                         var userCol = row.user_id ? row.user_id : '<span class="text-muted">—</span>';
                         var amount  = parseFloat(row.amount);
                         var amtStr  = amount < 0.01 ? '$' + amount.toFixed(6) : '$' + amount.toFixed(2);
@@ -363,6 +416,7 @@ $recurring = get_recurring_costs();
                             '<td>' + row.cost_id + '</td>' +
                             '<td>' + typeBadge + '</td>' +
                             '<td>' + escHtml(row.source_app) + '</td>' +
+                            '<td>' + vendorCol + '</td>' +
                             '<td>' + userCol + '</td>' +
                             '<td>' + escHtml(row.description) + '</td>' +
                             '<td class="text-end font-monospace">' + amtStr + '</td>' +
@@ -546,6 +600,44 @@ $recurring = get_recurring_costs();
                     height: 260,
                     color: colors.primary,
                 });
+
+                // By vendor bar chart
+                var byVendor = d.by_vendor || [];
+                var vendorAgg = {};
+                byVendor.forEach(function (row) {
+                    if (!vendorAgg[row.vendor]) vendorAgg[row.vendor] = 0;
+                    vendorAgg[row.vendor] += parseFloat(row.total_amount);
+                });
+                var vendorData = Object.keys(vendorAgg).map(function (k) {
+                    return { label: k, value: Math.round(vendorAgg[k] * 100) / 100 };
+                }).sort(function (a, b) { return b.value - a.value; });
+
+                R.barChart('#chartByVendor', vendorData, {
+                    width: 400,
+                    height: 260,
+                    color: colors.info,
+                });
+
+                // Vendor breakdown table
+                var vBody = document.getElementById('vendorBreakdownBody');
+                if (byVendor.length === 0) {
+                    vBody.innerHTML = '<tr><td colspan="4" class="text-muted text-center py-3">No vendor data.</td></tr>';
+                } else {
+                    var typeBadges = {
+                        cogs: '<span class="badge bg-info">COGS</span>',
+                        cac: '<span class="badge bg-warning text-dark">CAC</span>',
+                        support: '<span class="badge bg-primary">Support</span>'
+                    };
+                    vBody.innerHTML = byVendor.map(function (row) {
+                        var amt = parseFloat(row.total_amount);
+                        return '<tr>' +
+                            '<td>' + escHtml(row.vendor) + '</td>' +
+                            '<td>' + (typeBadges[row.cost_type] || '') + '</td>' +
+                            '<td class="text-end font-monospace">$' + amt.toFixed(2) + '</td>' +
+                            '<td class="text-end">' + row.entry_count + '</td>' +
+                            '</tr>';
+                    }).join('');
+                }
             })
             .catch(function (err) {
                 console.error('Cost report error:', err);

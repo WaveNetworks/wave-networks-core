@@ -39,6 +39,9 @@ if (($action ?? null) == 'apiRecordCost') {
             if (!empty($_POST['metadata'])) {
                 $opts['metadata'] = $_POST['metadata'];
             }
+            if (!empty($_POST['vendor'])) {
+                $opts['vendor'] = $_POST['vendor'];
+            }
 
             $cost_id = record_cost($cost_type, $source_app, $description, floatval($amount), $opts);
             if ($cost_id !== false) {
@@ -84,6 +87,7 @@ if (($action ?? null) == 'apiGetCostSummary') {
         $filters = [];
         if (!empty($_POST['cost_type']))  $filters['cost_type']  = $_POST['cost_type'];
         if (!empty($_POST['source_app'])) $filters['source_app'] = $_POST['source_app'];
+        if (!empty($_POST['vendor']))     $filters['vendor']     = $_POST['vendor'];
         if (isset($_POST['user_id']) && $_POST['user_id'] !== '') $filters['user_id'] = $_POST['user_id'];
         if (!empty($_POST['from_date'])) $filters['from_date'] = $_POST['from_date'];
         if (!empty($_POST['to_date']))   $filters['to_date']   = $_POST['to_date'];
