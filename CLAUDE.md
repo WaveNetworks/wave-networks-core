@@ -587,8 +587,7 @@ DO NOT:
 - Edit existing migration files — always create a new version
 - Manually update the db_version table — the migration system handles it
 - Set $_SESSION['error'] immediately on first validation failure (collect all errors first)
-- Use preview_screenshot or JS-based preview tools to verify UI changes — always use
-  the Chrome browser preview (Claude in Chrome MCP) to visually verify instead
+- Use JavaScript, computed styles, or DOM inspection to confirm visual fixes — trust screenshots as source of truth
 
 ## Template pattern
 <?php if ($someCondition) { ?>

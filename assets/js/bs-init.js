@@ -61,8 +61,12 @@ function showAlert(type, message) {
     alert.setAttribute('role', 'alert');
     alert.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
 
-    var firstChild = container.querySelector('.alert') || container.firstChild;
-    container.insertBefore(alert, firstChild);
+    var firstChild = container.querySelector(':scope > .alert') || container.firstChild;
+    try {
+        container.insertBefore(alert, firstChild);
+    } catch(e) {
+        container.prepend(alert);
+    }
 
     setTimeout(function() {
         alert.remove();
