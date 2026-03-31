@@ -1,13 +1,12 @@
 <?php
-include(__DIR__ . '/../include/common_auth.php');
-
+// Set action BEFORE including common_auth.php so definition.php picks it up
+// and loginActions.php fires the confirmAccount action during the include chain.
 $hash = $_GET['hash'] ?? '';
 if ($hash) {
-    // Trigger the confirmAccount action
-    $_POST['action'] = 'confirmAccount';
-    $_POST['hash']   = $hash;
-    // Action is already included via common_auth.php → loginActions.php
+    $_REQUEST['action'] = 'confirmAccount';
 }
+
+include(__DIR__ . '/../include/common_auth.php');
 
 header('Location: login.php');
 exit;
