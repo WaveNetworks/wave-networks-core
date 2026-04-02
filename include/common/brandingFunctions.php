@@ -151,5 +151,6 @@ function get_image_mime($path) {
         'gif' => 'image/gif',
         'ico' => 'image/x-icon',
     ];
-    return $map[$ext] ?? (mime_content_type($path) ?: 'image/png');
+    $clean_path = strtok($path, '?');
+    return $map[$ext] ?? (@mime_content_type($clean_path) ?: 'image/png');
 }
