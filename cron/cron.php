@@ -77,4 +77,19 @@ if ($today === 1) {
     run_jobs_in_dir($cronDir . '/months/' . $month . '/', 'month/' . $month);
 }
 
+// ── Child app crons ──────────────────────────────────────────────────────
+// Each child app can have its own cron/cron.php with the same folder structure.
+// Scan for sibling child app cron runners and include them.
+$childCrons = glob(__DIR__ . '/../../*/cron/cron.php');
+foreach ($childCrons as $childCron) {
+    $appName = basename(dirname(dirname($childCron)));
+    if ($appName === 'admin') continue; // skip self
+    echo "\nRunning child app cron: $appName\n";
+    try {
+        include($childCron);
+    } catch (Exception $e) {
+        echo "  ERROR in $appName cron: " . $e->getMessage() . "\n";
+    }
+}
+
 echo "Cron finished: " . date('Y-m-d H:i:s') . "\n";
