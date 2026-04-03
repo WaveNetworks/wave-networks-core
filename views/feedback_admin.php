@@ -241,6 +241,21 @@ $stats = get_feedback_stats();
     </div>
 </div>
 
+<!-- ── CR Detail Modal ─────────────────────────────────────────────────── -->
+<div class="modal fade" id="crDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="crDetailLabel">Change Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="crDetailBody">
+                <p class="text-muted text-center py-3">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div><!-- /crDetailModal -->
+
 <script>
 (function () {
     'use strict';
@@ -323,7 +338,7 @@ $stats = get_feedback_stats();
                             '<td><small>' + msg + '</small>' + (row.page_url ? '<br><a href="' + esc(row.page_url) + '" class="text-muted small" target="_blank">' + esc(row.page_url).substring(0, 50) + '</a>' : '') + '</td>' +
                             '<td><small>' + esc(row.user_email || '—') + '<br><span class="text-muted">' + esc(row.user_role || '') + '</span></small></td>' +
                             '<td class="text-center"><span class="badge bg-light text-dark">' + (row.upvotes || 0) + '</span></td>' +
-                            '<td>' + (statusBadges[row.status] || '') + '</td>' +
+                            '<td>' + (statusBadges[row.status] || '') + (row.change_request_id ? ' <button class="badge bg-warning text-dark border-0 ms-1 p-1" style="cursor:pointer" onclick="viewCRDetail(' + row.change_request_id + ')" title="View change request">CR #' + row.change_request_id + '</button>' : '') + '</td>' +
                             '<td><small>' + (row.created ? row.created.substring(0, 16) : '') + '</small></td>' +
                             '<td class="text-end text-nowrap">' + actions + '</td>' +
                             '</tr>';
@@ -464,7 +479,7 @@ $stats = get_feedback_stats();
                             '<td>' + typeBadge + '</td>' +
                             '<td>' + (priBadges[cr.priority] || '') + '</td>' +
                             '<td>' + statusSelect + '</td>' +
-                            '<td class="text-center"><span class="badge bg-light text-dark">' + (cr.feedback_count || 0) + '</span></td>' +
+                            '<td class="text-center"><span class="badge bg-light text-dark" style="cursor:pointer" onclick="viewCRDetail(' + cr.change_request_id + ')" title="View grouped feedback">' + (cr.feedback_count || 0) + '</span></td>' +
                             '<td><small>' + (cr.updated || cr.created || '').substring(0, 16) + '</small></td>' +
                             '<td class="text-end text-nowrap">' +
                                 '<button class="btn btn-sm btn-outline-secondary" onclick="editCR(' + cr.change_request_id + ', ' + esc(JSON.stringify(cr)).replace(/'/g, "\\'") + ')" title="Edit"><i class="bi bi-pencil"></i></button>' +
@@ -546,6 +561,51 @@ $stats = get_feedback_stats();
                 if (j.error) { alert(j.error); return; }
                 loadChangeRequests(crPage);
                 if (feedbackId) loadFeedback(fbPage);
+            });
+    };
+
+    // ── CR Detail (with grouped feedback) ────────────────────
+
+    window.viewCRDetail = function (crid) {
+        document.getElementById('crDetailLabel').textContent = 'Change Request #' + crid;
+        document.getElementById('crDetailBody').innerHTML = '<p class="text-muted text-center py-3">Loading...</p>';
+        new bootstrap.Modal(document.getElementById('crDetailModal')).show();
+
+        var fd = new FormData();
+        fd.append('action', 'getFeedbackData');
+        fd.append('change_request_id', crid);
+        fd.append('per_page', 50);
+        fetch('../api/index.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j.error) {
+                    document.getElementById('crDetailBody').innerHTML = '<p class="text-danger">' + esc(j.error) + '</p>';
+                    return;
+                }
+                var items = (j.results && j.results.items) || [];
+                if (items.length === 0) {
+                    document.getElementById('crDetailBody').innerHTML = '<p class="text-muted text-center py-3">No feedback grouped to this change request.</p>';
+                } else {
+                    var typeBadges = {
+                        bug:        '<span class="badge bg-danger">Bug</span>',
+                        suggestion: '<span class="badge bg-primary">Suggestion</span>',
+                        general:    '<span class="badge bg-secondary">General</span>'
+                    };
+                    var html = '<table class="table table-sm align-middle mb-0"><thead><tr><th style="width:80px">Type</th><th>Message</th><th style="width:120px">User</th><th style="width:50px" class="text-center">Votes</th><th style="width:100px">Date</th></tr></thead><tbody>';
+                    items.forEach(function (row) {
+                        var msg = esc(row.message);
+                        if (msg.length > 120) msg = msg.substring(0, 120) + '...';
+                        html += '<tr>' +
+                            '<td>' + (typeBadges[row.feedback_type] || '') + '</td>' +
+                            '<td><small>' + msg + '</small></td>' +
+                            '<td><small>' + esc(row.user_email || '—') + '</small></td>' +
+                            '<td class="text-center"><span class="badge bg-light text-dark">' + (row.upvotes || 0) + '</span></td>' +
+                            '<td><small>' + (row.created || '').substring(0, 10) + '</small></td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    document.getElementById('crDetailBody').innerHTML = html;
+                }
             });
     };
 
