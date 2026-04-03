@@ -52,6 +52,7 @@ if (($action ?? null) == 'getFeedbackData') {
         if (!empty($_POST['search']))        $filters['search']        = $_POST['search'];
         if (!empty($_POST['page']))          $filters['page']          = $_POST['page'];
         if (!empty($_POST['per_page']))      $filters['per_page']      = $_POST['per_page'];
+        if (!empty($_POST['change_request_id'])) $filters['change_request_id'] = $_POST['change_request_id'];
 
         $result = get_feedback_entries($filters);
         $data['items']       = $result['items'];
