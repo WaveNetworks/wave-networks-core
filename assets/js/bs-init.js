@@ -67,8 +67,4 @@ function showAlert(type, message) {
     } catch(e) {
         container.prepend(alert);
     }
-
-    setTimeout(function() {
-        alert.remove();
-    }, 5000);
 }
