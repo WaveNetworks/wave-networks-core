@@ -107,13 +107,44 @@ $branding = get_branding();
                             <input type="text" class="form-control" id="site_description" name="site_description" value="<?= h($branding['site_description']) ?>" maxlength="255">
                             <div class="form-text">PWA manifest description.</div>
                         </div>
+                    </div>
+
+                    <hr class="my-3">
+                    <h6 class="mb-3">Chrome Colors <small class="text-muted">(browser toolbar &amp; PWA splash screen)</small></h6>
+                    <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="theme_color" class="form-label">Theme Color</label>
+                            <label for="theme_color_light" class="form-label"><i class="bi bi-sun"></i> Light Mode Theme Color</label>
                             <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="theme_color_picker" value="<?= h($branding['theme_color']) ?>">
-                                <input type="text" class="form-control" id="theme_color" name="theme_color" value="<?= h($branding['theme_color']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                                <input type="color" class="form-control form-control-color" id="theme_color_light_picker" value="<?= h($branding['theme_color_light']) ?>">
+                                <input type="text" class="form-control" id="theme_color_light" name="theme_color_light" value="<?= h($branding['theme_color_light']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
                             </div>
-                            <div class="form-text">Browser toolbar / PWA theme color.</div>
+                            <div class="form-text">Browser toolbar color in light mode.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="theme_color_dark" class="form-label"><i class="bi bi-moon"></i> Dark Mode Theme Color</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" id="theme_color_dark_picker" value="<?= h($branding['theme_color_dark']) ?>">
+                                <input type="text" class="form-control" id="theme_color_dark" name="theme_color_dark" value="<?= h($branding['theme_color_dark']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                            </div>
+                            <div class="form-text">Browser toolbar color in dark mode.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="background_color_light" class="form-label"><i class="bi bi-sun"></i> Light Mode Background Color</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" id="background_color_light_picker" value="<?= h($branding['background_color_light']) ?>">
+                                <input type="text" class="form-control" id="background_color_light" name="background_color_light" value="<?= h($branding['background_color_light']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                            </div>
+                            <div class="form-text">PWA splash screen background in light mode.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="background_color_dark" class="form-label"><i class="bi bi-moon"></i> Dark Mode Background Color</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" id="background_color_dark_picker" value="<?= h($branding['background_color_dark']) ?>">
+                                <input type="text" class="form-control" id="background_color_dark" name="background_color_dark" value="<?= h($branding['background_color_dark']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                            </div>
+                            <div class="form-text">PWA splash screen background in dark mode.</div>
                         </div>
                     </div>
 
@@ -160,7 +191,7 @@ $branding = get_branding();
                     <hr class="my-3">
                     <h6 class="mb-3">PWA Screenshots <small class="text-muted">(optional — enables richer install UI)</small></h6>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label for="pwa_screenshot_wide" class="form-label">Desktop Screenshot</label>
                             <?php if (!empty($branding['pwa_screenshot_wide'])) { ?>
                             <div class="mb-2">
@@ -170,7 +201,17 @@ $branding = get_branding();
                             <input type="file" class="form-control" id="pwa_screenshot_wide" name="pwa_screenshot_wide" accept="image/png,image/jpeg,image/webp">
                             <div class="form-text">Landscape, 1280×720 or wider. PNG, JPG, or WebP. Max 2 MB.</div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label for="pwa_screenshot_tablet" class="form-label">Tablet Screenshot</label>
+                            <?php if (!empty($branding['pwa_screenshot_tablet'])) { ?>
+                            <div class="mb-2">
+                                <img src="../branding/<?= h($branding['pwa_screenshot_tablet']) ?>" alt="Tablet screenshot" style="max-height: 80px;" class="border rounded p-1">
+                            </div>
+                            <?php } ?>
+                            <input type="file" class="form-control" id="pwa_screenshot_tablet" name="pwa_screenshot_tablet" accept="image/png,image/jpeg,image/webp">
+                            <div class="form-text">Landscape tablet, ~1024×768. PNG, JPG, or WebP. Max 2 MB.</div>
+                        </div>
+                        <div class="col-md-4">
                             <label for="pwa_screenshot_mobile" class="form-label">Mobile Screenshot</label>
                             <?php if (!empty($branding['pwa_screenshot_mobile'])) { ?>
                             <div class="mb-2">
@@ -178,7 +219,7 @@ $branding = get_branding();
                             </div>
                             <?php } ?>
                             <input type="file" class="form-control" id="pwa_screenshot_mobile" name="pwa_screenshot_mobile" accept="image/png,image/jpeg,image/webp">
-                            <div class="form-text">Portrait, 750×1334 or similar. PNG, JPG, or WebP. Max 2 MB.</div>
+                            <div class="form-text">Portrait, ~390×844. PNG, JPG, or WebP. Max 2 MB.</div>
                         </div>
                     </div>
 
@@ -232,14 +273,21 @@ $branding = get_branding();
 
 <script>
 (function() {
-    var picker = document.getElementById('theme_color_picker');
-    var text = document.getElementById('theme_color');
-    if (picker && text) {
+    var colorPairs = [
+        ['theme_color_light_picker',      'theme_color_light'],
+        ['theme_color_dark_picker',       'theme_color_dark'],
+        ['background_color_light_picker', 'background_color_light'],
+        ['background_color_dark_picker',  'background_color_dark'],
+    ];
+    colorPairs.forEach(function(pair) {
+        var picker = document.getElementById(pair[0]);
+        var text   = document.getElementById(pair[1]);
+        if (!picker || !text) return;
         picker.addEventListener('input', function() { text.value = this.value; });
         text.addEventListener('input', function() {
             if (/^#[0-9a-fA-F]{6}$/.test(this.value)) picker.value = this.value;
         });
-    }
+    });
 })();
 
 function checkForUpdates() {

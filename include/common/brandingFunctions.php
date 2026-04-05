@@ -14,20 +14,27 @@ function get_branding() {
     if ($branding !== null) return $branding;
 
     $defaults = [
-        'site_name'             => 'Admin',
-        'site_short_name'       => 'Admin',
-        'site_description'      => '',
-        'theme_color'           => '#212529',
-        'logo_path'             => null,
-        'logo_dark_path'        => null,
-        'favicon_path'          => null,
-        'pwa_screenshot_wide'   => null,
-        'pwa_screenshot_mobile' => null,
+        'site_name'              => 'Admin',
+        'site_short_name'        => 'Admin',
+        'site_description'       => '',
+        'theme_color'            => '#212529',
+        'theme_color_light'      => '#ffffff',
+        'theme_color_dark'       => '#212529',
+        'background_color_light' => '#ffffff',
+        'background_color_dark'  => '#212529',
+        'logo_path'              => null,
+        'logo_dark_path'         => null,
+        'favicon_path'           => null,
+        'pwa_screenshot_wide'    => null,
+        'pwa_screenshot_tablet'  => null,
+        'pwa_screenshot_mobile'  => null,
     ];
 
     $row = db_fetch(db_query(
         "SELECT site_name, site_short_name, site_description, theme_color,
-                logo_path, logo_dark_path, favicon_path, pwa_screenshot_wide, pwa_screenshot_mobile
+                theme_color_light, theme_color_dark, background_color_light, background_color_dark,
+                logo_path, logo_dark_path, favicon_path,
+                pwa_screenshot_wide, pwa_screenshot_tablet, pwa_screenshot_mobile
          FROM auth_settings WHERE setting_id = 1"
     ));
 

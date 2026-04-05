@@ -39,8 +39,8 @@ $manifest = [
     'id'               => './app/index.php',
     'start_url'        => 'app/index.php',
     'display'          => 'standalone',
-    'theme_color'      => $b['theme_color'],
-    'background_color' => '#ffffff',
+    'theme_color'      => $b['theme_color_light'] ?? $b['theme_color'] ?? '#ffffff',
+    'background_color' => $b['background_color_light'] ?? '#ffffff',
 ];
 
 // Icons — prefer generated PNGs with explicit sizes, keep SVG as fallback
@@ -90,15 +90,29 @@ if (!empty($b['pwa_screenshot_wide'])) {
         ];
     }
 }
+if (!empty($b['pwa_screenshot_tablet'])) {
+    $st_path = $branding_dir . '/' . $b['pwa_screenshot_tablet'];
+    if (file_exists($st_path)) {
+        $st_info = @getimagesize($st_path);
+        $screenshots[] = [
+            'src'         => 'branding/' . $b['pwa_screenshot_tablet'],
+            'sizes'       => $st_info ? ($st_info[0] . 'x' . $st_info[1]) : '1024x768',
+            'type'        => function_exists('get_image_mime') ? get_image_mime($st_path) : 'image/png',
+            'form_factor' => 'wide',
+            'label'       => $b['site_name'] . ' — Tablet',
+        ];
+    }
+}
 if (!empty($b['pwa_screenshot_mobile'])) {
     $sm_path = $branding_dir . '/' . $b['pwa_screenshot_mobile'];
     if (file_exists($sm_path)) {
         $sm_info = @getimagesize($sm_path);
         $screenshots[] = [
-            'src'   => 'branding/' . $b['pwa_screenshot_mobile'],
-            'sizes' => $sm_info ? ($sm_info[0] . 'x' . $sm_info[1]) : '750x1334',
-            'type'  => function_exists('get_image_mime') ? get_image_mime($sm_path) : 'image/png',
-            'label' => $b['site_name'] . ' — Mobile',
+            'src'         => 'branding/' . $b['pwa_screenshot_mobile'],
+            'sizes'       => $sm_info ? ($sm_info[0] . 'x' . $sm_info[1]) : '390x844',
+            'type'        => function_exists('get_image_mime') ? get_image_mime($sm_path) : 'image/png',
+            'form_factor' => 'narrow',
+            'label'       => $b['site_name'] . ' — Mobile',
         ];
     }
 }

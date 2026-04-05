@@ -16,7 +16,8 @@
     </script>
     <?php $b = get_branding(); ?>
     <title><?= h($page_title ?? $b['site_name']) ?></title>
-    <meta name="theme-color" content="<?= h($b['theme_color']) ?>">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="<?= h($b['theme_color_light'] ?? $b['theme_color']) ?>">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="<?= h($b['theme_color_dark']  ?? $b['theme_color']) ?>">
     <?php if (!empty($b['favicon_path'])) { ?>
     <link rel="icon" href="../branding/<?= h($b['favicon_path']) ?>">
     <link rel="apple-touch-icon" href="../branding/<?= h($b['favicon_path']) ?>">

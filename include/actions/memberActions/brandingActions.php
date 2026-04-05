@@ -10,15 +10,21 @@ if (($action ?? null) == 'saveBranding') {
     if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
     if (!has_role('admin'))    { $errs['auth'] = 'Admin access required.'; }
 
-    $site_name       = trim($_POST['site_name'] ?? '');
-    $site_short_name = trim($_POST['site_short_name'] ?? '');
-    $site_description = trim($_POST['site_description'] ?? '');
-    $theme_color     = trim($_POST['theme_color'] ?? '#212529');
+    $site_name            = trim($_POST['site_name'] ?? '');
+    $site_short_name      = trim($_POST['site_short_name'] ?? '');
+    $site_description     = trim($_POST['site_description'] ?? '');
+    $theme_color_light    = trim($_POST['theme_color_light'] ?? '#ffffff');
+    $theme_color_dark     = trim($_POST['theme_color_dark'] ?? '#212529');
+    $background_color_light = trim($_POST['background_color_light'] ?? '#ffffff');
+    $background_color_dark  = trim($_POST['background_color_dark'] ?? '#212529');
 
-    if (strlen($site_name) > 100)       { $errs['site_name'] = 'Site name must be 100 characters or fewer.'; }
-    if (strlen($site_short_name) > 30)  { $errs['site_short_name'] = 'Short name must be 30 characters or fewer.'; }
+    if (strlen($site_name) > 100)        { $errs['site_name'] = 'Site name must be 100 characters or fewer.'; }
+    if (strlen($site_short_name) > 30)   { $errs['site_short_name'] = 'Short name must be 30 characters or fewer.'; }
     if (strlen($site_description) > 255) { $errs['site_description'] = 'Description must be 255 characters or fewer.'; }
-    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $theme_color)) { $errs['theme_color'] = 'Invalid theme color.'; }
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $theme_color_light))    { $errs['theme_color_light'] = 'Invalid light mode theme color.'; }
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $theme_color_dark))     { $errs['theme_color_dark'] = 'Invalid dark mode theme color.'; }
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $background_color_light)) { $errs['background_color_light'] = 'Invalid light mode background color.'; }
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $background_color_dark))  { $errs['background_color_dark'] = 'Invalid dark mode background color.'; }
 
     $allowed_image_types = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/webp'];
     $max_file_size = 2 * 1024 * 1024; // 2 MB
@@ -88,6 +94,20 @@ if (($action ?? null) == 'saveBranding') {
         }
     }
 
+    $screenshot_tablet_path = null;
+    $screenshot_tablet_updated = false;
+    if (!empty($_FILES['pwa_screenshot_tablet']['name']) && $_FILES['pwa_screenshot_tablet']['error'] === UPLOAD_ERR_OK) {
+        if (!in_array($_FILES['pwa_screenshot_tablet']['type'], $allowed_screenshot_types)) {
+            $errs['pwa_screenshot_tablet'] = 'Tablet screenshot must be PNG, JPG, or WebP.';
+        } elseif ($_FILES['pwa_screenshot_tablet']['size'] > $max_file_size) {
+            $errs['pwa_screenshot_tablet'] = 'Tablet screenshot must be under 2 MB.';
+        } else {
+            $ext = strtolower(pathinfo($_FILES['pwa_screenshot_tablet']['name'], PATHINFO_EXTENSION));
+            $screenshot_tablet_path = 'pwa_screenshot_tablet.' . $ext;
+            $screenshot_tablet_updated = true;
+        }
+    }
+
     $screenshot_mobile_path = null;
     $screenshot_mobile_updated = false;
     if (!empty($_FILES['pwa_screenshot_mobile']['name']) && $_FILES['pwa_screenshot_mobile']['error'] === UPLOAD_ERR_OK) {
@@ -126,22 +146,33 @@ if (($action ?? null) == 'saveBranding') {
             foreach (glob($uploads_dir . '/pwa_screenshot_wide.*') as $old) { unlink($old); }
             move_uploaded_file($_FILES['pwa_screenshot_wide']['tmp_name'], $uploads_dir . '/' . $screenshot_wide_path);
         }
+        if ($screenshot_tablet_updated) {
+            foreach (glob($uploads_dir . '/pwa_screenshot_tablet.*') as $old) { unlink($old); }
+            move_uploaded_file($_FILES['pwa_screenshot_tablet']['tmp_name'], $uploads_dir . '/' . $screenshot_tablet_path);
+        }
         if ($screenshot_mobile_updated) {
             foreach (glob($uploads_dir . '/pwa_screenshot_mobile.*') as $old) { unlink($old); }
             move_uploaded_file($_FILES['pwa_screenshot_mobile']['tmp_name'], $uploads_dir . '/' . $screenshot_mobile_path);
         }
 
         // Build UPDATE query
-        $safe_name  = sanitize($site_name, SQL);
-        $safe_short = sanitize($site_short_name, SQL);
-        $safe_desc  = sanitize($site_description, SQL);
-        $safe_color = sanitize($theme_color, SQL);
+        $safe_name        = sanitize($site_name, SQL);
+        $safe_short       = sanitize($site_short_name, SQL);
+        $safe_desc        = sanitize($site_description, SQL);
+        $safe_color_light = sanitize($theme_color_light, SQL);
+        $safe_color_dark  = sanitize($theme_color_dark, SQL);
+        $safe_bg_light    = sanitize($background_color_light, SQL);
+        $safe_bg_dark     = sanitize($background_color_dark, SQL);
 
         $sql = "UPDATE auth_settings SET
             site_name = '$safe_name',
             site_short_name = '$safe_short',
             site_description = '$safe_desc',
-            theme_color = '$safe_color'";
+            theme_color = '$safe_color_light',
+            theme_color_light = '$safe_color_light',
+            theme_color_dark = '$safe_color_dark',
+            background_color_light = '$safe_bg_light',
+            background_color_dark = '$safe_bg_dark'";
 
         if ($logo_updated) {
             $safe_logo = sanitize($logo_path, SQL);
@@ -162,6 +193,10 @@ if (($action ?? null) == 'saveBranding') {
         if ($screenshot_wide_updated) {
             $safe_sw = sanitize($screenshot_wide_path, SQL);
             $sql .= ", pwa_screenshot_wide = '$safe_sw'";
+        }
+        if ($screenshot_tablet_updated) {
+            $safe_st = sanitize($screenshot_tablet_path, SQL);
+            $sql .= ", pwa_screenshot_tablet = '$safe_st'";
         }
         if ($screenshot_mobile_updated) {
             $safe_sm = sanitize($screenshot_mobile_path, SQL);
