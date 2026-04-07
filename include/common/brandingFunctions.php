@@ -148,7 +148,8 @@ function generate_pwa_icons($source_path, $uploads_dir) {
  * @return string
  */
 function get_image_mime($path) {
-    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    $clean_path = strtok($path, '?');
+    $ext = strtolower(pathinfo($clean_path, PATHINFO_EXTENSION));
     $map = [
         'svg' => 'image/svg+xml',
         'png' => 'image/png',
@@ -158,6 +159,5 @@ function get_image_mime($path) {
         'gif' => 'image/gif',
         'ico' => 'image/x-icon',
     ];
-    $clean_path = strtok($path, '?');
-    return $map[$ext] ?? (@mime_content_type($clean_path) ?: 'image/png');
+    return $map[$ext] ?? (file_exists($clean_path) ? (@mime_content_type($clean_path) ?: 'image/png') : 'image/png');
 }
