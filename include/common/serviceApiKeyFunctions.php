@@ -112,6 +112,21 @@ function revoke_service_api_key($service_key_id, $revoked_by) {
 }
 
 /**
+ * Update the scopes for an existing (non-revoked) service API key.
+ *
+ * @param int   $service_key_id
+ * @param array $scopes     New array of scope strings
+ * @param int   $updated_by User ID of the admin making the change
+ * @return bool
+ */
+function update_service_api_key_scopes($service_key_id, $scopes, $updated_by) {
+    $id          = (int)$service_key_id;
+    $scopes_json = sanitize(json_encode(array_values($scopes)), SQL);
+    return (bool)db_query("UPDATE service_api_key SET scopes = '$scopes_json'
+                           WHERE service_key_id = '$id' AND revoked_at IS NULL");
+}
+
+/**
  * Get all service API keys for admin listing.
  * Never returns key_hash.
  *

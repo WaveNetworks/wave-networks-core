@@ -10,8 +10,7 @@ $modal = $_GET['modal'] ?? '';
 
 // Map modal names to snippet files
 $modals = [
-    // Add modal mappings as needed
-    // 'user_edit' => __DIR__ . '/../snippets/modal_user_edit.php',
+    'edit_api_key_scopes' => __DIR__ . '/../snippets/modal_edit_api_key_scopes.php',
 ];
 
 if (isset($modals[$modal]) && file_exists($modals[$modal])) {

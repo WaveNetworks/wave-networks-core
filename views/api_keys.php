@@ -122,6 +122,11 @@ function loadKeys() {
                 ? '<span class="badge bg-danger">Revoked</span>'
                 : '<span class="badge bg-success">Active</span>';
 
+            var editBtn = revoked
+                ? ''
+                : '<button class="btn btn-sm btn-outline-secondary me-1" onclick="editScopes(' + k.service_key_id + ', \'' + escapeHtml(k.key_name) + '\', ' + JSON.stringify(scopes) + ')" title="Edit Scopes">' +
+                  '<i class="bi bi-pencil"></i></button>';
+
             var revokeBtn = revoked
                 ? ''
                 : '<button class="btn btn-sm btn-outline-danger" onclick="revokeKey(' + k.service_key_id + ', \'' + escapeHtml(k.key_name) + '\')" title="Revoke">' +
@@ -136,7 +141,7 @@ function loadKeys() {
                 '<td>' + escapeHtml(k.created_at) + '</td>' +
                 '<td>' + (k.last_used_at ? escapeHtml(k.last_used_at) : '<span class="text-muted">Never</span>') + '</td>' +
                 '<td>' + statusBadge + '</td>' +
-                '<td>' + revokeBtn + '</td>' +
+                '<td>' + editBtn + revokeBtn + '</td>' +
                 '</tr>';
         }
         tbody.innerHTML = html;
@@ -202,4 +207,36 @@ function escapeHtml(str) {
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
 }
+
+function editScopes(id, name, currentScopes) {
+    document.getElementById('editKeyId').value = id;
+    document.getElementById('editKeyName').value = name;
+
+    document.querySelectorAll('.edit-scope-check').forEach(function(c) { c.checked = false; });
+    currentScopes.forEach(function(s) {
+        var cb = document.querySelector('.edit-scope-check[value="' + s + '"]');
+        if (cb) cb.checked = true;
+    });
+
+    var modal = new bootstrap.Modal(document.getElementById('editScopesModal'));
+    modal.show();
+}
+
+function saveScopes() {
+    var id = document.getElementById('editKeyId').value;
+    var checks = document.querySelectorAll('.edit-scope-check:checked');
+    if (checks.length === 0) { alert('Select at least one scope.'); return; }
+
+    var i = 0;
+    var postData = { service_key_id: id };
+    checks.forEach(function(c) { postData['scopes[' + i + ']'] = c.value; i++; });
+
+    apiPost('updateServiceApiKeyScopes', postData, function(resp) {
+        var modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
+        if (modal) modal.hide();
+        loadKeys();
+    });
+}
 </script>
+
+<?php include __DIR__ . '/../snippets/modal_edit_api_key_scopes.php'; ?>

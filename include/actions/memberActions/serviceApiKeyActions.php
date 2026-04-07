@@ -76,3 +76,35 @@ if (($_POST['action'] ?? '') == 'getServiceApiKeys') {
         $_SESSION['error'] = implode('<br>', $errs);
     }
 }
+
+if (($_POST['action'] ?? '') == 'updateServiceApiKeyScopes') {
+    $errs = array();
+    if (!$_SESSION['user_id'])           { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))              { $errs['role'] = 'Admin access required.'; }
+    if (empty($_POST['service_key_id'])) { $errs['id'] = 'Key ID required.'; }
+
+    $scopes = $_POST['scopes'] ?? [];
+    if (!is_array($scopes)) { $scopes = []; }
+    if (empty($scopes)) { $errs['scopes'] = 'At least one scope is required.'; }
+
+    if (empty($errs)) {
+        $available = array_keys(get_available_scopes());
+        foreach ($scopes as $s) {
+            if (!in_array($s, $available)) {
+                $errs['scopes'] = "Invalid scope: $s";
+                break;
+            }
+        }
+    }
+
+    if (count($errs) <= 0) {
+        $r = update_service_api_key_scopes((int)$_POST['service_key_id'], $scopes, $_SESSION['user_id']);
+        if ($r) {
+            $_SESSION['success'] = 'API key scopes updated.';
+        } else {
+            $_SESSION['error'] = 'Failed to update scopes. ' . db_error();
+        }
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
