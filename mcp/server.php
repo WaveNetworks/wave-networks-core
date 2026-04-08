@@ -439,7 +439,59 @@ mcp_log("Starting MCP server. API URL: $MCP_API_URL");
 
 if (empty($MCP_API_KEY)) {
     mcp_log("WARNING: WN_API_KEY is not set. API calls will fail with 401.");
+    mcp_log("  Set env var WN_API_KEY=wn_sk_... in your MCP client config.");
 }
+
+// Startup connectivity test — runs once to catch config/deploy issues early.
+// Outage 2026-04-07: deploy was broken (GITHUB_TOKEN couldn't access wave-networks-core),
+// leaving stale/missing admin code on the server and causing PHP errors in the API bootstrap.
+// Fix: use CROSS_REPO_PAT in .github/workflows/deploy.yml of the child app repos.
+// Also verify WN_API_URL and WN_API_KEY are set correctly in MCP client config.
+(function () use ($MCP_API_URL, $MCP_API_KEY) {
+    $ch = curl_init($MCP_API_URL);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query(['action' => 'apiGetErrorStats']),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $MCP_API_KEY,
+            'Content-Type: application/x-www-form-urlencoded',
+        ],
+        CURLOPT_TIMEOUT        => 10,
+    ]);
+    $body    = curl_exec($ch);
+    $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr) {
+        mcp_log("STARTUP CHECK FAILED — curl error: $curlErr");
+        mcp_log("  Verify WN_API_URL is reachable: $MCP_API_URL");
+        return;
+    }
+    if ($code === 401 || $code === 403) {
+        mcp_log("STARTUP CHECK FAILED — HTTP $code (auth error). Check WN_API_KEY.");
+        return;
+    }
+    if ($code !== 200) {
+        mcp_log("STARTUP CHECK WARNING — HTTP $code from API.");
+        mcp_log("  May indicate a PHP error in the bootstrap. Check server error logs.");
+        mcp_log("  Response preview: " . substr($body, 0, 300));
+        return;
+    }
+    $decoded = json_decode($body, true);
+    if (!$decoded) {
+        mcp_log("STARTUP CHECK WARNING — API returned non-JSON (HTTP $code).");
+        mcp_log("  Likely a PHP error in common_api.php or admin bootstrap chain.");
+        mcp_log("  Response preview: " . substr($body, 0, 300));
+        return;
+    }
+    if (!empty($decoded['error'])) {
+        mcp_log("STARTUP CHECK WARNING — API error: " . $decoded['error']);
+    } else {
+        mcp_log("STARTUP CHECK OK — API is reachable and responding correctly.");
+    }
+})();
 
 while (($line = fgets(STDIN)) !== false) {
     $line = trim($line);
