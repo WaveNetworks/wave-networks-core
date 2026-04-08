@@ -46,7 +46,8 @@ function submit_feedback($message, $type = 'general', $opts = []) {
     }
 
     $s_type       = sanitize($type, SQL);
-    $s_source     = sanitize($opts['source_app'] ?? detect_source_app_from_url(), SQL);
+    $source_app   = $opts['source_app'] ?? detect_source_app_from_url();
+    $s_source     = sanitize($source_app, SQL);
     $s_page       = isset($opts['page_url']) ? "'" . sanitize($opts['page_url'], SQL) . "'" : 'NULL';
     $s_message    = sanitize($message, SQL);
     $user_id      = isset($opts['user_id']) ? intval($opts['user_id']) : (isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null);
@@ -59,7 +60,19 @@ function submit_feedback($message, $type = 'general', $opts = []) {
                     VALUES ('$s_type', '$s_source', $s_page, $uid_col, '$user_role', '$s_message', $context_json)");
 
     if (!$r) return false;
-    return (int) db_insert_id();
+    $feedback_id = (int) db_insert_id();
+
+    // Notify the user that their feedback was received
+    if ($user_id !== null) {
+        $type_label = $type === 'bug' ? 'bug report' : ($type === 'suggestion' ? 'suggestion' : 'feedback');
+        _notify_feedback_user($user_id, 'feedback_received',
+            'Thanks for your ' . $type_label . '!',
+            'Your ' . $type_label . ' has been received and will be reviewed. We appreciate you taking the time to help improve the platform.',
+            ['source_app' => $source_app]
+        );
+    }
+
+    return $feedback_id;
 }
 
 // ─── Feedback Queries ───────────────────────────────────────────────────────
@@ -278,6 +291,15 @@ function create_change_request($title, $description, $type, $created_by, $opts =
  */
 function update_change_request($id, $fields) {
     $id = intval($id);
+
+    // Get current state before update (for status change notifications)
+    $old_status = null;
+    if (isset($fields['status'])) {
+        $r = db_query("SELECT status, title, created_by, source_app FROM change_request WHERE change_request_id = '$id'");
+        $old_cr = $r ? db_fetch($r) : null;
+        $old_status = $old_cr['status'] ?? null;
+    }
+
     $sets = [];
 
     $allowed = ['title', 'description', 'status', 'priority', 'assigned_to', 'request_type'];
@@ -301,7 +323,14 @@ function update_change_request($id, $fields) {
 
     if (empty($sets)) return false;
 
-    return (bool) db_query("UPDATE change_request SET " . implode(', ', $sets) . " WHERE change_request_id = '$id'");
+    $result = (bool) db_query("UPDATE change_request SET " . implode(', ', $sets) . " WHERE change_request_id = '$id'");
+
+    // Notify on status change
+    if ($result && isset($fields['status']) && $old_status !== null && $old_status !== $fields['status']) {
+        _notify_cr_status_change($id, $old_cr, $fields['status']);
+    }
+
+    return $result;
 }
 
 /**
@@ -390,7 +419,22 @@ function get_change_request_detail($id) {
 function group_feedback_with_request($feedback_id, $change_request_id) {
     $fid  = intval($feedback_id);
     $crid = intval($change_request_id);
-    return (bool) db_query("UPDATE feedback SET change_request_id = '$crid', status = 'grouped' WHERE feedback_id = '$fid'");
+    $result = (bool) db_query("UPDATE feedback SET change_request_id = '$crid', status = 'grouped' WHERE feedback_id = '$fid'");
+
+    // Notify the feedback author that their feedback led to a change request
+    if ($result) {
+        $feedback = get_feedback_by_id($fid);
+        $cr = db_fetch(db_query("SELECT title FROM change_request WHERE change_request_id = '$crid'"));
+        if ($feedback && !empty($feedback['user_id']) && $cr) {
+            _notify_feedback_user((int)$feedback['user_id'], 'feedback_update',
+                'Your feedback is being acted on',
+                'Your feedback has been grouped into a change request: "' . $cr['title'] . '". We\'ll keep you updated on its progress.',
+                ['source_app' => $feedback['source_app'] ?? null]
+            );
+        }
+    }
+
+    return $result;
 }
 
 /**
@@ -402,4 +446,95 @@ function group_feedback_with_request($feedback_id, $change_request_id) {
 function ungroup_feedback($feedback_id) {
     $fid = intval($feedback_id);
     return (bool) db_query("UPDATE feedback SET change_request_id = NULL, status = 'reviewed' WHERE feedback_id = '$fid'");
+}
+
+// ─── Notification Helpers ──────────────────────────────────────────────────
+
+/**
+ * Send a notification to a feedback/CR user. Looks up shard_id from user table.
+ * Silently does nothing if user not found or notifications unavailable.
+ *
+ * @param int    $user_id
+ * @param string $category_slug
+ * @param string $title
+ * @param string $body
+ * @param array  $opts  Optional: source_app
+ */
+function _notify_feedback_user($user_id, $category_slug, $title, $body, $opts = []) {
+    if (!function_exists('send_notification')) return;
+
+    global $db;
+    $uid = intval($user_id);
+    $r = $db->query("SELECT shard_id FROM user WHERE user_id = '$uid'");
+    $user = $r ? $r->fetch(PDO::FETCH_ASSOC) : null;
+    if (!$user || empty($user['shard_id'])) return;
+
+    send_notification($uid, $user['shard_id'], $category_slug, $title, $body, $opts);
+}
+
+/**
+ * Notify relevant users when a change request status changes.
+ * Notifies: the CR creator + all users whose feedback is grouped into this CR.
+ *
+ * @param int    $cr_id
+ * @param array  $old_cr    Previous CR data (title, created_by, source_app)
+ * @param string $new_status
+ */
+function _notify_cr_status_change($cr_id, $old_cr, $new_status) {
+    $cr_id = intval($cr_id);
+    $title = $old_cr['title'] ?? 'Change request';
+    $source_app = $old_cr['source_app'] ?? null;
+
+    $status_labels = [
+        'proposed'    => 'proposed',
+        'approved'    => 'approved',
+        'in_progress' => 'now being worked on',
+        'completed'   => 'completed',
+        'paused'      => 'paused',
+        'rejected'    => 'rejected',
+    ];
+    $status_label = $status_labels[$new_status] ?? $new_status;
+
+    $notif_title = 'Change request ' . $status_label;
+    $notif_body  = '"' . $title . '" has been ' . $status_label . '.';
+
+    if ($new_status === 'completed') {
+        $notif_body .= ' Thank you for helping improve the platform!';
+    }
+
+    // Collect unique user IDs to notify: CR creator + feedback authors
+    $user_ids = [];
+
+    if (!empty($old_cr['created_by'])) {
+        $user_ids[(int)$old_cr['created_by']] = true;
+    }
+
+    $r = db_query("SELECT DISTINCT user_id FROM feedback WHERE change_request_id = '$cr_id' AND user_id IS NOT NULL");
+    if ($r) {
+        foreach (db_fetch_all($r) as $row) {
+            $user_ids[(int)$row['user_id']] = true;
+        }
+    }
+
+    $opts = [];
+    if ($source_app) {
+        $opts['source_app'] = $source_app;
+    }
+
+    foreach (array_keys($user_ids) as $uid) {
+        _notify_feedback_user($uid, 'feedback_update', $notif_title, $notif_body, $opts);
+    }
+}
+
+// ─── Category Registration (idempotent, runs at include time) ──────────────
+
+if (function_exists('register_notification_category') && isset($db)) {
+    register_notification_category('feedback_received', 'Feedback Received',
+        'Confirmation when you submit feedback',
+        ['icon' => 'bi-chat-dots', 'default_frequency' => 'realtime', 'created_by_app' => 'admin']
+    );
+    register_notification_category('feedback_update', 'Feedback Updates',
+        'Updates when your feedback leads to changes or change requests are updated',
+        ['icon' => 'bi-arrow-repeat', 'default_frequency' => 'realtime', 'created_by_app' => 'admin']
+    );
 }
