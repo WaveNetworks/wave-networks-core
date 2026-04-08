@@ -10,7 +10,7 @@
 // Get filename from rewrite or query string
 $file = $_GET['f'] ?? '';
 
-if (!$file || preg_match('/[\/\\\\]|\.\./', $file)) {
+if (!$file || preg_match('/[\/\\\\]|\.\./u', $file)) {
     http_response_code(400);
     exit;
 }
@@ -48,7 +48,7 @@ $mime_map = [
     'gif'  => 'image/gif',
     'ico'  => 'image/x-icon',
 ];
-$mime = $mime_map[$ext] ?? (mime_content_type($path) ?: 'application/octet-stream');
+$mime = $mime_map[$ext] ?? (@mime_content_type($path) ?: 'application/octet-stream');
 
 // ETag based on file modification time for cache revalidation
 $etag = '"' . md5($path . filemtime($path)) . '"';

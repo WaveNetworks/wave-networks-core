@@ -5,10 +5,12 @@
  * Prevents undefined variable notices and documents expected input/output.
  */
 
-// ─── VERSION ────────────────────────────────────────────────────────────────
-define('WN_ADMIN_VERSION', '1.0.0');
+// ─── VERSION ────────────────────────────────────────────────────────────────────────────
+if (!defined('WN_ADMIN_VERSION')) {
+    define('WN_ADMIN_VERSION', '1.0.0');
+}
 
-// ─── SESSION VARIABLES ───────────────────────────────────────────────────────
+// ─── SESSION VARIABLES ───────────────────────────────────────────────────────────────────────
 
 $_SESSION['user_id']      = $_SESSION['user_id'] ?? null;
 $_SESSION['shard_id']     = $_SESSION['shard_id'] ?? null;
@@ -37,7 +39,7 @@ $_SESSION['saml_session_index'] = $_SESSION['saml_session_index'] ?? null;
 $_SESSION['saml_name_id']       = $_SESSION['saml_name_id'] ?? null;
 $_SESSION['saml_provider_slug'] = $_SESSION['saml_provider_slug'] ?? null;
 
-// ─── REQUEST / POST / GET VARIABLES ──────────────────────────────────────────
+// ─── REQUEST / POST / GET VARIABLES ──────────────────────────────────────────────────────────────────
 
 $action          = $_REQUEST['action']       ?? null;
 $page            = $_REQUEST['page']         ?? null;
