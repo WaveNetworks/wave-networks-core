@@ -1,6 +1,6 @@
--- Migration 3.1 for Main Database
+-- Migration 3.2 for Main Database
 -- Add refresh_tokens table for JWT refresh token rotation (mobile app auth)
--- REMINDER: Update admin/include/common.php $db_version = 3.1;
+-- REMINDER: Update admin/include/common.php $db_version = 3.2;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
 

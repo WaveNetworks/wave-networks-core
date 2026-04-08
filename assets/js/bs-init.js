@@ -37,6 +37,12 @@ function apiPost(action, data, callback) {
     })
     .then(function(r) { return r.json(); })
     .then(function(json) {
+        // Auth failure — session lost, redirect to login page
+        // Uses relative path so it works for both admin and child apps
+        if (json.error && /^Login required\.?$/.test(json.error)) {
+            window.location.href = '../auth/login.php';
+            return;
+        }
         if (json.error) {
             showAlert('danger', json.error);
         } else if (json.success) {

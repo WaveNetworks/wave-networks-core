@@ -14,27 +14,20 @@ function get_branding() {
     if ($branding !== null) return $branding;
 
     $defaults = [
-        'site_name'              => 'Admin',
-        'site_short_name'        => 'Admin',
-        'site_description'       => '',
-        'theme_color'            => '#212529',
-        'theme_color_light'      => '#ffffff',
-        'theme_color_dark'       => '#212529',
-        'background_color_light' => '#ffffff',
-        'background_color_dark'  => '#212529',
-        'logo_path'              => null,
-        'logo_dark_path'         => null,
-        'favicon_path'           => null,
-        'pwa_screenshot_wide'    => null,
-        'pwa_screenshot_tablet'  => null,
-        'pwa_screenshot_mobile'  => null,
+        'site_name'             => 'Admin',
+        'site_short_name'       => 'Admin',
+        'site_description'      => '',
+        'theme_color'           => '#212529',
+        'logo_path'             => null,
+        'logo_dark_path'        => null,
+        'favicon_path'          => null,
+        'pwa_screenshot_wide'   => null,
+        'pwa_screenshot_mobile' => null,
     ];
 
     $row = db_fetch(db_query(
         "SELECT site_name, site_short_name, site_description, theme_color,
-                theme_color_light, theme_color_dark, background_color_light, background_color_dark,
-                logo_path, logo_dark_path, favicon_path,
-                pwa_screenshot_wide, pwa_screenshot_tablet, pwa_screenshot_mobile
+                logo_path, logo_dark_path, favicon_path, pwa_screenshot_wide, pwa_screenshot_mobile
          FROM auth_settings WHERE setting_id = 1"
     ));
 
@@ -148,8 +141,9 @@ function generate_pwa_icons($source_path, $uploads_dir) {
  * @return string
  */
 function get_image_mime($path) {
-    $clean_path = strtok($path, '?');
-    $ext = strtolower(pathinfo($clean_path, PATHINFO_EXTENSION));
+    // Strip query string (e.g. ?v=123) before resolving extension/mime
+    $cleanPath = strtok($path, '?');
+    $ext = strtolower(pathinfo($cleanPath, PATHINFO_EXTENSION));
     $map = [
         'svg' => 'image/svg+xml',
         'png' => 'image/png',
@@ -159,5 +153,5 @@ function get_image_mime($path) {
         'gif' => 'image/gif',
         'ico' => 'image/x-icon',
     ];
-    return $map[$ext] ?? (file_exists($clean_path) ? (@mime_content_type($clean_path) ?: 'image/png') : 'image/png');
+    return $map[$ext] ?? (file_exists($cleanPath) ? (mime_content_type($cleanPath) ?: 'image/png') : 'image/png');
 }
