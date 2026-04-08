@@ -197,7 +197,7 @@ function get_error_log_stats() {
         SUM(CASE WHEN resolved_at IS NULL THEN 1 ELSE 0 END) as open,
         COUNT(*) as total
         FROM error_log");
-    $row = $r ? db_fetch($r) : [];
+    $row = ($r ? db_fetch($r) : null) ?: [];
     return [
         'errors_today'   => (int)($row['errors_today'] ?? 0),
         'warnings_today' => (int)($row['warnings_today'] ?? 0),
