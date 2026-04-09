@@ -4,7 +4,9 @@
  * API bootstrap — JSON output, no template rendering.
  */
 
-header('Content-Type: application/json');
+if (PHP_SAPI !== 'cli' && !headers_sent()) {
+    header('Content-Type: application/json');
+}
 
 // 1. Composer autoload
 require_once __DIR__ . '/../vendor/autoload.php';
