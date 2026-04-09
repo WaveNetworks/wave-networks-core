@@ -93,7 +93,9 @@ function wn_exception_handler($exception) {
         echo '<p>' . htmlspecialchars($message) . '</p>';
         echo '<pre>' . htmlspecialchars($trace) . '</pre>';
     } else {
-        http_response_code(500);
+        if (PHP_SAPI !== 'cli') {
+            http_response_code(500);
+        }
         echo 'An unexpected error occurred. Please try again later.';
     }
     exit;
