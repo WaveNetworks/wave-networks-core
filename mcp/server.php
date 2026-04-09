@@ -420,6 +420,56 @@ function handle_tool_call($id, $toolName, $args) {
     }
 }
 
+// ─── Diagnostic Test Mode ────────────────────────────────────────────────────
+// Run: php server.php --test
+// Checks PHP version, env vars, and API connectivity. Does NOT start MCP loop.
+
+if (in_array('--test', $argv ?? [])) {
+    echo "=== Wave Networks Admin MCP Server Diagnostic ===\n";
+    echo "PHP version : " . PHP_VERSION . "\n";
+    echo "Server file : " . __FILE__ . "\n";
+    echo "API URL     : $MCP_API_URL\n";
+    echo "API Key set : " . (empty($MCP_API_KEY) ? "NO (will fail with 401)" : "YES (prefix: " . substr($MCP_API_KEY, 0, 12) . "...)") . "\n";
+    echo "curl ext    : " . (extension_loaded('curl') ? "loaded" : "MISSING") . "\n";
+
+    echo "\nTesting API connectivity...\n";
+    $ch = curl_init($MCP_API_URL);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => 'action=apiGetErrorStats',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $MCP_API_KEY,
+            'Content-Type: application/x-www-form-urlencoded',
+        ],
+        CURLOPT_TIMEOUT        => 10,
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+
+    if ($err) {
+        echo "API result  : FAILED (curl error: $err)\n";
+    } elseif ($code === 401) {
+        echo "API result  : HTTP 401 — API key missing or invalid\n";
+    } elseif ($code === 200) {
+        $json = json_decode($body, true);
+        if ($json && empty($json['error'])) {
+            echo "API result  : OK (HTTP 200)\n";
+        } else {
+            echo "API result  : HTTP 200 but error in response: " . ($json['error'] ?? 'unknown') . "\n";
+        }
+    } else {
+        echo "API result  : HTTP $code\n";
+        echo "Response    : " . substr($body, 0, 200) . "\n";
+    }
+
+    echo "\nMCP protocol test (send initialize to stdin): OK if server responds above.\n";
+    echo "Run: echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}' | WN_API_URL=... WN_API_KEY=wn_sk_... php server.php\n";
+    exit(0);
+}
+
 // ─── Main Loop ───────────────────────────────────────────────────────────────
 
 // Disable output buffering for realtime stdio
