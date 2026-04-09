@@ -474,15 +474,23 @@ $stats = get_feedback_stats();
                         });
                         statusSelect += '</select>';
 
+                        // Store CR data for edit (avoid inline JSON escaping issues)
+                        window._crData = window._crData || {};
+                        window._crData[cr.change_request_id] = cr;
+
+                        // Show source app and page URLs from grouped feedback
+                        var context = '';
+                        if (cr.source_app) context += '<span class="badge bg-dark">' + esc(cr.source_app) + '</span> ';
+
                         return '<tr>' +
-                            '<td>' + esc(cr.title) + '</td>' +
+                            '<td>' + esc(cr.title) + (context ? '<br>' + context : '') + '</td>' +
                             '<td>' + typeBadge + '</td>' +
                             '<td>' + (priBadges[cr.priority] || '') + '</td>' +
                             '<td>' + statusSelect + '</td>' +
                             '<td class="text-center"><span class="badge bg-light text-dark" style="cursor:pointer" onclick="viewCRDetail(' + cr.change_request_id + ')" title="View grouped feedback">' + (cr.feedback_count || 0) + '</span></td>' +
                             '<td><small>' + (cr.updated || cr.created || '').substring(0, 16) + '</small></td>' +
                             '<td class="text-end text-nowrap">' +
-                                '<button class="btn btn-sm btn-outline-secondary" onclick="editCR(' + cr.change_request_id + ', ' + esc(JSON.stringify(cr)).replace(/'/g, "\\'") + ')" title="Edit"><i class="bi bi-pencil"></i></button>' +
+                                '<button class="btn btn-sm btn-outline-secondary" onclick="editCR(' + cr.change_request_id + ')" title="Edit"><i class="bi bi-pencil"></i></button>' +
                             '</td></tr>';
                     }).join('');
                 }
@@ -524,8 +532,8 @@ $stats = get_feedback_stats();
         new bootstrap.Modal(document.getElementById('crModal')).show();
     };
 
-    window.editCR = function (crid, data) {
-        if (typeof data === 'string') data = JSON.parse(data);
+    window.editCR = function (crid) {
+        var data = (window._crData && window._crData[crid]) || {};
         document.getElementById('crEditId').value = crid;
         document.getElementById('crFeedbackId').value = '';
         document.getElementById('crTitle').value = data.title || '';
@@ -591,14 +599,31 @@ $stats = get_feedback_stats();
                         suggestion: '<span class="badge bg-primary">Suggestion</span>',
                         general:    '<span class="badge bg-secondary">General</span>'
                     };
-                    var html = '<table class="table table-sm align-middle mb-0"><thead><tr><th style="width:80px">Type</th><th>Message</th><th style="width:120px">User</th><th style="width:50px" class="text-center">Votes</th><th style="width:100px">Date</th></tr></thead><tbody>';
+                    // Collect unique page URLs from feedback for context
+                    var pageUrls = [];
+                    items.forEach(function (row) {
+                        if (row.page_url && pageUrls.indexOf(row.page_url) === -1) pageUrls.push(row.page_url);
+                    });
+
+                    var html = '';
+                    if (pageUrls.length > 0) {
+                        html += '<div class="mb-3"><strong>Affected pages:</strong><br>';
+                        pageUrls.forEach(function (url) {
+                            html += '<a href="' + esc(url) + '" target="_blank" class="small text-info d-block">' + esc(url) + '</a>';
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '<table class="table table-sm align-middle mb-0"><thead><tr><th style="width:80px">Type</th><th>Message</th><th style="width:120px">User</th><th style="width:80px">Page</th><th style="width:50px" class="text-center">Votes</th><th style="width:100px">Date</th></tr></thead><tbody>';
                     items.forEach(function (row) {
                         var msg = esc(row.message);
                         if (msg.length > 120) msg = msg.substring(0, 120) + '...';
+                        var pageLink = row.page_url ? '<a href="' + esc(row.page_url) + '" target="_blank" class="small text-muted" title="' + esc(row.page_url) + '">' + esc(row.page_url).split('?page=').pop().split('&')[0] || 'link' + '</a>' : '—';
                         html += '<tr>' +
                             '<td>' + (typeBadges[row.feedback_type] || '') + '</td>' +
                             '<td><small>' + msg + '</small></td>' +
                             '<td><small>' + esc(row.user_email || '—') + '</small></td>' +
+                            '<td><small>' + pageLink + '</small></td>' +
                             '<td class="text-center"><span class="badge bg-light text-dark">' + (row.upvotes || 0) + '</span></td>' +
                             '<td><small>' + (row.created || '').substring(0, 10) + '</small></td>' +
                             '</tr>';
