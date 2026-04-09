@@ -33,26 +33,37 @@ jobs:
             --exclude='test' --exclude='docker' --exclude='.docker' \
             --exclude='.env' --exclude='.env.example' --exclude='docker-compose.yml' \
             --exclude='docker-compose.yaml' --exclude='Dockerfile' --exclude='.dockerignore' \
-            --exclude='CLAUDE.md' --exclude='CHILD_APP_SPEC.md' --exclude='phpunit.xml' \
-            --exclude='phpunit.xml.dist' --exclude='.editorconfig' --exclude='config/config.php' \
+            --exclude='CLAUDE.md' --exclude='CLAUDE-*.md' --exclude='CHILD_APP_SPEC.md' \
+            --exclude='phpunit.xml' --exclude='phpunit.xml.dist' --exclude='.editorconfig' \
+            --exclude='config/config.php' \
             --exclude='deploy.py' --exclude='deploy_config.py' --exclude='deploy_config.sample.py' \
             --exclude='__pycache__' --exclude='.github' --exclude='.claude' \
             admin/ staging/admin/
+
+      - name: Validate staging directory
+        run: |
+          ADMIN_COUNT=$(find staging/admin -type f | wc -l)
+          echo "staging/admin file count: $ADMIN_COUNT"
+          if [ "$ADMIN_COUNT" -lt 10 ]; then
+            echo "ERROR: staging/admin has fewer than 10 files ($ADMIN_COUNT). Aborting deploy."
+            exit 1
+          fi
 
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ssh.us.stackcp.com >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Deploy to subtheme.com
         run: |
           RSYNC_OPTS="-avz --delete-after --chmod=D755,F644"
           SSH_CMD="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+          TARGET="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
 
           echo "Deploying admin to subtheme.com..."
-          rsync $RSYNC_OPTS -e "$SSH_CMD" \
-            staging/admin/ subtheme.com@ssh.us.stackcp.com:public_html/admin/
+          rsync $RSYNC_OPTS --exclude='config/config.php' -e "$SSH_CMD" \
+            staging/admin/ $TARGET:public_html/admin/
 
           echo "Deploy complete."
