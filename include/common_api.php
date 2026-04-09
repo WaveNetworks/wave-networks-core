@@ -4,7 +4,7 @@
  * API bootstrap — JSON output, no template rendering.
  */
 
-header('Content-Type: application/json');
+if (php_sapi_name() !== 'cli') { header('Content-Type: application/json'); }
 
 // 1. Composer autoload
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -94,7 +94,7 @@ $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZ
 if (preg_match('/^Bearer\s+(wn_sk_.+)$/i', $authHeader, $m)) {
     $_SERVICE_API_KEY = validate_service_api_key($m[1]);
     if (!$_SERVICE_API_KEY) {
-        http_response_code(401);
+        if (php_sapi_name() !== 'cli') { http_response_code(401); }
         echo json_encode(['error' => 'Invalid or revoked API key.', 'success' => '', 'info' => '', 'warning' => '', 'results' => []]);
         exit;
     }
