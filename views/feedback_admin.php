@@ -263,6 +263,7 @@ $stats = get_feedback_stats();
     var fbPage = 1;
     var crPage = 1;
     var userUpvotes = [];
+    var fbData = {};
 
     // ── Feedback Tab ────────────────────────────────────────
 
@@ -308,7 +309,9 @@ $stats = get_feedback_stats();
                 if (!d.items || d.items.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-4">No feedback found.</td></tr>';
                 } else {
+                    fbData = {};
                     tbody.innerHTML = d.items.map(function (row) {
+                        fbData[row.feedback_id] = row;
                         var typeBadges = {
                             bug:        '<span class="badge bg-danger">Bug</span>',
                             suggestion: '<span class="badge bg-primary">Suggestion</span>',
@@ -329,7 +332,7 @@ $stats = get_feedback_stats();
                         var actions = upBtn + ' ';
                         if (row.status !== 'dismissed') {
                             actions += '<button class="btn btn-sm btn-outline-secondary" onclick="openGroupModal(' + row.feedback_id + ')" title="Group"><i class="bi bi-link-45deg"></i></button> ';
-                            actions += '<button class="btn btn-sm btn-outline-success" onclick="openCRFromFeedback(' + row.feedback_id + ', ' + esc(JSON.stringify(row.message)).replace(/'/g, "\\'") + ')" title="Create CR"><i class="bi bi-arrow-up-circle"></i></button> ';
+                            actions += '<button class="btn btn-sm btn-outline-success" onclick="openCRFromFeedback(' + row.feedback_id + ')" title="Create CR"><i class="bi bi-arrow-up-circle"></i></button> ';
                             actions += '<button class="btn btn-sm btn-outline-dark" onclick="doDismiss(' + row.feedback_id + ')" title="Dismiss"><i class="bi bi-x-lg"></i></button>';
                         }
 
@@ -381,11 +384,12 @@ $stats = get_feedback_stats();
             .then(function (j) { if (!j.error) loadFeedback(fbPage); });
     };
 
-    window.openCRFromFeedback = function (fid, msg) {
+    window.openCRFromFeedback = function (fid) {
+        var row = fbData[fid] || {};
         document.getElementById('crEditId').value = '';
         document.getElementById('crFeedbackId').value = fid;
         document.getElementById('crTitle').value = '';
-        document.getElementById('crDescription').value = typeof msg === 'string' ? msg : '';
+        document.getElementById('crDescription').value = row.message || '';
         document.getElementById('crType').value = 'change';
         document.getElementById('crPriority').value = 'medium';
         document.getElementById('crModalTitle').textContent = 'Create Change Request from Feedback';
