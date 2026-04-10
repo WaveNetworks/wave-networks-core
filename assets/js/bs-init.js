@@ -74,3 +74,37 @@ function showAlert(type, message) {
         container.prepend(alert);
     }
 }
+
+// ─── SESSION HEARTBEAT ─────────────────────────────────────────────────────
+// Polls the server to detect expired sessions and redirect to login.
+// Runs every 2 minutes and on tab visibility change.
+(function() {
+    'use strict';
+
+    var SESSION_CHECK_INTERVAL = 120000; // 2 minutes
+    var sessionTimer = null;
+
+    function checkSession() {
+        var formData = new FormData();
+        formData.append('action', 'checkSession');
+
+        fetch('../api/index.php', { method: 'POST', body: formData })
+            .then(function(r) { return r.json(); })
+            .then(function(json) {
+                if (json.error && /^Login required\.?$/.test(json.error)) {
+                    window.location.href = '../auth/login.php';
+                }
+            })
+            .catch(function() { /* network error — skip, retry next interval */ });
+    }
+
+    // Poll on interval
+    sessionTimer = setInterval(checkSession, SESSION_CHECK_INTERVAL);
+
+    // Also check when user returns to the tab
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            checkSession();
+        }
+    });
+})();
