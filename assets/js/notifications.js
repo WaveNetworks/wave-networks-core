@@ -68,16 +68,12 @@
         list.querySelectorAll('[data-notification-id]').forEach(function(el) {
             el.addEventListener('click', function(e) {
                 e.preventDefault();
-                var nid = this.getAttribute('data-notification-id');
                 var url = this.getAttribute('data-action-url');
+                var destination = url || 'index.php?page=notifications';
 
-                apiPost('markNotificationRead', { notification_id: nid }, function() {
-                    fetchNotifications();
+                apiPost('markAllNotificationsRead', {}, function() {
+                    window.location.href = destination;
                 });
-
-                if (url) {
-                    window.location.href = url;
-                }
             });
         });
     }
