@@ -18,6 +18,10 @@ function get_branding() {
         'site_short_name'       => 'Admin',
         'site_description'      => '',
         'theme_color'           => '#212529',
+        'theme_color_light'     => '#ffffff',
+        'theme_color_dark'      => '#212529',
+        'background_color_light' => '#ffffff',
+        'background_color_dark'  => '#212529',
         'logo_path'             => null,
         'logo_dark_path'        => null,
         'favicon_path'          => null,
@@ -27,6 +31,7 @@ function get_branding() {
 
     $row = db_fetch(db_query(
         "SELECT site_name, site_short_name, site_description, theme_color,
+                theme_color_light, theme_color_dark, background_color_light, background_color_dark,
                 logo_path, logo_dark_path, favicon_path, pwa_screenshot_wide, pwa_screenshot_mobile
          FROM auth_settings WHERE setting_id = 1"
     ));

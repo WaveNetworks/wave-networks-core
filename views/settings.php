@@ -115,16 +115,16 @@ $branding = get_branding();
                         <div class="col-md-6">
                             <label for="theme_color_light" class="form-label"><i class="bi bi-sun"></i> Light Mode Theme Color</label>
                             <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="theme_color_light_picker" value="<?= h($branding['theme_color_light']) ?>">
-                                <input type="text" class="form-control" id="theme_color_light" name="theme_color_light" value="<?= h($branding['theme_color_light']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                                <input type="color" class="form-control form-control-color" id="theme_color_light_picker" value="<?= h($branding['theme_color_light'] ?? '#ffffff') ?>">
+                                <input type="text" class="form-control" id="theme_color_light" name="theme_color_light" value="<?= h($branding['theme_color_light'] ?? '#ffffff') ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
                             </div>
                             <div class="form-text">Browser toolbar color in light mode.</div>
                         </div>
                         <div class="col-md-6">
                             <label for="theme_color_dark" class="form-label"><i class="bi bi-moon"></i> Dark Mode Theme Color</label>
                             <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="theme_color_dark_picker" value="<?= h($branding['theme_color_dark']) ?>">
-                                <input type="text" class="form-control" id="theme_color_dark" name="theme_color_dark" value="<?= h($branding['theme_color_dark']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                                <input type="color" class="form-control form-control-color" id="theme_color_dark_picker" value="<?= h($branding['theme_color_dark'] ?? '#212529') ?>">
+                                <input type="text" class="form-control" id="theme_color_dark" name="theme_color_dark" value="<?= h($branding['theme_color_dark'] ?? '#212529') ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
                             </div>
                             <div class="form-text">Browser toolbar color in dark mode.</div>
                         </div>
@@ -133,16 +133,16 @@ $branding = get_branding();
                         <div class="col-md-6">
                             <label for="background_color_light" class="form-label"><i class="bi bi-sun"></i> Light Mode Background Color</label>
                             <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="background_color_light_picker" value="<?= h($branding['background_color_light']) ?>">
-                                <input type="text" class="form-control" id="background_color_light" name="background_color_light" value="<?= h($branding['background_color_light']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                                <input type="color" class="form-control form-control-color" id="background_color_light_picker" value="<?= h($branding['background_color_light'] ?? '#ffffff') ?>">
+                                <input type="text" class="form-control" id="background_color_light" name="background_color_light" value="<?= h($branding['background_color_light'] ?? '#ffffff') ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
                             </div>
                             <div class="form-text">PWA splash screen background in light mode.</div>
                         </div>
                         <div class="col-md-6">
                             <label for="background_color_dark" class="form-label"><i class="bi bi-moon"></i> Dark Mode Background Color</label>
                             <div class="input-group">
-                                <input type="color" class="form-control form-control-color" id="background_color_dark_picker" value="<?= h($branding['background_color_dark']) ?>">
-                                <input type="text" class="form-control" id="background_color_dark" name="background_color_dark" value="<?= h($branding['background_color_dark']) ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
+                                <input type="color" class="form-control form-control-color" id="background_color_dark_picker" value="<?= h($branding['background_color_dark'] ?? '#212529') ?>">
+                                <input type="text" class="form-control" id="background_color_dark" name="background_color_dark" value="<?= h($branding['background_color_dark'] ?? '#212529') ?>" maxlength="7" pattern="#[0-9a-fA-F]{6}">
                             </div>
                             <div class="form-text">PWA splash screen background in dark mode.</div>
                         </div>
