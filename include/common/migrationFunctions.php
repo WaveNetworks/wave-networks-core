@@ -52,6 +52,16 @@ function run_migration($conn, $file, $type, $version) {
 
     $statements = preg_split('/;\s*[\r\n]+/', $sql);
 
+    // MySQL error codes we treat as "already applied" and skip, so partial
+    // reruns of a migration can complete and bump db_version. Without this,
+    // a migration that added some columns then failed leaves db_version
+    // unbumped, and every subsequent request re-runs it forever.
+    //   1050 = Table already exists
+    //   1060 = Duplicate column name
+    //   1061 = Duplicate key name
+    //   1091 = Can't DROP (column/index/key doesn't exist)
+    $idempotent_codes = ['1050', '1060', '1061', '1091'];
+
     try {
         $conn->beginTransaction();
 
@@ -64,7 +74,16 @@ function run_migration($conn, $file, $type, $version) {
             if (strpos($upper, 'COMMIT') !== false) continue;
             if (strpos($upper, 'ROLLBACK') !== false) continue;
 
-            $conn->exec($stmt);
+            try {
+                $conn->exec($stmt);
+            } catch (PDOException $stmt_e) {
+                $code = isset($stmt_e->errorInfo[1]) ? (string)$stmt_e->errorInfo[1] : '';
+                if (in_array($code, $idempotent_codes, true)) {
+                    error_log("Migration $type/$version: skipping already-applied statement (MySQL code $code)");
+                    continue;
+                }
+                throw $stmt_e;
+            }
         }
 
         // Update db_version table
