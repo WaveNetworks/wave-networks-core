@@ -30,10 +30,7 @@ function get_branding() {
     ];
 
     $row = db_fetch(db_query(
-        "SELECT site_name, site_short_name, site_description, theme_color,
-                theme_color_light, theme_color_dark, background_color_light, background_color_dark,
-                logo_path, logo_dark_path, favicon_path, pwa_screenshot_wide, pwa_screenshot_mobile
-         FROM auth_settings WHERE setting_id = 1"
+        "SELECT * FROM auth_settings WHERE setting_id = 1"
     ));
 
     if ($row) {
