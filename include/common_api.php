@@ -96,7 +96,7 @@ $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZ
 if (preg_match('/^Bearer\s+(wn_sk_.+)$/i', $authHeader, $m)) {
     $_SERVICE_API_KEY = validate_service_api_key($m[1]);
     if (!$_SERVICE_API_KEY) {
-        http_response_code(401);
+        if (!headers_sent()) { http_response_code(401); }
         echo json_encode(['error' => 'Invalid or revoked API key.', 'success' => '', 'info' => '', 'warning' => '', 'results' => []]);
         exit;
     }

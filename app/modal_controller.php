@@ -16,6 +16,6 @@ $modals = [
 if (isset($modals[$modal]) && file_exists($modals[$modal])) {
     include($modals[$modal]);
 } else {
-    http_response_code(404);
+    if (!headers_sent()) { http_response_code(404); }
     echo '<p>Modal not found.</p>';
 }

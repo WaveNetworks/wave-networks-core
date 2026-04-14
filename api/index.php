@@ -17,7 +17,7 @@ $response = [
 ];
 
 // Set HTTP status code
-if (!empty($_SESSION['error'])) {
+if (!empty($_SESSION['error']) && !headers_sent()) {
     http_response_code(400);
 }
 

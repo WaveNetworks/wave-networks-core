@@ -171,7 +171,7 @@ function serve_profile_image($user_id, $shard_id) {
     $path = get_profile_image_path($user_id, $shard_id);
 
     if (!$path) {
-        http_response_code(404);
+        if (!headers_sent()) { http_response_code(404); }
         exit;
     }
 

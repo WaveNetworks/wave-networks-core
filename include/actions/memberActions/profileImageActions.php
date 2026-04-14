@@ -73,6 +73,6 @@ if (($_GET['action'] ?? '') == 'serveProfileImage') {
     if ($uid && $sid) {
         serve_profile_image($uid, $sid);
     }
-    http_response_code(404);
+    if (!headers_sent()) { http_response_code(404); }
     exit;
 }
