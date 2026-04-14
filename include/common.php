@@ -116,3 +116,10 @@ include(__DIR__ . '/definition.php');
 
 // 8. Action includes
 foreach (glob(__DIR__ . '/actions/*/*.php') as $f) { include_once($f); }
+
+// 9. Action logging — record what was just executed
+if (function_exists('log_user_action')) {
+    $__action = $_POST['action'] ?? 'view';
+    try { log_user_action($__action); } catch (Exception $e) { /* silent */ }
+    unset($__action);
+}

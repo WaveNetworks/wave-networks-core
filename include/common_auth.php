@@ -80,8 +80,8 @@ foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 
 // 5. Migrations
-$db_version    = $db_version ?? 3.3;
-$shard_version = $shard_version ?? 1.1;
+$db_version    = $db_version ?? 3.4;
+$shard_version = $shard_version ?? 1.2;
 check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
@@ -99,3 +99,10 @@ include(__DIR__ . '/definition.php');
 // 8. Action includes — login actions only for auth pages
 foreach (glob(__DIR__ . '/actions/loginActions/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/actions/apiActions/*.php') as $f) { include_once($f); }
+
+// 9. Action logging — record what was just executed
+if (function_exists('log_user_action')) {
+    $__action = $_POST['action'] ?? 'view';
+    try { log_user_action($__action); } catch (Exception $e) { /* silent */ }
+    unset($__action);
+}
