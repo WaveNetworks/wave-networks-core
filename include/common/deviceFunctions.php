@@ -62,13 +62,14 @@ function get_or_create_device() {
 
     $user_id = $_SESSION['user_id'] ?? null;
 
-    if (isset($_COOKIE[$cookie_name])) {
-        $cookie_id = $_COOKIE[$cookie_name];
+    // Accept device cookie from header (API/Cordova clients) or browser cookie
+    $cookie_id = $_SERVER['HTTP_X_WN_DEVICE'] ?? $_COOKIE[$cookie_name] ?? null;
+
+    if ($cookie_id) {
         $device = get_device_by_cookie($cookie_id);
 
         if ($device) {
             touch_device($device['device_id']);
-            // Associate device with user if logged in and device is anonymous
             if ($user_id && !$device['user_id']) {
                 $did = (int)$device['device_id'];
                 $uid = (int)$user_id;
@@ -77,14 +78,22 @@ function get_or_create_device() {
             $_SESSION['device_id'] = (int)$device['device_id'];
             return (int)$device['device_id'];
         }
-        // Cookie exists but device row was deleted — fall through to recreate
     }
 
     // Create new device
-    $cookie_id = generateHashCode(64);
+    if (!$cookie_id) {
+        $cookie_id = generateHashCode(64);
+    }
     $device_id = register_device($cookie_id, $user_id);
 
-    setcookie($cookie_name, $cookie_id, time() + $cookie_lifetime, '/', '', false, true);
+    $is_secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    setcookie($cookie_name, $cookie_id, [
+        'expires'  => time() + $cookie_lifetime,
+        'path'     => '/',
+        'secure'   => $is_secure,
+        'httponly'  => true,
+        'samesite' => 'Lax',
+    ]);
     $_SESSION['device_id'] = $device_id;
 
     return $device_id;

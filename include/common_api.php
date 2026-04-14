@@ -102,6 +102,11 @@ if (preg_match('/^Bearer\s+(wn_sk_.+)$/i', $authHeader, $m)) {
     }
 }
 
+// 6c. Device tracking — identify API callers via cookie or X-Wn-Device header
+if (function_exists('get_or_create_device')) {
+    try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }
+}
+
 // 7. definition.php
 include(__DIR__ . '/definition.php');
 
