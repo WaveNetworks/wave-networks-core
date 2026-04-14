@@ -4,8 +4,13 @@
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
 
--- A. Add is_test_account flag to user table
-ALTER TABLE user ADD COLUMN is_test_account TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 AFTER role;
+-- A. Add is_test_account flag to user table.
+-- NOTE: Appended at end of table (no AFTER clause). Earlier version of this
+-- file used "AFTER role" but the user table uses multiple boolean role
+-- columns (is_admin, is_owner, is_manager, is_employee), not a single
+-- `role` column. That caused 1054 Unknown column on every page load and
+-- blocked the entire 3.4 migration. Fixed 2026-04-14.
+ALTER TABLE `user` ADD COLUMN `is_test_account` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0;
 
 -- B. Anonymous device action log (security/attack-surface event source)
 CREATE TABLE IF NOT EXISTS device_action_log (
