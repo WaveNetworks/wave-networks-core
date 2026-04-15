@@ -40,7 +40,7 @@ foreach ($noisePatterns as $pattern) {
 if (empty($conditions)) return;
 
 $where = implode(' OR ', $conditions);
-$sql = "SELECT error_id FROM error_log WHERE status = 'open' AND ($where) LIMIT 200";
+$sql = "SELECT error_id FROM error_log WHERE resolved_at IS NULL AND ($where) LIMIT 200";
 
 try {
     $r = db_query_prepared($sql, $params);
@@ -58,7 +58,7 @@ try {
     $resolved = 0;
     foreach ($errors as $error) {
         db_query_prepared(
-            "UPDATE error_log SET status = 'resolved', resolved_at = NOW(), resolved_by = 'auto-noise-filter' WHERE error_id = ?",
+            "UPDATE error_log SET resolved_at = NOW(), resolved_by = 'auto-noise-filter' WHERE error_id = ?",
             [intval($error['error_id'])]
         );
         $resolved++;
