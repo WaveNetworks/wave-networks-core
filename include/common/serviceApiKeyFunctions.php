@@ -23,6 +23,10 @@ function get_available_scopes() {
         'feedback:admin'  => 'Manage change requests and feedback status',
         'stripe:read'     => 'Read Stripe transactions, revenue, and LTV data',
         'stripe:write'    => 'Record Stripe transactions',
+        'zoom:read'       => 'Read Zoom recordings and pipeline jobs',
+        'zoom:write'      => 'Download recordings, update status, start pipeline',
+        'monitoring:read' => 'Read registered apps, monitoring events, stats',
+        'monitoring:write'=> 'Trigger checks, create tasks, send reports, manage CRs',
     ];
 }
 
