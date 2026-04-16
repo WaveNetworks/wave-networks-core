@@ -199,6 +199,64 @@ if (($action ?? null) == 'apiGroupFeedback') {
     }
 }
 
+// ── Bulk update change requests ─────────────────────────────
+// Accepts a JSON array of change_request_ids and applies the same status
+// (and optionally description) to all of them in one DB round-trip.
+// Designed for cleanup operations (bulk reject, bulk complete, etc.)
+// that would otherwise require N individual apiUpdateChangeRequest calls.
+if (($action ?? null) == 'apiBulkUpdateChangeRequests') {
+    if (require_api_scope('feedback:admin')) {
+        $errs = [];
+        $ids_raw = $_POST['change_request_ids'] ?? '';
+        $status  = trim($_POST['status'] ?? '');
+        $desc    = isset($_POST['description']) ? trim($_POST['description']) : null;
+
+        $ids = json_decode($ids_raw, true);
+        if (!is_array($ids) || empty($ids)) {
+            $errs['ids'] = 'change_request_ids must be a JSON array of integers.';
+        } else {
+            $ids = array_values(array_filter(array_map('intval', $ids)));
+            if (empty($ids)) $errs['ids'] = 'No valid IDs after parsing.';
+            if (count($ids) > 500) $errs['ids'] = 'Max 500 IDs per call.';
+        }
+
+        $valid_statuses = ['proposed','approved','in_progress','completed','paused','rejected'];
+        if (!in_array($status, $valid_statuses)) {
+            $errs['status'] = 'status must be one of: ' . implode(', ', $valid_statuses);
+        }
+
+        if (count($errs) <= 0) {
+            $s_status = sanitize($status, SQL);
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+            // Build SET clause
+            $set_parts = ["status = '$s_status'"];
+            if ($status === 'completed') {
+                $set_parts[] = "completed_at = NOW()";
+            } elseif ($status !== 'completed') {
+                $set_parts[] = "completed_at = NULL";
+            }
+            if ($desc !== null) {
+                $s_desc = sanitize($desc, SQL);
+                $set_parts[] = "description = '$s_desc'";
+            }
+            $set_sql = implode(', ', $set_parts);
+
+            $r = db_query_prepared(
+                "UPDATE change_request SET $set_sql WHERE change_request_id IN ($placeholders)",
+                $ids
+            );
+
+            $affected = $r ? $r->rowCount() : 0;
+            $_SESSION['success'] = "Bulk-updated {$affected} change request(s) to status '{$status}'.";
+            $data['updated']   = $affected;
+            $data['requested'] = count($ids);
+        } else {
+            $_SESSION['error'] = implode(' ', $errs);
+        }
+    }
+}
+
 // ── Upvote feedback ─────────────────────────────────────────
 if (($action ?? null) == 'apiUpvoteFeedback') {
     if (require_api_scope('feedback:write')) {
