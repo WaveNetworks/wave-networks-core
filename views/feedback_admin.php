@@ -622,7 +622,7 @@ $stats = get_feedback_stats();
                     items.forEach(function (row) {
                         var msg = esc(row.message);
                         if (msg.length > 120) msg = msg.substring(0, 120) + '...';
-                        var pageLink = row.page_url ? '<a href="' + esc(row.page_url) + '" target="_blank" class="small text-muted" title="' + esc(row.page_url) + '">' + esc(row.page_url).split('?page=').pop().split('&')[0] || 'link' + '</a>' : '—';
+                        var pageLink = row.page_url ? '<a href="' + esc(row.page_url) + '" target="_blank" class="small text-muted" title="' + esc(row.page_url) + '">' + (esc(row.page_url).split('?page=').pop().split('&')[0] || 'link') + '</a>' : '—';
                         html += '<tr>' +
                             '<td>' + (typeBadges[row.feedback_type] || '') + '</td>' +
                             '<td><small>' + msg + '</small></td>' +
