@@ -73,6 +73,30 @@ if (($action ?? null) == 'apiUnresolveErrorLog') {
     }
 }
 
+// ---- BULK RESOLVE (stale errors) ----
+// Resolves all open errors whose last_seen_at is older than a threshold.
+// Designed for cleanup: after fixes ship and errors stop recurring, this
+// clears the backlog so the dashboard reflects reality.
+if (($action ?? null) == 'apiBulkResolveStaleErrors') {
+    if (require_api_scope('error_log:write')) {
+        $hours = max(1, min(720, (int) ($_POST['older_than_hours'] ?? 48)));
+        $resolved_by = sanitize($_POST['resolved_by'] ?? 'bulk-stale-cleanup', SQL);
+
+        $r = db_query_prepared(
+            "UPDATE error_log
+             SET resolved_at = NOW(), resolved_by = ?
+             WHERE resolved_at IS NULL
+               AND last_seen_at < DATE_SUB(NOW(), INTERVAL ? HOUR)",
+            [$resolved_by, $hours]
+        );
+
+        $affected = $r ? $r->rowCount() : 0;
+        $_SESSION['success'] = "Resolved {$affected} stale error(s) older than {$hours}h.";
+        $data['resolved'] = $affected;
+        $data['older_than_hours'] = $hours;
+    }
+}
+
 // ---- STATS ----
 if (($action ?? null) == 'apiGetErrorStats') {
     if (require_api_scope('error_log:read')) {
