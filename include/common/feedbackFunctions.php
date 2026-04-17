@@ -35,12 +35,13 @@ function detect_source_app_from_url() {
  * Submit a feedback entry.
  *
  * @param string $message  The feedback text
- * @param string $type     'bug', 'suggestion', or 'general'
- * @param array  $opts     Optional: source_app, page_url, context_json, user_id, user_role
+ * @param string $type     'bug', 'suggestion', 'general', or 'review'
+ * @param array  $opts     Optional: source_app, page_url, context_json, user_id, user_role,
+ *                         rating (1-5, only used when type='review')
  * @return int|false       feedback_id on success
  */
 function submit_feedback($message, $type = 'general', $opts = []) {
-    $valid_types = ['bug', 'suggestion', 'general'];
+    $valid_types = ['bug', 'suggestion', 'general', 'review'];
     if (!in_array($type, $valid_types)) {
         $type = 'general';
     }
@@ -52,7 +53,20 @@ function submit_feedback($message, $type = 'general', $opts = []) {
     $s_message    = sanitize($message, SQL);
     $user_id      = isset($opts['user_id']) ? intval($opts['user_id']) : (isset($_SESSION['user_id']) ? intval($_SESSION['user_id']) : null);
     $user_role    = sanitize($opts['user_role'] ?? get_user_role_label(), SQL);
-    $context_json = isset($opts['context_json']) ? "'" . sanitize($opts['context_json'], SQL) . "'" : 'NULL';
+
+    // Merge rating into context_json when type is review
+    $ctx_data = [];
+    if (!empty($opts['context_json'])) {
+        $decoded = json_decode($opts['context_json'], true);
+        if (is_array($decoded)) $ctx_data = $decoded;
+    }
+    if ($type === 'review' && isset($opts['rating'])) {
+        $rating = max(1, min(5, intval($opts['rating'])));
+        $ctx_data['rating'] = $rating;
+    }
+    $context_json = !empty($ctx_data)
+        ? "'" . sanitize(json_encode($ctx_data), SQL) . "'"
+        : 'NULL';
 
     $uid_col = $user_id !== null ? "'$user_id'" : 'NULL';
 
@@ -64,7 +78,9 @@ function submit_feedback($message, $type = 'general', $opts = []) {
 
     // Notify the user that their feedback was received
     if ($user_id !== null) {
-        $type_label = $type === 'bug' ? 'bug report' : ($type === 'suggestion' ? 'suggestion' : 'feedback');
+        $type_label = $type === 'bug' ? 'bug report'
+            : ($type === 'suggestion' ? 'suggestion'
+            : ($type === 'review' ? 'review' : 'feedback'));
         _notify_feedback_user($user_id, 'feedback_received',
             'Thanks for your ' . $type_label . '!',
             'Your ' . $type_label . ' has been received and will be reviewed. We appreciate you taking the time to help improve the platform.',
