@@ -10,6 +10,17 @@
     var pollTimer = null;
     var cachedNotifications = [];
 
+    // Guarded apiPost — bs-init.js defines apiPost, but may fail to load or
+    // be loaded out of order in some child-app templates. Using typeof avoids
+    // a ReferenceError on undeclared globals.
+    function safeApiPost(action, params, callback) {
+        if (typeof apiPost !== 'function') {
+            if (callback) callback({ error: 'apiPost unavailable' });
+            return;
+        }
+        apiPost(action, params, callback);
+    }
+
     // ─── BELL BADGE & DROPDOWN ──────────────────────────────────────────────
 
     function updateBadge(count) {
@@ -26,13 +37,7 @@
     }
 
     function fetchNotifications(callback) {
-        // Guard: bs-init.js (which defines apiPost) may have failed to load or
-        // been loaded out of order in some child-app templates.
-        if (typeof apiPost !== 'function') {
-            if (callback) callback({ error: 'apiPost unavailable' });
-            return;
-        }
-        apiPost('getNotifications', { limit: 5 }, function(json) {
+        safeApiPost('getNotifications', { limit: 5 }, function(json) {
             if (json.results) {
                 cachedNotifications = json.results.notifications || [];
                 updateBadge(json.results.unread_count || 0);
@@ -77,7 +82,7 @@
                 var url = this.getAttribute('data-action-url');
                 var destination = url || 'index.php?page=notifications';
 
-                apiPost('markAllNotificationsRead', {}, function() {
+                safeApiPost('markAllNotificationsRead', {}, function() {
                     window.location.href = destination;
                 });
             });
@@ -110,7 +115,7 @@
 
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            apiPost('markAllNotificationsRead', {}, function() {
+            safeApiPost('markAllNotificationsRead', {}, function() {
                 fetchNotifications(function() {
                     renderDropdown();
                 });
@@ -171,7 +176,7 @@
         }
 
         // First get VAPID public key from server
-        apiPost('getVapidPublicKey', {}, function(json) {
+        safeApiPost('getVapidPublicKey', {}, function(json) {
             var publicKey = json.results ? json.results.vapid_public_key : '';
             if (!publicKey) {
                 showAlert('warning', 'Push notifications are not configured on this server.');
@@ -220,7 +225,7 @@
             var endpoint = subscription.endpoint;
 
             subscription.unsubscribe().then(function() {
-                apiPost('unregisterPushSubscription', { endpoint: endpoint }, function() {
+                safeApiPost('unregisterPushSubscription', { endpoint: endpoint }, function() {
                     showAlert('success', 'Push notifications disabled.');
                     updatePushUI('default');
                 });
@@ -232,7 +237,7 @@
         var key   = subscription.getKey('p256dh');
         var auth  = subscription.getKey('auth');
 
-        apiPost('registerPushSubscription', {
+        safeApiPost('registerPushSubscription', {
             endpoint: subscription.endpoint,
             p256dh:   key  ? btoa(String.fromCharCode.apply(null, new Uint8Array(key)))  : '',
             auth:     auth ? btoa(String.fromCharCode.apply(null, new Uint8Array(auth))) : ''
