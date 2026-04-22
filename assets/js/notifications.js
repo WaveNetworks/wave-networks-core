@@ -26,6 +26,12 @@
     }
 
     function fetchNotifications(callback) {
+        // Guard: bs-init.js (which defines apiPost) may have failed to load or
+        // been loaded out of order in some child-app templates.
+        if (typeof apiPost !== 'function') {
+            if (callback) callback({ error: 'apiPost unavailable' });
+            return;
+        }
         apiPost('getNotifications', { limit: 5 }, function(json) {
             if (json.results) {
                 cachedNotifications = json.results.notifications || [];
