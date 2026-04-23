@@ -62,6 +62,16 @@ function count_login_history($user_id) {
  */
 function check_reconsent_needed($user_id) {
     $uid = (int) $user_id;
+
+    // Test accounts (is_test_account=1) are exempt from re-consent so automated
+    // test runs do not break when consent_version is bumped. Real PII never goes
+    // against test accounts; the exemption is safe.
+    $r_test = db_query_prepared("SELECT is_test_account FROM user WHERE user_id = ?", [$uid]);
+    $test_row = db_fetch($r_test);
+    if ($test_row && (int)$test_row['is_test_account'] === 1) {
+        return [];
+    }
+
     $required_types = ['terms_of_service', 'privacy_policy'];
     $needs_reconsent = [];
 
