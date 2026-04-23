@@ -62,13 +62,14 @@
             var icon = n.category_icon || 'bi-bell';
 
             html += '<a href="#" class="dropdown-item px-3 py-2 border-bottom ' + readClass + '" ' +
+                    'style="white-space: normal;" ' +
                     'data-notification-id="' + n.notification_id + '" ' +
                     'data-action-url="' + (n.action_url || '') + '">' +
                     '<div class="d-flex align-items-start">' +
                     '<i class="bi ' + icon + ' me-2 mt-1 text-primary"></i>' +
-                    '<div class="flex-grow-1 overflow-hidden">' +
-                    '<div class="fw-semibold small text-truncate">' + escapeHtml(n.title) + '</div>' +
-                    '<div class="text-muted small text-truncate">' + escapeHtml(n.body || '') + '</div>' +
+                    '<div class="flex-grow-1">' +
+                    '<div class="fw-semibold small">' + escapeHtml(n.title) + '</div>' +
+                    '<div class="text-muted small">' + escapeHtml(n.body || '') + '</div>' +
                     '<div class="text-muted" style="font-size: 0.7rem;">' + timeAgo + '</div>' +
                     '</div></div></a>';
         });
@@ -80,7 +81,8 @@
             el.addEventListener('click', function(e) {
                 e.preventDefault();
                 var url = this.getAttribute('data-action-url');
-                var destination = url || 'index.php?page=notifications';
+                var notifId = this.getAttribute('data-notification-id');
+                var destination = url || ('index.php?page=notifications#notif-' + notifId);
 
                 safeApiPost('markAllNotificationsRead', {}, function() {
                     window.location.href = destination;

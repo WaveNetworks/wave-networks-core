@@ -34,7 +34,7 @@ $unread_count  = get_unread_count($user_id, $shard_id);
 <div class="list-group">
     <?php foreach ($notifications as $n) { ?>
     <?php $is_read = (int)$n['is_read']; ?>
-    <div class="list-group-item list-group-item-action <?= $is_read ? 'opacity-75' : '' ?>" data-notif-id="<?= (int)$n['notification_id'] ?>">
+    <div class="list-group-item list-group-item-action <?= $is_read ? 'opacity-75' : '' ?>" id="notif-<?= (int)$n['notification_id'] ?>" data-notif-id="<?= (int)$n['notification_id'] ?>">
         <div class="d-flex align-items-start">
             <div class="me-3 mt-1">
                 <i class="bi <?= h($n['category_icon']) ?> <?= $is_read ? 'text-muted' : 'text-primary' ?>" style="font-size: 1.25rem;"></i>
@@ -80,4 +80,15 @@ function markRead(btn, notifId) {
         }
     });
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (!window.location.hash) return;
+    var target = document.querySelector(window.location.hash);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('border', 'border-primary', 'border-2');
+    setTimeout(function() {
+        target.classList.remove('border', 'border-primary', 'border-2');
+    }, 3000);
+});
 </script>

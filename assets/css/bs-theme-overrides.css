@@ -83,3 +83,24 @@
 [data-bs-theme="light"] #topNav .form-control {
     color: #212529 !important;
 }
+
+/*
+ * Notification dropdown: force dark text in light mode so the list is
+ * readable even when a child-app theme has overridden --bs-body-color
+ * to white globally. Dropdown-menu inherits the navbar context.
+ */
+[data-bs-theme="light"] #notifDropdown,
+[data-bs-theme="light"] #notifDropdown .dropdown-item,
+[data-bs-theme="light"] #notifDropdown .dropdown-item .fw-semibold {
+    color: #212529 !important;
+}
+
+[data-bs-theme="light"] #notifDropdown .text-muted {
+    color: #6c757d !important;
+}
+
+[data-bs-theme="light"] #notifDropdown .dropdown-item:hover,
+[data-bs-theme="light"] #notifDropdown .dropdown-item:focus {
+    background-color: #f8f9fa !important;
+    color: #212529 !important;
+}
