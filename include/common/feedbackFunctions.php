@@ -341,6 +341,24 @@ function update_change_request($id, $fields) {
 
     $result = (bool) db_query("UPDATE change_request SET " . implode(', ', $sets) . " WHERE change_request_id = '$id'");
 
+    // Cascade to linked feedback so the submitter sees their item resolved
+    // instead of stuck on 'grouped' forever. Status map:
+    //   CR completed → feedback 'resolved'
+    //   CR rejected  → feedback 'dismissed'
+    //   CR back to in_progress/approved/proposed → feedback stays/reverts to 'grouped'
+    if ($result && isset($fields['status']) && $old_status !== $fields['status']) {
+        $new = $fields['status'];
+        if ($new === 'completed') {
+            db_query("UPDATE feedback SET status = 'resolved' WHERE change_request_id = '$id' AND status IN ('grouped','new','reviewed')");
+        } elseif ($new === 'rejected') {
+            db_query("UPDATE feedback SET status = 'dismissed' WHERE change_request_id = '$id' AND status IN ('grouped','new','reviewed')");
+        } elseif (in_array($new, ['in_progress','approved','proposed','paused'], true)) {
+            // Re-opening: pull resolved/dismissed feedback back to grouped so
+            // notifications fire again if the CR cycles.
+            db_query("UPDATE feedback SET status = 'grouped' WHERE change_request_id = '$id' AND status IN ('resolved','dismissed')");
+        }
+    }
+
     // Notify on status change
     if ($result && isset($fields['status']) && $old_status !== null && $old_status !== $fields['status']) {
         _notify_cr_status_change($id, $old_cr, $fields['status']);
