@@ -384,12 +384,42 @@ $stats = get_feedback_stats();
             .then(function (j) { if (!j.error) loadFeedback(fbPage); });
     };
 
+    // Build a plaintext chat transcript from feedback.context_json if present.
+    // Returns '' when no chat context is attached.
+    function renderChatContextBlock(row) {
+        if (!row || !row.context_json) return '';
+        var ctx;
+        try { ctx = JSON.parse(row.context_json); } catch (e) { return ''; }
+        var chat = ctx && ctx.chat;
+        if (!chat || !chat.messages || !chat.messages.length) return '';
+
+        var lines = [];
+        lines.push('');
+        lines.push('--- Chat context (captured from user session) ---');
+        if (chat.session_id) lines.push('Session: ' + chat.session_id);
+        if (chat.phase)      lines.push('Phase: '   + chat.phase);
+        if (chat.viewport)   lines.push('Viewport: ' + chat.viewport);
+        if (chat.visible_options && chat.visible_options.length) {
+            lines.push('Choices visible when feedback sent: ' + chat.visible_options.join(' | '));
+        }
+        lines.push('');
+        lines.push('Transcript (' + chat.messages.length + ' messages):');
+        chat.messages.forEach(function (m) {
+            var who = m.role === 'user' ? 'USER' : 'AI';
+            lines.push('[' + who + '] ' + (m.text || '').replace(/\s+/g, ' ').trim());
+        });
+        return lines.join('\n');
+    }
+
     window.openCRFromFeedback = function (fid) {
         var row = fbData[fid] || {};
         document.getElementById('crEditId').value = '';
         document.getElementById('crFeedbackId').value = fid;
         document.getElementById('crTitle').value = '';
-        document.getElementById('crDescription').value = row.message || '';
+        var desc = row.message || '';
+        var ctxBlock = renderChatContextBlock(row);
+        if (ctxBlock) desc += '\n' + ctxBlock;
+        document.getElementById('crDescription').value = desc;
         document.getElementById('crType').value = 'change';
         document.getElementById('crPriority').value = 'medium';
         document.getElementById('crModalTitle').textContent = 'Create Change Request from Feedback';
