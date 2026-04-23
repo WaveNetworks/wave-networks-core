@@ -257,6 +257,45 @@ if (($action ?? null) == 'apiBulkUpdateChangeRequests') {
     }
 }
 
+// ── Bulk cascade feedback status from their change-request ──
+//
+// One-shot reconciliation: for every CR that's already in a terminal
+// status (completed / rejected), flip the linked feedback rows to the
+// matching feedback state. Used to back-fill rows linked BEFORE the
+// update_change_request cascade landed (493386b).
+//
+// CR completed → feedback 'resolved'
+// CR rejected  → feedback 'dismissed'
+// Only touches feedback.status in {'grouped','new','reviewed'} so we
+// don't clobber rows that were manually reclassified.
+//
+// Idempotent — re-runs are no-ops once a row is already resolved/dismissed.
+if (($action ?? null) == 'apiBulkCascadeFeedbackFromCR') {
+    if (require_api_scope('feedback:admin')) {
+        $r1 = db_query(
+            "UPDATE feedback f
+             JOIN change_request cr ON cr.change_request_id = f.change_request_id
+             SET f.status = 'resolved'
+             WHERE cr.status = 'completed'
+               AND f.status IN ('grouped','new','reviewed')"
+        );
+        $resolved = $r1 ? $r1->rowCount() : 0;
+
+        $r2 = db_query(
+            "UPDATE feedback f
+             JOIN change_request cr ON cr.change_request_id = f.change_request_id
+             SET f.status = 'dismissed'
+             WHERE cr.status = 'rejected'
+               AND f.status IN ('grouped','new','reviewed')"
+        );
+        $dismissed = $r2 ? $r2->rowCount() : 0;
+
+        $_SESSION['success'] = "Cascaded CR status: {$resolved} feedback resolved, {$dismissed} dismissed.";
+        $data['resolved']  = $resolved;
+        $data['dismissed'] = $dismissed;
+    }
+}
+
 // ── Upvote feedback ─────────────────────────────────────────
 if (($action ?? null) == 'apiUpvoteFeedback') {
     if (require_api_scope('feedback:write')) {
