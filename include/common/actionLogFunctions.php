@@ -4,15 +4,8 @@
  * Silent side-effect: never throws, never writes to STDERR.
  */
 
-const NOISY_ACTIONS = [
-    'heartbeat',
-    'ping',
-    'csrf_refresh',
-    'notification_poll',
-    'pollNotifications',
-];
-
-const ACTION_LOG_PARAM_ALLOWLIST = [];
+// Policy (ACTION_LOG_PARAM_ALLOWLIST, ACTION_LOG_DENY) lives in actionLogPolicy.php
+// and is auto-included via glob — see that file for rules on adding entries.
 
 function detect_source_app() {
     global $source_app;
@@ -27,7 +20,8 @@ function detect_source_app() {
 
 function log_user_action($action_name, $result = 'success', $params = [], $duration_ms = null) {
     try {
-        if (in_array($action_name, NOISY_ACTIONS, true)) return;
+        $deny = defined('ACTION_LOG_DENY') ? ACTION_LOG_DENY : [];
+        if (in_array($action_name, $deny, true)) return;
 
         $device_id = $_SESSION['device_id'] ?? null;
         if (!$device_id) {
@@ -54,13 +48,17 @@ function log_user_action($action_name, $result = 'success', $params = [], $durat
             }
         }
 
-        $allowed    = defined('ACTION_LOG_PARAM_ALLOWLIST') ? ACTION_LOG_PARAM_ALLOWLIST : [];
-        if (!empty($allowed) && !empty($params)) {
-            $params = array_intersect_key($params, array_flip($allowed));
-        } elseif (empty($allowed)) {
+        $allowed = defined('ACTION_LOG_PARAM_ALLOWLIST') ? ACTION_LOG_PARAM_ALLOWLIST : [];
+        if (array_key_exists($action_name, $allowed)) {
+            $keys = $allowed[$action_name];
+            $params = is_array($params)
+                ? array_intersect_key($params, array_flip($keys))
+                : [];
+        } else {
+            // Fail-safe: unknown action → log with empty params, never raw body.
             $params = [];
         }
-        $params_json = !empty($params) ? json_encode($params) : null;
+        $params_json = json_encode($params);
 
         $ip         = $_SERVER['REMOTE_ADDR'] ?? null;
         $user_agent = mb_substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
