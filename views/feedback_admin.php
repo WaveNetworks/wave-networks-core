@@ -50,7 +50,7 @@ $stats = get_feedback_stats();
     <!-- Filters -->
     <div class="row mb-3 g-2">
         <div class="col-md-2">
-            <select class="form-select form-select-sm" id="fbFilterType">
+            <select class="form-select form-select-sm" id="fbFilterType" onchange="loadFeedback(1)">
                 <option value="">All Types</option>
                 <option value="bug">Bug</option>
                 <option value="suggestion">Suggestion</option>
@@ -58,12 +58,12 @@ $stats = get_feedback_stats();
             </select>
         </div>
         <div class="col-md-2">
-            <select class="form-select form-select-sm" id="fbFilterSource">
+            <select class="form-select form-select-sm" id="fbFilterSource" onchange="loadFeedback(1)">
                 <option value="">All Sources</option>
             </select>
         </div>
         <div class="col-md-2">
-            <select class="form-select form-select-sm" id="fbFilterStatus">
+            <select class="form-select form-select-sm" id="fbFilterStatus" onchange="loadFeedback(1)">
                 <option value="">All Status</option>
                 <option value="new">New</option>
                 <option value="reviewed">Reviewed</option>
@@ -72,7 +72,7 @@ $stats = get_feedback_stats();
             </select>
         </div>
         <div class="col-md-3">
-            <input type="text" class="form-control form-control-sm" id="fbFilterSearch" placeholder="Search feedback...">
+            <input type="text" class="form-control form-control-sm" id="fbFilterSearch" placeholder="Search feedback..." onkeydown="if(event.key==='Enter'){event.preventDefault();loadFeedback(1);}">
         </div>
         <div class="col-md-1">
             <button class="btn btn-sm btn-primary w-100" id="btnFilterFb" onclick="loadFeedback(1)">Filter</button>
