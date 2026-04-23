@@ -268,6 +268,82 @@ Child app benefit: errors from child apps are captured automatically because
 
 Helpers: include/common/errorHandler.php, include/common/errorLogFunctions.php
 
+## User action logging system
+Captures every authenticated action and view as the canonical source of truth for
+automated testing, security auditing, and product analytics. One write path, many
+consumers — do NOT add a parallel logging table for any new use case. Extend this.
+
+### Purpose (why this exists)
+1. **Testing source-of-truth** — integration suites assert user journeys by
+   reading the log, not by scraping HTML. Every feature is reachable because
+   its action shows up here.
+2. **Security event source** — failed logins, permission denials, admin
+   actions, and unusual session patterns are all derived from the same rows.
+3. **Product analytics input** — feature usage, funnel conversion, and
+   retention are all driven by aggregates of this table.
+
+### Schema split (CRITICAL — the anti-pattern guard)
+Per-user row-level data lives on the user's SHARD. Shared/aggregate/anonymous
+data lives on MAIN. Do NOT put per-user log tables on main — you will defeat
+shard isolation and lose per-tenant data locality.
+
+| Table | DB | Purpose |
+|---|---|---|
+| user_action_log | SHARD | Raw per-user action rows (24h rolling for normal users) |
+| user_action_summary | SHARD | Per-user rolled-up counts (kept forever) |
+| device_action_log | MAIN | Pre-login / anonymous device actions (7d rolling) |
+| feature_metric_daily | MAIN | Cross-user daily feature aggregates (kept forever) |
+| use_case | MAIN | Test infrastructure — named user journeys |
+| use_case_test_run | MAIN | Test infrastructure — per-run pass/fail records |
+
+Rule of thumb: if a column is `user_id`, it belongs on a shard. If it's
+`device_id` or a cross-user count, it belongs on main. Test infra is shared
+across users, so use_case* live on main.
+
+### Automatic logging — no per-action work required
+Helper: `log_user_action($action_name, $result, $params, $duration_ms)` in
+`include/common/actionLogFunctions.php`. Called automatically from
+`admin/include/common.php` after every action dispatch and after every view
+render. New action files and views are logged for free — you add nothing.
+
+### Redaction (default-deny)
+Policy lives in `include/common/actionLogPolicy.php`. By default NO request
+params are logged. To record safe params for a new action, add an entry to
+`ACTION_LOG_PARAM_ALLOWLIST` keyed by the action name. Never allowlist
+passwords, tokens, API keys, payment info, or free-text fields that may
+contain PII. When in doubt, leave the action unlogged for params — the
+action name + timestamp + result is usually enough.
+
+### Retention
+- **Normal users** — raw rows on shard: 24h rolling, deleted by daily cron.
+- **Anonymous / pre-login** — raw rows on main (device_action_log): 7d rolling.
+- **Test accounts** (`user.is_test_account = 1`) — raw rows kept forever so
+  automated suites can assert on historical journeys. TTL sweepers must
+  exclude these rows.
+- **Summary tables** (user_action_summary, feature_metric_daily) — kept forever.
+
+### Cleanup cron
+`cron/days/1/cleanup_action_log.php` runs daily and does three jobs in order:
+1. TTL-delete raw rows older than their retention window (skipping test accounts).
+2. Roll per-shard summaries into `user_action_summary`.
+3. Aggregate cross-shard counts into `feature_metric_daily` on main.
+
+### Device tracking
+Every request creates or updates a row in the `device` table via bootstrap.
+- **Anonymous device_id** — minted at first request, persisted in the
+  `wn_device` cookie, and carried across login so pre-login journeys link
+  to the eventual authenticated user.
+- **Cordova / mobile clients** — send the `X-Wn-Device` header instead of
+  the cookie; bootstrap honors it the same way.
+
+### Adding a new logged feature — checklist
+1. Write the action file as usual — logging is automatic.
+2. If you need to record a safe param, add it to `ACTION_LOG_PARAM_ALLOWLIST`
+   in `actionLogPolicy.php`. Do not touch `log_user_action()` itself.
+3. If the feature needs a cross-user aggregate metric, extend the roll-up
+   in `cleanup_action_log.php` — do NOT add a new table on main.
+4. If it's per-user analytics, extend `user_action_summary` on the shard.
+
 ## Service API keys
 Programmatic API access for external tools and agents. Separate from the
 remember-me api_key table used for device cookies.
