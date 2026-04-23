@@ -538,6 +538,27 @@ Action file: include/actions/memberActions/userComplianceActions.php
 Admin UI: views/user_edit.php — 5-tab compliance dashboard (Profile, Consent,
   Login History, Sessions, Data & Deletion) accessed from Users list.
 
+## Test account
+Canonical cross-host test user: **nokemo@nokemo.com** (`user.is_test_account = 1`).
+
+Seed script: `admin/scripts/create_test_user.php` (idempotent, CLI-only, bootstraps
+via `common_readonly.php`). Run once per deployed admin host after migration 3.4
+reaches it. See `admin/scripts/README.md` for run instructions.
+
+The `is_test_account` flag has two semantic exemptions:
+  - **Infinite action log retention** — action log TTL sweepers must exclude
+    rows where the actor is a test account (see Phase1-T4 redaction policy).
+  - **Re-consent exemption** (T8) — `check_reconsent_needed()` must skip test
+    accounts so automated suites never trip the consent interstitial.
+
+Rules:
+  - NEVER store real PII against this user. It exists solely for automated
+    end-to-end suites and Phase 3 service-impersonation flows.
+  - The password is a discarded random 64-char hex — this user is never
+    reached via a real password login.
+  - Treat it as a normal user for every other invariant (shard assignment,
+    homedir, consent audit log, notifications, etc.).
+
 ## Versioning & update checks
 Version constants defined in include/definition.php:
   WN_ADMIN_VERSION — current admin core version (e.g. '1.0.0')
