@@ -282,7 +282,8 @@ Validation: prefix lookup (first 12 chars) narrows candidates, then bcrypt verif
 last_used_at updated on each successful validation.
 
 Scopes: JSON array of scope strings. Available scopes defined in get_available_scopes():
-  error_log:read, error_log:write, users:read.
+  error_log:read, error_log:write, users:read, costs:write, costs:read,
+  feedback:read, feedback:write, feedback:admin.
   Child apps can extend by adding scopes to this function.
   require_api_scope($scope) checks the current key's scopes and sets $_SESSION['error']
   if missing. API action files call this before processing.

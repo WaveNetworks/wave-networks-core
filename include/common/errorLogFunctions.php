@@ -235,14 +235,29 @@ function clear_error_logs($older_than_days = 30) {
 /**
  * Mark an error log entry as resolved.
  *
- * @param int $error_id
- * @param int $user_id  The admin who resolved it
+ * @param int    $error_id
+ * @param int    $user_id            The admin who resolved it
+ * @param string $resolution_reason  One of: fixed, already_fixed, cant_fix, noise, wont_fix (optional)
+ * @param string $resolution_notes   Free-text explanation (optional, max 500 chars)
  * @return bool
  */
-function resolve_error_log($error_id, $user_id) {
-    $id  = (int)$error_id;
-    $uid = (int)$user_id;
-    return (bool)db_query("UPDATE error_log SET resolved_at = NOW(), resolved_by = '$uid' WHERE error_id = '$id'");
+function resolve_error_log($error_id, $user_id, $resolution_reason = null, $resolution_notes = null) {
+    $allowed = ['fixed', 'already_fixed', 'cant_fix', 'noise', 'wont_fix'];
+    if ($resolution_reason !== null && !in_array($resolution_reason, $allowed, true)) {
+        $resolution_reason = null;
+    }
+    if ($resolution_notes !== null) {
+        $resolution_notes = mb_substr((string)$resolution_notes, 0, 500);
+    }
+    return (bool)db_query_prepared(
+        "UPDATE error_log
+         SET resolved_at = NOW(),
+             resolved_by = ?,
+             resolution_reason = ?,
+             resolution_notes = ?
+         WHERE error_id = ?",
+        [(int)$user_id, $resolution_reason, $resolution_notes, (int)$error_id]
+    );
 }
 
 /**
@@ -253,7 +268,7 @@ function resolve_error_log($error_id, $user_id) {
  */
 function unresolve_error_log($error_id) {
     $id = (int)$error_id;
-    return (bool)db_query("UPDATE error_log SET resolved_at = NULL, resolved_by = NULL WHERE error_id = '$id'");
+    return (bool)db_query("UPDATE error_log SET resolved_at = NULL, resolved_by = NULL, resolution_reason = NULL, resolution_notes = NULL WHERE error_id = '$id'");
 }
 
 /**

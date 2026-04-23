@@ -51,8 +51,18 @@ if (($action ?? null) == 'apiResolveErrorLog') {
     if (!require_api_scope('error_log:write')) { /* error already set */ }
     elseif (empty($_POST['error_id'])) { $errs['id'] = 'error_id required.'; }
 
+    $reason = $_POST['resolution_reason'] ?? null;
+    if ($reason !== null && $reason !== '' && !in_array($reason, ['fixed','already_fixed','cant_fix','noise','wont_fix'], true)) {
+        $errs['reason'] = 'resolution_reason must be one of: fixed, already_fixed, cant_fix, noise, wont_fix.';
+    }
+
     if (empty($errs) && $_SERVICE_API_KEY) {
-        resolve_error_log((int)$_POST['error_id'], (int)$_SERVICE_API_KEY['created_by']);
+        resolve_error_log(
+            (int)$_POST['error_id'],
+            (int)$_SERVICE_API_KEY['created_by'],
+            ($reason === '' ? null : $reason),
+            $_POST['resolution_notes'] ?? null
+        );
         $_SESSION['success'] = 'Error marked as resolved.';
     } elseif (!empty($errs)) {
         $_SESSION['error'] = implode('<br>', $errs);
