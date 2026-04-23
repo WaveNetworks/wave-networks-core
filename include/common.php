@@ -80,7 +80,7 @@ foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 
 // 5. Migrations
-$db_version    = $db_version ?? 3.5;
+$db_version    = $db_version ?? 3.6;
 $shard_version = $shard_version ?? 1.2;
 check_and_migrate_main_db();
 check_and_migrate_all_shards();
