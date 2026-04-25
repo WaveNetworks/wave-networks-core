@@ -53,4 +53,10 @@ const ACTION_LOG_DENY = [
     'email_queue_status',
     'session_keepalive',
     'pollNotifications',
+    // 2026-04-25: bs-init.js / notifications.js fire these on a 60s
+    // timer regardless of user activity — they were swamping the log
+    // at ~99% of rows for any active session, drowning out the real
+    // action sequences the use-case derivation needs.
+    'getNotifications',
+    'checkSession',
 ];
