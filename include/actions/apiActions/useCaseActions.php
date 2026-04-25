@@ -69,6 +69,85 @@ if (($action ?? null) == 'apiAdminGrantSelfScopes') {
     }
 }
 
+// ── Idempotent test-user seed (mirrors create_test_user.php) ───────────
+// Per `admin/CLAUDE.md` the canonical cross-host test user is
+// nokemo@nokemo.com with is_test_account=1. The CLI seed script
+// (admin/scripts/create_test_user.php) only runs on hosts where the
+// admin/operator has shell access; this HTTP twin lets nokemo bootstrap
+// the test user across every registered app it administers.
+//
+// Idempotent: if the user already exists with the flag set, returns
+// the existing row. If it exists without the flag, sets it. Safe to
+// re-run.
+if (($action ?? null) == 'apiAdminEnsureTestUser') {
+    if (require_api_scope('tests:write')) {
+        $email     = 'nokemo@nokemo.com';
+        $s_email   = sanitize($email, SQL);
+        $existing  = db_fetch(db_query(
+            "SELECT user_id, shard_id, is_test_account
+             FROM `user` WHERE email = '$s_email'"
+        ));
+
+        if ($existing) {
+            $uid   = (int)$existing['user_id'];
+            $shard = $existing['shard_id'];
+            if ((int)$existing['is_test_account'] !== 1) {
+                db_query("UPDATE `user` SET is_test_account = 1
+                          WHERE user_id = '$uid'");
+                $note = 'flag fixed';
+            } else {
+                $note = 'already exists';
+            }
+            $data['user_id']        = $uid;
+            $data['shard_id']       = $shard;
+            $data['email']          = $email;
+            $data['is_test_account']= 1;
+            $data['note']           = $note;
+            $_SESSION['success']    = 'OK';
+        } else {
+            $shard_id  = function_exists('get_least_loaded_shard')
+                ? get_least_loaded_shard()
+                : 'shard1';
+            $password  = bin2hex(random_bytes(32));
+            $hashed    = hash_password($password);
+            $confirm   = generateHashCode(100);
+            $s_shard   = sanitize($shard_id, SQL);
+            $s_confirm = sanitize($confirm, SQL);
+
+            $ins = db_query(
+                "INSERT INTO `user`
+                   (email, password, shard_id, is_confirmed, is_test_account,
+                    confirm_hash, created_date)
+                 VALUES ('$s_email', '$hashed', '$s_shard', 1, 1,
+                         '$s_confirm', NOW())"
+            );
+            if (!$ins) {
+                $_SESSION['error'] = 'Failed to insert test user.';
+            } else {
+                $new_id = (int)db_insert_id();
+                prime_shard($shard_id);
+                db_query_shard($shard_id,
+                    "INSERT INTO user_profile (user_id, first_name, last_name, created)
+                     VALUES ('$new_id', 'Nokemo', 'Test', NOW())"
+                );
+                // create_home_dir_id reads $_SESSION['shard_id']
+                $_SESSION['shard_id'] = $shard_id;
+                if (function_exists('create_home_dir_id')) {
+                    create_home_dir_id($new_id);
+                }
+                unset($_SESSION['shard_id']);
+
+                $data['user_id']         = $new_id;
+                $data['shard_id']        = $shard_id;
+                $data['email']           = $email;
+                $data['is_test_account'] = 1;
+                $data['note']            = 'created';
+                $_SESSION['success']     = 'OK';
+            }
+        }
+    }
+}
+
 // ── Shared helpers ──────────────────────────────────────────────────────
 function _uc_test_user(): ?array {
     // Conventionally nokemo@nokemo.com; fall back to any is_test_account
