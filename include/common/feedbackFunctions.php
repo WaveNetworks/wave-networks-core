@@ -380,6 +380,10 @@ function get_change_requests($filters = []) {
         $s = sanitize($filters['status'], SQL);
         $where[] = "cr.status = '$s'";
     }
+    if (!empty($filters['exclude_status'])) {
+        $s = sanitize($filters['exclude_status'], SQL);
+        $where[] = "cr.status != '$s'";
+    }
     if (!empty($filters['request_type'])) {
         $s = sanitize($filters['request_type'], SQL);
         $where[] = "cr.request_type = '$s'";

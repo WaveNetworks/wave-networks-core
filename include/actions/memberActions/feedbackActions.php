@@ -211,8 +211,9 @@ if (($action ?? null) == 'getChangeRequests') {
 
     if (count($errs) <= 0) {
         $filters = [];
-        if (!empty($_POST['status']))       $filters['status']       = $_POST['status'];
-        if (!empty($_POST['request_type'])) $filters['request_type'] = $_POST['request_type'];
+        if (!empty($_POST['status']))         $filters['status']         = $_POST['status'];
+        if (!empty($_POST['exclude_status'])) $filters['exclude_status'] = $_POST['exclude_status'];
+        if (!empty($_POST['request_type']))   $filters['request_type']   = $_POST['request_type'];
         if (!empty($_POST['priority']))     $filters['priority']     = $_POST['priority'];
         if (!empty($_POST['search']))       $filters['search']       = $_POST['search'];
         if (!empty($_POST['page']))         $filters['page']         = $_POST['page'];

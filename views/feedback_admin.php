@@ -137,6 +137,10 @@ $stats = get_feedback_stats();
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
             </select>
+            <div class="form-check form-check-inline ms-2">
+                <input class="form-check-input" type="checkbox" id="crShowRejected" onchange="loadChangeRequests(1)">
+                <label class="form-check-label small" for="crShowRejected">Show rejected</label>
+            </div>
         </div>
         <button class="btn btn-sm btn-primary" onclick="openCRModal()">
             <i class="bi bi-plus-lg"></i> New Change Request
@@ -477,7 +481,12 @@ $stats = get_feedback_stats();
         var fd = new FormData();
         fd.append('action', 'getChangeRequests');
         fd.append('page', crPage);
-        if (document.getElementById('crFilterStatus').value)   fd.append('status',       document.getElementById('crFilterStatus').value);
+        var crStatusVal = document.getElementById('crFilterStatus').value;
+        if (crStatusVal) {
+            fd.append('status', crStatusVal);
+        } else if (!document.getElementById('crShowRejected').checked) {
+            fd.append('exclude_status', 'rejected');
+        }
         if (document.getElementById('crFilterType').value)     fd.append('request_type', document.getElementById('crFilterType').value);
         if (document.getElementById('crFilterPriority').value) fd.append('priority',     document.getElementById('crFilterPriority').value);
 
