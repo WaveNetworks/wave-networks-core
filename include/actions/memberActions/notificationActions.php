@@ -59,6 +59,40 @@ if (($_POST['action'] ?? '') == 'markAllNotificationsRead') {
     }
 }
 
+// ─── DELETE SINGLE ──────────────────────────────────────────────────────────
+
+if (($_POST['action'] ?? '') == 'deleteNotification') {
+    $errs = array();
+
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+
+    $notification_id = (int)($_POST['notification_id'] ?? 0);
+    if (!$notification_id) { $errs['id'] = 'Notification ID required.'; }
+
+    if (count($errs) <= 0) {
+        delete_notification($notification_id, $_SESSION['user_id'], $_SESSION['shard_id']);
+        $_SESSION['success'] = 'Notification removed.';
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
+// ─── CLEAR ALL ──────────────────────────────────────────────────────────────
+
+if (($_POST['action'] ?? '') == 'clearAllNotifications') {
+    $errs = array();
+
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+
+    if (count($errs) <= 0) {
+        $only_read = !empty($_POST['only_read']);
+        delete_all_notifications($_SESSION['user_id'], $_SESSION['shard_id'], $only_read);
+        $_SESSION['success'] = $only_read ? 'Read notifications cleared.' : 'All notifications cleared.';
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
 // ─── GET PREFERENCES ────────────────────────────────────────────────────────
 
 if (($_POST['action'] ?? '') == 'getNotificationPreferences') {

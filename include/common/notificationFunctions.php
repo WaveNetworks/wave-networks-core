@@ -162,6 +162,28 @@ function mark_all_notifications_read($user_id, $shard_id) {
         "UPDATE notification SET is_read = 1 WHERE user_id = '$user_id' AND is_read = 0");
 }
 
+/**
+ * Delete a single notification owned by the given user.
+ */
+function delete_notification($notification_id, $user_id, $shard_id) {
+    $notification_id = (int)$notification_id;
+    $user_id = (int)$user_id;
+    prime_shard($shard_id);
+    return db_query_shard($shard_id,
+        "DELETE FROM notification WHERE notification_id = '$notification_id' AND user_id = '$user_id'");
+}
+
+/**
+ * Delete all notifications for a user (optionally only read ones).
+ */
+function delete_all_notifications($user_id, $shard_id, $only_read = false) {
+    $user_id = (int)$user_id;
+    prime_shard($shard_id);
+    $where = $only_read ? " AND is_read = 1" : "";
+    return db_query_shard($shard_id,
+        "DELETE FROM notification WHERE user_id = '$user_id'" . $where);
+}
+
 // ─── CATEGORIES ─────────────────────────────────────────────────────────────
 
 /**
