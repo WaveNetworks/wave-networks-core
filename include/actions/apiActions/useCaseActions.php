@@ -69,6 +69,53 @@ if (($action ?? null) == 'apiAdminGrantSelfScopes') {
     }
 }
 
+// ── Set the test user's password (Playwright runner needs a known one) ──
+// The Phase 1 seed script discards a random 64-char password; the
+// canonical login path was supposed to be Phase 3 service-impersonation
+// tokens. Until that ships, the runner needs a known password.
+//
+// Security: this action will ONLY mutate a user with is_test_account=1.
+// A leaked tests:write key cannot use it to reset arbitrary accounts.
+if (($action ?? null) == 'apiAdminSetTestUserPassword') {
+    if (require_api_scope('tests:write')) {
+        $errs     = [];
+        $password = (string)($_POST['password'] ?? '');
+        if (strlen($password) < 16) {
+            $errs[] = 'password must be at least 16 chars (use a random secret).';
+        }
+        if (empty($errs)) {
+            $r = db_query_prepared(
+                "SELECT user_id, email, is_test_account, shard_id
+                 FROM `user`
+                 WHERE email = 'nokemo@nokemo.com' LIMIT 1",
+                []
+            );
+            $row = $r ? $r->fetch(PDO::FETCH_ASSOC) : null;
+            if (!$row) {
+                $_SESSION['error'] = 'Test user nokemo@nokemo.com not found '
+                                   . '(call apiAdminEnsureTestUser first).';
+            } elseif ((int)$row['is_test_account'] !== 1) {
+                $_SESSION['error'] = 'Refusing to set password — user is not '
+                                   . 'flagged is_test_account=1.';
+            } else {
+                $hashed = hash_password($password);
+                db_query_prepared(
+                    "UPDATE `user` SET password = ?, updated = NOW()
+                     WHERE user_id = ? AND is_test_account = 1",
+                    [$hashed, (int)$row['user_id']]
+                );
+                $data['user_id']  = (int)$row['user_id'];
+                $data['email']    = $row['email'];
+                $data['shard_id'] = $row['shard_id'];
+                $data['note']     = 'password set';
+                $_SESSION['success'] = 'OK';
+            }
+        } else {
+            $_SESSION['error'] = implode('<br>', $errs);
+        }
+    }
+}
+
 // ── Idempotent test-user seed (mirrors create_test_user.php) ───────────
 // Per `admin/CLAUDE.md` the canonical cross-host test user is
 // nokemo@nokemo.com with is_test_account=1. The CLI seed script
