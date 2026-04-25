@@ -122,9 +122,18 @@ function loadKeys() {
                 ? '<span class="badge bg-danger">Revoked</span>'
                 : '<span class="badge bg-success">Active</span>';
 
+            // Note: scopes is an array — JSON.stringify produces double-quotes
+            // that collide with an inline onclick attribute (the first `"`
+            // closes the attribute and the handler silently breaks). We use
+            // data-* attributes + a delegated listener instead, which keeps
+            // the HTML well-formed regardless of scope content.
             var editBtn = revoked
                 ? ''
-                : '<button class="btn btn-sm btn-outline-secondary me-1" onclick="editScopes(' + k.service_key_id + ', \'' + escapeHtml(k.key_name) + '\', ' + JSON.stringify(scopes) + ')" title="Edit Scopes">' +
+                : '<button class="btn btn-sm btn-outline-secondary me-1 edit-scopes-btn" ' +
+                  'data-key-id="' + k.service_key_id + '" ' +
+                  'data-key-name="' + escapeHtml(k.key_name) + '" ' +
+                  'data-key-scopes="' + escapeHtml(JSON.stringify(scopes)) + '" ' +
+                  'title="Edit Scopes">' +
                   '<i class="bi bi-pencil"></i></button>';
 
             var revokeBtn = revoked
@@ -202,11 +211,26 @@ function copyKey() {
 }
 
 function escapeHtml(str) {
-    if (!str) return '';
+    if (str == null) return '';
+    // textNode → innerHTML escapes &, <, >, but NOT " or '. We need
+    // attribute-safe escaping for data-* values (especially JSON), so
+    // do the explicit replacement after the DOM round-trip.
     var div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
+    div.appendChild(document.createTextNode(String(str)));
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+// Delegated handler — picks up edit clicks even though the table is
+// re-rendered by loadKeys(). data-* attributes carry the row state.
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.edit-scopes-btn');
+    if (!btn) return;
+    var id = parseInt(btn.dataset.keyId, 10);
+    var name = btn.dataset.keyName || '';
+    var scopes = [];
+    try { scopes = JSON.parse(btn.dataset.keyScopes || '[]'); } catch (e) {}
+    editScopes(id, name, scopes);
+});
 
 function editScopes(id, name, currentScopes) {
     document.getElementById('editKeyId').value = id;
