@@ -185,13 +185,29 @@ if (($action ?? null) == 'apiListTestSessionActions') {
         $app   = trim((string)($_POST['source_app'] ?? ''));
         $since = trim((string)($_POST['since']      ?? '')); // YYYY-MM-DD HH:MM:SS
         $limit = max(1, min(2000, (int)($_POST['limit'] ?? 500)));
+        // Optional: derive from a specific user instead of the canonical
+        // test account. Useful while bootstrapping when nobody has been
+        // logging in as nokemo@nokemo.com yet but real admins have
+        // generated organic action history under their own user_id.
+        $email_filter = trim((string)($_POST['email'] ?? ''));
 
         if ($app === '') {
             $_SESSION['error'] = 'source_app is required.';
         } else {
-            $user = _uc_test_user();
+            if ($email_filter !== '') {
+                $s_email = sanitize($email_filter, SQL);
+                $r = db_query_prepared(
+                    "SELECT user_id, email, shard_id FROM `user` WHERE email = ? LIMIT 1",
+                    [$email_filter]
+                );
+                $user = $r ? $r->fetch(PDO::FETCH_ASSOC) : null;
+            } else {
+                $user = _uc_test_user();
+            }
             if (!$user) {
-                $_SESSION['error'] = 'No is_test_account=1 user found.';
+                $_SESSION['error'] = $email_filter !== ''
+                    ? "No user with email '$email_filter'."
+                    : 'No is_test_account=1 user found.';
             } else {
                 prime_shard($user['shard_id']);
                 $sql = "SELECT log_id, user_id, session_id, source_app, page, action,

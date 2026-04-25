@@ -171,10 +171,11 @@ def build_action_path(actions: list) -> list:
 
 
 # ── Main ────────────────────────────────────────────────────────────────
-def derive_for_app(app: str, since: str | None, dry_run: bool) -> int:
+def derive_for_app(app: str, since: str | None, dry_run: bool,
+                   email: str | None = None) -> int:
     log.info("── %s ──", app)
     res = api("apiListTestSessionActions",
-              source_app=app, since=since, limit=2000)
+              source_app=app, since=since, email=email, limit=2000)
     sessions = res.get("sessions") or []
     total_actions = res.get("action_count") or 0
     if not sessions:
@@ -229,6 +230,10 @@ def main() -> int:
                     help="Comma-separated source_app slugs (e.g. nokemo,elevateher,pwt)")
     ap.add_argument("--since", default=None, metavar="YYYY-MM-DD[ HH:MM:SS]",
                     help="Earliest action log timestamp to consider.")
+    ap.add_argument("--email", default=None,
+                    help="Derive from this user's logs instead of the "
+                         "canonical is_test_account user. Useful before "
+                         "the test user has generated real history.")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print clusters; do not UPSERT.")
     ap.add_argument("--verbose", "-v", action="store_true")
@@ -248,7 +253,7 @@ def main() -> int:
     total = 0
     for app in apps:
         try:
-            total += derive_for_app(app, args.since, args.dry_run)
+            total += derive_for_app(app, args.since, args.dry_run, args.email)
         except Exception as e:
             log.error("[%s] %s", app, e)
     log.info("Done. wrote %d use_case row(s) across %d app(s) %s",
