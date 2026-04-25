@@ -78,9 +78,18 @@
         } else if (typeof reason === 'string') {
             message = reason;
         } else {
+            // Skip empty/uninformative rejections (common iOS Safari/Chrome noise:
+            // null, undefined, plain {} from interrupted media element loads, etc.)
+            if (reason == null) return;
+            try {
+                var serialized = JSON.stringify(reason);
+                if (!serialized || serialized === '{}' || serialized === '[]' || serialized === '""') return;
+                stack = serialized;
+            } catch(e) { return; }
             message = 'Unhandled promise rejection';
-            try { stack = JSON.stringify(reason); } catch(e) {}
         }
+
+        if (!message) return;
 
         reportError({
             message:    message,
