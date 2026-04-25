@@ -6,6 +6,10 @@
  */
 include(__DIR__ . '/../include/common.php');
 
+// Buffer output so views included by template.php can still call header()
+// for auth/validation redirects (e.g. user_edit.php redirecting on missing user).
+ob_start();
+
 $page = $_GET['page'] ?? 'dashboard';
 
 // Map page names to view files
