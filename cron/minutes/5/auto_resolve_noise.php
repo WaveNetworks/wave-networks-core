@@ -39,6 +39,7 @@ $noisePatterns = [
     '%favicon.ico%',
     '%favicon.svg%',
     '%/admin/api/index.php%',
+    '%/nokemo/api/index.php%',
 ];
 
 $noise_resolved = 0;
