@@ -99,8 +99,10 @@ if (($action ?? null) == 'apiAdminSetTestUserPassword') {
                                    . 'flagged is_test_account=1.';
             } else {
                 $hashed = hash_password($password);
+                // The `user` table has no `updated` column — only
+                // `created_date`. Don't fabricate one.
                 db_query_prepared(
-                    "UPDATE `user` SET password = ?, updated = NOW()
+                    "UPDATE `user` SET password = ?
                      WHERE user_id = ? AND is_test_account = 1",
                     [$hashed, (int)$row['user_id']]
                 );
