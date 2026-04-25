@@ -19,6 +19,56 @@
  * the main `user` row before querying.
  */
 
+// ── Bootstrap-only self-scope grant ────────────────────────────────────
+// Reason: when a new admin instance comes online, its existing service
+// keys don't yet have the actions:read / tests:write scopes the test
+// runner needs. The api_keys.php Edit-modal UI bug stranded several
+// admins; this is the curl-friendly bootstrap path.
+//
+// Security: the calling key authenticates itself via Bearer header
+// (validated by common_api.php into $_SERVICE_API_KEY before any action
+// runs). It can ONLY add scopes from a hard-coded bootstrap allowlist —
+// not arbitrary scopes — so a compromised key cannot escalate to
+// (e.g.) feedback:admin or stripe:write through this path.
+if (($action ?? null) == 'apiAdminGrantSelfScopes') {
+    global $_SERVICE_API_KEY;
+    $errs = [];
+    $req = $_POST['scopes'] ?? '';
+    if (is_string($req)) {
+        $req = array_filter(array_map('trim', explode(',', $req)));
+    }
+    $req = is_array($req) ? array_values(array_unique($req)) : [];
+
+    $bootstrap_allow = ['actions:read', 'tests:write'];
+    foreach ($req as $s) {
+        if (!in_array($s, $bootstrap_allow, true)) {
+            $errs[] = "scope '$s' is not in the bootstrap allowlist (" .
+                      implode(', ', $bootstrap_allow) . ")";
+        }
+    }
+    if (empty($req))             $errs[] = 'scopes is required.';
+    if (empty($_SERVICE_API_KEY)) $errs[] = 'No service key on request.';
+
+    if (empty($errs)) {
+        $key_id   = (int)$_SERVICE_API_KEY['service_key_id'];
+        $existing = json_decode($_SERVICE_API_KEY['scopes'] ?? '[]', true);
+        if (!is_array($existing)) $existing = [];
+        $merged   = array_values(array_unique(array_merge($existing, $req)));
+        db_query_prepared(
+            "UPDATE service_api_key SET scopes = ? WHERE service_key_id = ?",
+            [json_encode($merged), $key_id]
+        );
+        $data['service_key_id'] = $key_id;
+        $data['key_prefix']     = $_SERVICE_API_KEY['key_prefix'] ?? null;
+        $data['before_scopes']  = $existing;
+        $data['after_scopes']   = $merged;
+        $data['added']          = array_values(array_diff($merged, $existing));
+        $_SESSION['success']    = 'Scopes granted.';
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
 // ── Shared helpers ──────────────────────────────────────────────────────
 function _uc_test_user(): ?array {
     // Conventionally nokemo@nokemo.com; fall back to any is_test_account
