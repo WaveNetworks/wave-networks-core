@@ -154,6 +154,15 @@ if (($action ?? null) == 'deleteUser') {
         db_query("DELETE FROM user WHERE user_id = '$user_id'");
 
         $_SESSION['success'] = 'User deleted successfully.';
+
+        // Plain-form POST from views/user_edit.php would otherwise re-render
+        // that view, which then 404s and overwrites this success with
+        // "User not found." Redirect to the list instead. AJAX/API callers
+        // (script lives under /admin/api/) keep getting JSON unchanged.
+        if (strpos($_SERVER['SCRIPT_NAME'] ?? '', '/api/') === false) {
+            header('Location: index.php?page=users');
+            exit;
+        }
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }
