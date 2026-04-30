@@ -101,6 +101,11 @@
                 <span class="sidebar-text">Feedback</span>
             </a>
 
+            <a class="nav-link text-white <?= ($page ?? '') === 'use_cases' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=use_cases">
+                <i class="bi bi-check2-square sidebar-icon"></i>
+                <span class="sidebar-text">Use Cases</span>
+            </a>
+
             <a class="nav-link text-white <?= ($page ?? '') === 'costs' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=costs">
                 <i class="bi bi-cash-stack sidebar-icon"></i>
                 <span class="sidebar-text">Costs</span>
