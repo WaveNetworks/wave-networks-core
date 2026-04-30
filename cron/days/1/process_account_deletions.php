@@ -22,6 +22,19 @@ if (!isset($db)) {
 
 global $db;
 
+// Pull in sibling child apps so they can register their delete_user_data
+// hooks (e.g. pwt_delete_user_data). Each child opt-ins via a small
+// include/admin_hooks.php file — keeping this lightweight (no migrations,
+// no session, no action glob).
+$adminRoot = realpath(__DIR__ . '/../../..');
+foreach (glob(dirname($adminRoot) . '/*/include/admin_hooks.php') as $hookFile) {
+    if (realpath(dirname(dirname($hookFile))) === $adminRoot) continue; // skip admin itself
+    try { include_once($hookFile); }
+    catch (Throwable $e) {
+        error_log("process_account_deletions: failed to load $hookFile: " . $e->getMessage());
+    }
+}
+
 $processed = 0;
 $failed    = 0;
 

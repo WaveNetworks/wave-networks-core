@@ -143,15 +143,10 @@ if (($action ?? null) == 'deleteUser') {
     }
 
     if (count($errs) <= 0) {
-        // Delete from shard
-        prime_shard($user['shard_id']);
-        db_query_shard($user['shard_id'], "DELETE FROM user_profile WHERE user_id = '$user_id'");
-
-        // Delete related records from main DB
-        db_query("DELETE FROM api_key WHERE user_id = '$user_id'");
-        db_query("DELETE FROM forgot WHERE user_id = '$user_id'");
-        db_query("DELETE FROM notification WHERE user_id = '$user_id'");
-        db_query("DELETE FROM user WHERE user_id = '$user_id'");
+        // Single source of truth for what "delete" means — admin main + admin
+        // shard + registered child-app hooks + on-disk homedir/exports.
+        // See gdprFunctions.php::delete_user_data and its register_delete_user_data_hook.
+        delete_user_data($user_id);
 
         $_SESSION['success'] = 'User deleted successfully.';
 

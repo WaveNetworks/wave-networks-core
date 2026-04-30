@@ -231,3 +231,131 @@ function complete_data_export($export_id, $file_path, $file_size) {
         expires_at = DATE_ADD(NOW(), INTERVAL 7 DAY)
         WHERE export_id = '$s_eid'");
 }
+
+// ── Right-to-erasure: full user-data wipe ───────────────────────────────────
+
+/**
+ * Register a child-app callback to be invoked by delete_user_data().
+ * Signature: function(int $user_id, ?string $shard_id): void
+ * Child apps call this at bootstrap (e.g. from include/common.php) so the
+ * cross-app wipe can purge their per-user rows + on-disk files too.
+ */
+function register_delete_user_data_hook(callable $hook) {
+    if (!isset($GLOBALS['_delete_user_data_hooks'])) {
+        $GLOBALS['_delete_user_data_hooks'] = [];
+    }
+    $GLOBALS['_delete_user_data_hooks'][] = $hook;
+}
+
+/**
+ * Remove every byte of a user's data — admin main, admin shard, registered
+ * child-app hooks, and on-disk files (homedir, completed exports). Used by:
+ *   • cron/days/1/process_account_deletions.php  (GDPR Article 17)
+ *   • admin deleteUser action (immediate admin-initiated removal)
+ *
+ * Idempotent: if the user is already gone, hooks still run + any orphaned
+ * shard rows are cleaned up.
+ */
+function delete_user_data($user_id) {
+    $uid = (int) $user_id;
+    if ($uid <= 0) return;
+
+    $user     = function_exists('get_user') ? get_user($uid) : null;
+    $shard_id = $user['shard_id'] ?? null;
+
+    // 1. Run child-app hooks first — they may need shard_id and the admin
+    //    user row before we wipe them. Hooks failing must not block the rest.
+    if (!empty($GLOBALS['_delete_user_data_hooks'])) {
+        foreach ($GLOBALS['_delete_user_data_hooks'] as $hook) {
+            try { $hook($uid, $shard_id); }
+            catch (Throwable $e) {
+                if (function_exists('log_error_to_db')) {
+                    log_error_to_db('ERROR', 'delete_user_data hook: ' . $e->getMessage(),
+                        $e->getFile(), $e->getLine(), $e->getTraceAsString(),
+                        ['user_id' => $uid]);
+                } else {
+                    error_log("delete_user_data hook failed for user_id=$uid: " . $e->getMessage());
+                }
+            }
+        }
+    }
+
+    // 2. Remove on-disk files referenced from data_export_request (each row
+    //    has a file_path — wipe the file before the DB row goes).
+    $r = db_query_prepared("SELECT file_path FROM data_export_request WHERE user_id = ? AND file_path IS NOT NULL", [$uid]);
+    while ($row = db_fetch($r)) {
+        $p = $row['file_path'] ?? '';
+        if ($p && is_file($p)) { @unlink($p); }
+    }
+
+    // 3. Remove the user's homedir (stored on the shard's user_profile.homedir).
+    if ($shard_id) {
+        prime_shard($shard_id);
+        $pr = db_query_shard($shard_id, "SELECT homedir FROM user_profile WHERE user_id = '$uid'");
+        $prow = $pr ? db_fetch($pr) : null;
+        $homedir = $prow['homedir'] ?? '';
+        if ($homedir && is_dir($homedir)) {
+            _delete_user_data_rmdir_recursive($homedir);
+        }
+    }
+
+    // 4. Wipe admin shard tables (per-user rows).
+    if ($shard_id) {
+        prime_shard($shard_id);
+        foreach ([
+            'push_subscription',
+            'notification_preference',
+            'user_action_log',
+            'user_action_summary',
+            'notification',
+            'user_profile',
+        ] as $tbl) {
+            db_query_shard($shard_id, "DELETE FROM `$tbl` WHERE user_id = '$uid'");
+        }
+    }
+
+    // 5. Wipe admin main tables (per-user rows). Order: dependents first,
+    //    user row last so foreign key-style joins still resolve.
+    foreach ([
+        'user_consent',
+        'login_history',
+        'device',
+        'account_deletion_request',
+        'data_export_request',
+        'api_key',
+        'forgot',
+        'notification',
+    ] as $tbl) {
+        db_query("DELETE FROM `$tbl` WHERE user_id = '$uid'");
+    }
+
+    // 6. Finally, the user row itself.
+    db_query("DELETE FROM user WHERE user_id = '$uid'");
+}
+
+/**
+ * Recursively delete a directory. Internal helper for delete_user_data().
+ * Refuses paths that don't look like a homedir (must contain '/home/').
+ */
+function _delete_user_data_rmdir_recursive($dir) {
+    if (!is_dir($dir)) return;
+    // Safety: only remove paths that live under a /home/ bucket — homedirs
+    // are bucketed under $files_location . 'home/'. Refusing other shapes
+    // makes a config typo or stray value impossible to weaponise.
+    if (strpos($dir, '/home/') === false) {
+        error_log("delete_user_data: refusing to rmdir non-home path: $dir");
+        return;
+    }
+    $items = @scandir($dir);
+    if (!is_array($items)) return;
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') continue;
+        $path = rtrim($dir, '/') . '/' . $item;
+        if (is_dir($path) && !is_link($path)) {
+            _delete_user_data_rmdir_recursive($path);
+        } else {
+            @unlink($path);
+        }
+    }
+    @rmdir($dir);
+}
