@@ -171,6 +171,7 @@ if (($action ?? null) == 'apiUpdateChangeRequest') {
             if (isset($_POST['priority']))     $fields['priority']     = $_POST['priority'];
             if (isset($_POST['assigned_to']))  $fields['assigned_to']  = $_POST['assigned_to'];
             if (isset($_POST['request_type'])) $fields['request_type'] = $_POST['request_type'];
+            if (isset($_POST['source_app']))   $fields['source_app']   = $_POST['source_app'];
 
             if (empty($fields)) {
                 $_SESSION['error'] = 'No fields to update.';

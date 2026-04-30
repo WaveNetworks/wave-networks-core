@@ -318,7 +318,7 @@ function update_change_request($id, $fields) {
 
     $sets = [];
 
-    $allowed = ['title', 'description', 'status', 'priority', 'assigned_to', 'request_type'];
+    $allowed = ['title', 'description', 'status', 'priority', 'assigned_to', 'request_type', 'source_app'];
     foreach ($allowed as $col) {
         if (isset($fields[$col])) {
             if ($col === 'assigned_to' && $fields[$col] === '') {
