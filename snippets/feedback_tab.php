@@ -47,6 +47,12 @@ if (empty($_SESSION['user_id'])) return;
                 <small class="text-muted">
                     <i class="bi bi-info-circle me-1"></i>Page and user info captured automatically.
                 </small>
+                <div class="mt-1 px-2 py-1 bg-light rounded" style="font-size:0.75rem;">
+                    <span class="text-muted d-block text-truncate" id="fbCapturedUrl" title=""></span>
+                    <?php if (!empty($_SESSION['user_id'])) { ?>
+                    <span class="text-muted d-block"><?= h(trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? '')) . ' <' . ($_SESSION['email'] ?? '') . '>') ?></span>
+                    <?php } ?>
+                </div>
             </div>
             <button class="btn btn-primary w-100" id="fbSubmitBtn" onclick="submitFeedbackTab()">
                 <i class="bi bi-send me-1"></i>Submit Feedback
@@ -62,6 +68,14 @@ if (empty($_SESSION['user_id'])) return;
 </div>
 
 <script>
+(function() {
+    var urlEl = document.getElementById('fbCapturedUrl');
+    if (urlEl) {
+        urlEl.textContent = window.location.href;
+        urlEl.title = window.location.href;
+    }
+})();
+
 function submitFeedbackTab() {
     var message = document.getElementById('fbMessage').value.trim();
     if (!message) {
