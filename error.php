@@ -27,10 +27,13 @@ try {
     include_once(__DIR__ . '/include/common_auth.php');
     $branding = get_branding();
 
-    // Log to error_log DB table for security monitoring
-    if (function_exists('log_error_to_db')) {
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
-        $method = $_SERVER['REQUEST_METHOD'] ?? '';
+    // Log to error_log DB table for security monitoring (skip known noise patterns)
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    $method = $_SERVER['REQUEST_METHOD'] ?? '';
+    // Browser DevTools auto-fetch source maps for vendored CSS/JS; these 404s
+    // are not real errors and just spam the security monitor.
+    $is_noise = ($status === 404 && preg_match('#\.(css|js)\.map($|\?)#', $uri));
+    if (function_exists('log_error_to_db') && !$is_noise) {
         $msg = "HTTP $status: $method $uri";
         log_error_to_db('WARNING', $msg, __FILE__, 0, null);
     }
