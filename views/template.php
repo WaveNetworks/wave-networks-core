@@ -58,7 +58,7 @@
                 <i class="bi bi-people sidebar-icon"></i>
                 <span class="sidebar-text">Users</span>
             </a>
-            <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration', 'error_log', 'api_keys']); ?>
+            <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration', 'error_log', 'api_keys', 'onboarding_tours']); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#settingsMenu" role="button"
                aria-expanded="<?= $settingsOpen ? 'true' : 'false' ?>" aria-controls="settingsMenu">
@@ -88,6 +88,9 @@
                     </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'api_keys' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=api_keys">
                         <span class="sidebar-text">API Keys</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'onboarding_tours' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=onboarding_tours">
+                        <span class="sidebar-text">Onboarding Tours</span>
                     </a>
                 </nav>
             </div>
@@ -197,6 +200,12 @@
                         <li><span class="dropdown-item-text small text-muted"><?= h($_SESSION['email'] ?? '') ?></span></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="index.php?page=account_security"><i class="bi bi-shield-lock me-2"></i>Account & Security</a></li>
+                        <li>
+                            <form method="post" class="d-inline">
+                                <input type="hidden" name="action" value="tourRestart">
+                                <button type="submit" class="dropdown-item"><i class="bi bi-compass me-2"></i>Restart tour</button>
+                            </form>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form method="post" class="d-inline">
@@ -267,6 +276,52 @@
 <script src="../assets/js/color-mode.js"></script>
 <script src="../assets/js/theme.js"></script>
 <script src="../assets/js/notifications.js"></script>
+<?php
+// REGION: onboarding tour bootstrap
+if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id'])) {
+    $__previewSlug = $_GET['preview_tour'] ?? '';
+    $__onb = null;
+    if ($__previewSlug !== '' && function_exists('has_role') && has_role('admin')) {
+        $__s = sanitize($__previewSlug, SQL);
+        $__t = db_fetch(db_query("SELECT * FROM onboarding_tour WHERE slug = '$__s'"));
+        if ($__t) {
+            $__tid = (int)$__t['tour_id'];
+            $__steps = db_fetch_all(db_query(
+                "SELECT * FROM onboarding_tour_step WHERE tour_id = '$__tid' ORDER BY step_order ASC, step_id ASC"
+            )) ?: [];
+            $__onb = ['tour' => $__t, 'steps' => $__steps, 'state' => ['status'=>'not_started','current_step'=>0], 'preview' => true];
+        }
+    } else {
+        $__onb = get_active_tour_for_user($_SESSION['user_id'], $_SESSION['shard_id'] ?? '');
+    }
+    if ($__onb) {
+        $__payload = [
+            'tour'         => [
+                'slug'                  => $__onb['tour']['slug'],
+                'name'                  => $__onb['tour']['name'],
+                'welcome_title'         => $__onb['tour']['welcome_title'],
+                'welcome_body_md'       => $__onb['tour']['welcome_body_md'],
+                'welcome_cta_primary'   => $__onb['tour']['welcome_cta_primary'],
+                'welcome_cta_secondary' => $__onb['tour']['welcome_cta_secondary'],
+            ],
+            'steps'        => array_map(function ($s) {
+                return [
+                    'selector' => $s['selector'],
+                    'title'    => $s['title'],
+                    'body_md'  => $s['body_md'],
+                    'position' => $s['position'],
+                    'action'   => $s['action'],
+                ];
+            }, $__onb['steps']),
+            'status'       => $__onb['state']['status'] ?? 'not_started',
+            'current_step' => (int)($__onb['state']['current_step'] ?? 0),
+            'preview'      => !empty($__onb['preview']),
+        ];
+        echo "\n<script>window.WN_ONBOARDING = " . json_encode($__payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ";</script>\n";
+        echo '<script src="../assets/js/onboarding.js?v=20260506"></script>' . "\n";
+    }
+}
+?>
 <?php include(__DIR__ . '/../snippets/feedback_tab.php'); ?>
 </body>
 </html>

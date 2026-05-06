@@ -75,6 +75,8 @@ $branding = get_branding();
                 <p><strong>SMTP:</strong> <?= !empty($smtp_host) ? h($smtp_host) : '<span class="text-muted">Not configured</span>' ?></p>
                 <p><strong>reCAPTCHA:</strong> <?= recaptcha_enabled() ? 'Enabled' : '<span class="text-muted">Disabled</span>' ?></p>
                 <p><strong>Files Location:</strong> <code><?= h($files_location ?? 'Not set') ?></code></p>
+                <hr>
+                <p class="mb-0"><a href="index.php?page=onboarding_tours"><i class="bi bi-compass me-1"></i>Manage onboarding tours</a></p>
             </div>
         </div>
     </div>

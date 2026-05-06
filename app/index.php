@@ -38,6 +38,7 @@ $views = [
     'api_keys'                 => __DIR__ . '/../views/api_keys.php',
     'use_cases'                => __DIR__ . '/../views/use_cases.php',
     'account_security'         => __DIR__ . '/../views/account_security.php',
+    'onboarding_tours'         => __DIR__ . '/../views/onboarding_tours.php',
 ];
 
 if (isset($views[$page]) && file_exists($views[$page])) {

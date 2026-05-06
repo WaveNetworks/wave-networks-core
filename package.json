@@ -1,0 +1,9 @@
+{
+  "name": "wave-networks-core-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frontend dependencies for the wave-networks-core admin. The shipped tour player in assets/js/onboarding.js is self-contained today; driver.js is declared here so a future bundling step can swap the player implementation without changing the data contract.",
+  "dependencies": {
+    "driver.js": "^1.3.1"
+  }
+}
