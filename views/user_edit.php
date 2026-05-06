@@ -35,6 +35,7 @@ $login_history     = function_exists('get_login_history') ? get_login_history($u
 $active_devices    = function_exists('get_user_devices') ? get_user_devices($user_id) : [];
 $pending_deletion  = function_exists('get_pending_deletion') ? get_pending_deletion($user_id) : null;
 $latest_export     = function_exists('get_latest_export') ? get_latest_export($user_id) : null;
+$email_schedule    = function_exists('get_user_email_schedule') ? get_user_email_schedule($user_id) : ['scheduled' => [], 'enrollments' => []];
 
 $active_tab = $_GET['tab'] ?? 'profile';
 ?>
@@ -80,6 +81,15 @@ $active_tab = $_GET['tab'] ?? 'profile';
             <i class="bi bi-shield-check me-1"></i> Data & Deletion
             <?php if ($pending_deletion) { ?>
             <span class="badge bg-danger">Pending</span>
+            <?php } ?>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link <?= $active_tab === 'email' ? 'active' : '' ?>" href="?page=user_edit&id=<?= h($user_id) ?>&tab=email">
+            <i class="bi bi-envelope-paper me-1"></i> Email Schedule
+            <?php $emailPending = count($email_schedule['scheduled']) + count($email_schedule['enrollments']); ?>
+            <?php if ($emailPending > 0) { ?>
+            <span class="badge bg-info"><?= (int)$emailPending ?></span>
             <?php } ?>
         </a>
     </li>
@@ -526,6 +536,75 @@ $active_tab = $_GET['tab'] ?? 'profile';
                 <p class="text-muted mb-0"><i class="bi bi-check-circle me-1"></i> No pending deletion request.</p>
                 <?php } ?>
             </div>
+        </div>
+    </div>
+</div>
+<?php } ?>
+
+<?php if ($active_tab === 'email') { ?>
+<!-- ═══ EMAIL SCHEDULE TAB ═══ -->
+<div class="row">
+    <div class="col-md-7">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-envelope-paper me-1"></i> Pending scheduled emails</h6></div>
+            <?php if (empty($email_schedule['scheduled'])) { ?>
+            <div class="card-body text-muted">No pending sends for this user.</div>
+            <?php } else { ?>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Template</th><th>Scheduled for</th><th>Skip if</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($email_schedule['scheduled'] as $s) { ?>
+                        <tr>
+                            <td><code class="small"><?= h($s['template_slug']) ?></code></td>
+                            <td class="small"><?= h($s['scheduled_for']) ?></td>
+                            <td class="small"><?= $s['skip_event'] ? '<code>' . h($s['skip_event']) . '</code>' : '<span class="text-muted">—</span>' ?></td>
+                            <td class="text-end">
+                                <form method="post" class="d-inline" onsubmit="return confirm('Cancel this scheduled email?')">
+                                    <input type="hidden" name="action" value="cancelScheduledEmail">
+                                    <input type="hidden" name="scheduled_id" value="<?= (int)$s['scheduled_id'] ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> Cancel</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <?php } ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php } ?>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-broadcast me-1"></i> Active drip enrollments</h6></div>
+            <?php if (empty($email_schedule['enrollments'])) { ?>
+            <div class="card-body text-muted">Not enrolled in any active campaigns.</div>
+            <?php } else { ?>
+            <ul class="list-group list-group-flush">
+                <?php foreach ($email_schedule['enrollments'] as $e) { ?>
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <code class="small"><?= h($e['campaign_slug']) ?></code>
+                            <div class="small text-muted">
+                                Step <?= (int)$e['current_step'] ?>
+                                <?php if ($e['next_send_at']) { ?>
+                                · next: <?= h($e['next_send_at']) ?>
+                                <?php } ?>
+                            </div>
+                        </div>
+                        <form method="post" onsubmit="return confirm('Unenroll from <?= h($e['campaign_slug']) ?>? Pending sends will be cancelled.')">
+                            <input type="hidden" name="action" value="cancelDripEnrollment">
+                            <input type="hidden" name="user_id" value="<?= (int)$user_id ?>">
+                            <input type="hidden" name="campaign_slug" value="<?= h($e['campaign_slug']) ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i></button>
+                        </form>
+                    </div>
+                </li>
+                <?php } ?>
+            </ul>
+            <?php } ?>
         </div>
     </div>
 </div>
