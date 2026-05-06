@@ -348,7 +348,13 @@ if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id']))
             'current_step' => (int)($__onb['state']['current_step'] ?? 0),
             'preview'      => !empty($__onb['preview']),
         ];
-        echo "\n<script>window.WN_ONBOARDING = " . json_encode($__payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ";</script>\n";
+        // JSON_HEX_TAG/AMP/APOS/QUOT keep tour strings (welcome_body_md, step body_md, etc.)
+        // from breaking out of the inline <script> — a literal "</script>" or stray quote
+        // in admin-edited markdown was triggering "Unexpected token }" SyntaxErrors here.
+        echo "\n<script>window.WN_ONBOARDING = " . json_encode(
+            $__payload,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES
+        ) . ";</script>\n";
         echo '<script src="../assets/js/onboarding.js?v=20260506"></script>' . "\n";
     }
 }
