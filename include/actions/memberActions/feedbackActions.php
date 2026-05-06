@@ -25,6 +25,24 @@ if (($action ?? null) == 'submitFeedback') {
             'user_role'   => get_user_role_label(),
         ];
 
+        // Feedback widget v2: screenshot + lightweight page context.
+        // Capture columns are NULL-safe in submit_feedback() — missing fields
+        // just preserve the legacy submission shape.
+        if (!empty($_POST['screenshot'])) {
+            $opts['screenshot_b64'] = $_POST['screenshot'];
+        }
+        if (!empty($_POST['context_json'])) {
+            $opts['context_json'] = $_POST['context_json'];
+            // Mirror viewport / capture_url out of the bundle into typed columns
+            // so admin queries don't need JSON_EXTRACT for the common case.
+            $ctx = json_decode($_POST['context_json'], true);
+            if (is_array($ctx)) {
+                if (isset($ctx['viewport_w'])) $opts['viewport_w'] = $ctx['viewport_w'];
+                if (isset($ctx['viewport_h'])) $opts['viewport_h'] = $ctx['viewport_h'];
+                if (!empty($ctx['url']))       $opts['capture_url'] = $ctx['url'];
+            }
+        }
+
         $fid = submit_feedback($message, $type, $opts);
         if ($fid !== false) {
             $data['feedback_id'] = $fid;
@@ -105,6 +123,29 @@ if (($action ?? null) == 'dismissFeedback') {
             $_SESSION['success'] = 'Feedback dismissed.';
         } else {
             $_SESSION['error'] = 'Failed to dismiss feedback: ' . db_error();
+        }
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
+// ── Delete screenshot from a feedback row (admin) ──────────
+// Lets admins purge a capture if PII slipped through, without nuking
+// the feedback message itself.
+if (($action ?? null) == 'deleteFeedbackScreenshot') {
+    $errs = array();
+
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))    { $errs['role'] = 'Admin access required.'; }
+
+    $fid = intval($_POST['feedback_id'] ?? 0);
+    if ($fid <= 0) { $errs['id'] = 'Feedback ID required.'; }
+
+    if (count($errs) <= 0) {
+        if (delete_feedback_screenshot($fid)) {
+            $_SESSION['success'] = 'Screenshot deleted.';
+        } else {
+            $_SESSION['error'] = 'Failed to delete screenshot.';
         }
     } else {
         $_SESSION['error'] = implode('<br>', $errs);

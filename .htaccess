@@ -19,6 +19,9 @@ ErrorDocument 500 /admin/error.php
     # Serve branding assets from files directory via branding.php proxy
     RewriteRule ^branding/(.+)$ branding.php?f=$1 [L,QSA]
 
+    # Serve admin feedback screenshots (admin-only auth in PHP)
+    RewriteRule ^feedback/screenshot/([0-9]+)$ feedback_screenshot.php?id=$1 [L,QSA]
+
     # Pretty URLs (optional - index.php handles routing)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

@@ -245,6 +245,34 @@ $stats = get_feedback_stats();
     </div>
 </div>
 
+<!-- ── Screenshot viewer (admin) ─────────────────────────────────────────── -->
+<div class="modal fade" id="screenshotModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Feedback capture</h5>
+                <div class="ms-auto d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnDeleteScreenshot" onclick="doDeleteScreenshot()">
+                        <i class="bi bi-trash"></i> Delete capture
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-lg-8 text-center bg-light py-3">
+                        <img id="screenshotImg" alt="capture" style="max-width:100%; max-height:75vh; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div class="col-lg-4">
+                        <h6>Context</h6>
+                        <dl class="mb-0 small" id="screenshotContextList"></dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ── CR Detail Modal ─────────────────────────────────────────────────── -->
 <div class="modal fade" id="crDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -340,9 +368,20 @@ $stats = get_feedback_stats();
                             actions += '<button class="btn btn-sm btn-outline-dark" onclick="doDismiss(' + row.feedback_id + ')" title="Dismiss"><i class="bi bi-x-lg"></i></button>';
                         }
 
+                        // Thumbnail + viewport hint, only when a capture exists.
+                        var thumb = '';
+                        if (row.screenshot_path) {
+                            var src = 'feedback/screenshot/' + row.feedback_id;
+                            var vp = (row.viewport_w && row.viewport_h) ? (row.viewport_w + '×' + row.viewport_h) : '';
+                            thumb = '<img src="' + src + '" alt="capture" ' +
+                                'onclick="viewFeedbackScreenshot(' + row.feedback_id + ')" ' +
+                                'title="Click to view full size' + (vp ? ' (' + vp + ')' : '') + '" ' +
+                                'style="width:48px; height:48px; object-fit:cover; border:1px solid #ddd; border-radius:3px; cursor:pointer; margin-right:6px; vertical-align:middle;">';
+                        }
+
                         return '<tr>' +
                             '<td>' + (typeBadges[row.feedback_type] || '') + '</td>' +
-                            '<td><small>' + msg + '</small>' + (row.page_url ? '<br><a href="' + esc(row.page_url) + '" class="text-muted small" target="_blank">' + esc(row.page_url).substring(0, 50) + '</a>' : '') + '</td>' +
+                            '<td>' + thumb + '<small>' + msg + '</small>' + (row.page_url ? '<br><a href="' + esc(row.page_url) + '" class="text-muted small" target="_blank">' + esc(row.page_url).substring(0, 50) + '</a>' : '') + '</td>' +
                             '<td><small>' + esc(row.user_email || '—') + '<br><span class="text-muted">' + esc(row.user_role || '') + '</span></small></td>' +
                             '<td class="text-center"><span class="badge bg-light text-dark">' + (row.upvotes || 0) + '</span></td>' +
                             '<td>' + (statusBadges[row.status] || '') + (row.change_request_id ? ' <button class="badge bg-warning text-dark border-0 ms-1 p-1" style="cursor:pointer" onclick="viewCRDetail(' + row.change_request_id + ')" title="View change request">CR #' + row.change_request_id + '</button>' : '') + '</td>' +
@@ -674,6 +713,63 @@ $stats = get_feedback_stats();
                     html += '</tbody></table>';
                     document.getElementById('crDetailBody').innerHTML = html;
                 }
+            });
+    };
+
+    // ── Screenshot viewer ────────────────────────────────────
+
+    var _screenshotFid = null;
+
+    window.viewFeedbackScreenshot = function (fid) {
+        var row = fbData[fid] || {};
+        _screenshotFid = fid;
+
+        document.getElementById('screenshotImg').src = 'feedback/screenshot/' + fid + '?t=' + Date.now();
+
+        // Render context list — typed columns + parsed context_json.
+        var ctx = {};
+        if (row.context_json) {
+            try { ctx = JSON.parse(row.context_json) || {}; } catch (e) { ctx = {}; }
+        }
+        var rows = [];
+        function add(k, v) {
+            if (v === null || v === undefined || v === '') return;
+            rows.push('<dt class="col-5 text-muted">' + esc(k) + '</dt><dd class="col-7 text-break">' + esc(v) + '</dd>');
+        }
+        add('URL', row.capture_url || ctx.url || row.page_url);
+        add('Page title', ctx.title);
+        var vp = (row.viewport_w && row.viewport_h) ? (row.viewport_w + ' × ' + row.viewport_h) : (ctx.viewport_w && ctx.viewport_h ? (ctx.viewport_w + ' × ' + ctx.viewport_h) : '');
+        add('Viewport', vp);
+        add('Scroll Y', ctx.scroll_y);
+        add('Browser', ctx.user_agent);
+        if (ctx.custom && typeof ctx.custom === 'object') {
+            for (var k in ctx.custom) {
+                if (Object.prototype.hasOwnProperty.call(ctx.custom, k)) {
+                    var val = ctx.custom[k];
+                    if (val !== null && typeof val === 'object') val = JSON.stringify(val);
+                    add('custom.' + k, val);
+                }
+            }
+        }
+        add('User', row.user_email);
+        add('Submitted', row.created);
+
+        document.getElementById('screenshotContextList').innerHTML = rows.join('') || '<dd class="text-muted">No context recorded.</dd>';
+        new bootstrap.Modal(document.getElementById('screenshotModal')).show();
+    };
+
+    window.doDeleteScreenshot = function () {
+        if (!_screenshotFid) return;
+        if (!confirm('Delete this screenshot? The feedback message itself will be kept.')) return;
+        var fd = new FormData();
+        fd.append('action', 'deleteFeedbackScreenshot');
+        fd.append('feedback_id', _screenshotFid);
+        fetch('../api/index.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j.error) { alert(j.error); return; }
+                bootstrap.Modal.getInstance(document.getElementById('screenshotModal')).hide();
+                loadFeedback(fbPage);
             });
     };
 

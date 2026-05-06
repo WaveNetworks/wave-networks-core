@@ -29,6 +29,110 @@ function detect_source_app_from_url() {
     return 'admin';
 }
 
+// ─── Feedback Screenshots ───────────────────────────────────────────────────
+
+/**
+ * Resolve $files_location/feedback/screenshots/ regardless of how config was loaded.
+ * Mirrors branding.php fallback so callers outside common.php still work.
+ * @return string|null absolute base directory, or null if config missing
+ */
+function feedback_screenshots_base_dir() {
+    global $files_location;
+    if (empty($files_location)) {
+        if (getenv('FILES_LOCATION')) {
+            $files_location = getenv('FILES_LOCATION');
+        } else {
+            $files_location = __DIR__ . '/../../../../files/';
+        }
+    }
+    if (empty($files_location)) return null;
+    $base = rtrim($files_location, '/') . '/feedback/screenshots/';
+    if (!is_dir($base)) { @mkdir($base, 0755, true); }
+    return $base;
+}
+
+/**
+ * Decode + persist a base64 JPEG screenshot for a feedback row.
+ * Stored as feedback/screenshots/YYYY-MM/<feedback_id>.jpg, above webroot.
+ * EXIF stripped via imagejpeg() re-encode.
+ *
+ * @param int    $feedback_id
+ * @param string $b64  Base64 JPEG (with or without data:image/jpeg;base64, prefix)
+ * @return string|false Relative path written (YYYY-MM/<id>.jpg) or false on failure
+ */
+function save_feedback_screenshot($feedback_id, $b64) {
+    $feedback_id = intval($feedback_id);
+    if ($feedback_id <= 0 || empty($b64)) return false;
+
+    if (preg_match('#^data:image/[a-z]+;base64,#i', $b64)) {
+        $b64 = preg_replace('#^data:image/[a-z]+;base64,#i', '', $b64);
+    }
+    $bin = base64_decode($b64, true);
+    if ($bin === false) return false;
+
+    // 4 MB hard cap (configurable later if needed)
+    if (strlen($bin) > 4 * 1024 * 1024) return false;
+
+    // Validate the bytes are actually a real image we can decode
+    $img = @imagecreatefromstring($bin);
+    if ($img === false) return false;
+
+    $w = imagesx($img);
+    $h = imagesy($img);
+    // Belt-and-braces cap at 4096px on longest side (client clamps to 2x DPR already)
+    if ($w > 4096 || $h > 4096) {
+        $scale = 4096 / max($w, $h);
+        $nw = (int) floor($w * $scale);
+        $nh = (int) floor($h * $scale);
+        $resized = imagecreatetruecolor($nw, $nh);
+        imagecopyresampled($resized, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+        imagedestroy($img);
+        $img = $resized;
+    }
+
+    $base = feedback_screenshots_base_dir();
+    if (!$base) { imagedestroy($img); return false; }
+
+    $bucket = date('Y-m');
+    $dir = $base . $bucket . '/';
+    if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+
+    $filename = $feedback_id . '.jpg';
+    $abs = $dir . $filename;
+    $ok = @imagejpeg($img, $abs, 85);
+    imagedestroy($img);
+    if (!$ok) return false;
+
+    return $bucket . '/' . $filename;
+}
+
+/**
+ * Delete the screenshot file for a feedback row and null its screenshot_path.
+ * Used when an admin spots PII in a capture.
+ *
+ * @param int $feedback_id
+ * @return bool
+ */
+function delete_feedback_screenshot($feedback_id) {
+    $feedback_id = intval($feedback_id);
+    if ($feedback_id <= 0) return false;
+
+    $row = get_feedback_by_id($feedback_id);
+    if (!$row) return false;
+
+    if (!empty($row['screenshot_path'])) {
+        $base = feedback_screenshots_base_dir();
+        // Defensive: never let a tampered path escape the base dir.
+        $safe = preg_replace('#[^A-Za-z0-9/_.\-]#', '', $row['screenshot_path']);
+        if ($base && $safe && strpos($safe, '..') === false) {
+            $abs = $base . $safe;
+            if (is_file($abs)) @unlink($abs);
+        }
+    }
+
+    return (bool) db_query("UPDATE feedback SET screenshot_path = NULL WHERE feedback_id = '$feedback_id'");
+}
+
 // ─── Feedback Submission ────────────────────────────────────────────────────
 
 /**
@@ -70,11 +174,27 @@ function submit_feedback($message, $type = 'general', $opts = []) {
 
     $uid_col = $user_id !== null ? "'$user_id'" : 'NULL';
 
-    $r = db_query("INSERT INTO feedback (feedback_type, source_app, page_url, user_id, user_role, message, context_json)
-                    VALUES ('$s_type', '$s_source', $s_page, $uid_col, '$user_role', '$s_message', $context_json)");
+    // Capture columns from the page-context bundle (feedback widget v2)
+    $vw          = isset($opts['viewport_w']) ? intval($opts['viewport_w']) : null;
+    $vh          = isset($opts['viewport_h']) ? intval($opts['viewport_h']) : null;
+    $s_capture   = isset($opts['capture_url']) ? "'" . sanitize($opts['capture_url'], SQL) . "'" : 'NULL';
+    $s_vw        = ($vw !== null && $vw > 0 && $vw < 65535) ? "'$vw'" : 'NULL';
+    $s_vh        = ($vh !== null && $vh > 0 && $vh < 65535) ? "'$vh'" : 'NULL';
+
+    $r = db_query("INSERT INTO feedback (feedback_type, source_app, page_url, user_id, user_role, message, context_json, viewport_w, viewport_h, capture_url)
+                    VALUES ('$s_type', '$s_source', $s_page, $uid_col, '$user_role', '$s_message', $context_json, $s_vw, $s_vh, $s_capture)");
 
     if (!$r) return false;
     $feedback_id = (int) db_insert_id();
+
+    // Persist screenshot if provided (base64 JPEG, optionally with data: prefix)
+    if (!empty($opts['screenshot_b64'])) {
+        $rel_path = save_feedback_screenshot($feedback_id, $opts['screenshot_b64']);
+        if ($rel_path) {
+            $s_path = sanitize($rel_path, SQL);
+            db_query("UPDATE feedback SET screenshot_path = '$s_path' WHERE feedback_id = '$feedback_id'");
+        }
+    }
 
     // Notify the user that their feedback was received
     if ($user_id !== null) {
