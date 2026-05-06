@@ -144,6 +144,37 @@
                 </nav>
             </div>
             <?php } ?>
+
+            <?php
+            // Analytics — visible to anyone whose scope is broader than 'self'/'none'.
+            // Sits OUTSIDE the has_role('admin') gate so coaches/producers can reach it.
+            $analyticsScope = function_exists('get_visible_user_scope')
+                ? get_visible_user_scope($_SESSION['user_id'] ?? 0)
+                : ['type' => 'none'];
+            $analyticsVisible = in_array($analyticsScope['type'], ['all', 'company', 'coached'], true);
+            $analyticsOpen    = in_array($page ?? '', ['analytics_overview', 'analytics_activity', 'analytics_cohorts']);
+            if ($analyticsVisible) { ?>
+            <a class="nav-link text-white sidebar-parent"
+               data-bs-toggle="collapse" href="#analyticsMenu" role="button"
+               aria-expanded="<?= $analyticsOpen ? 'true' : 'false' ?>" aria-controls="analyticsMenu">
+                <i class="bi bi-bar-chart sidebar-icon"></i>
+                <span class="sidebar-text">Analytics</span>
+                <i class="bi bi-chevron-down sidebar-caret sidebar-text ms-auto"></i>
+            </a>
+            <div class="collapse <?= $analyticsOpen ? 'show' : '' ?>" id="analyticsMenu">
+                <nav class="nav flex-column sidebar-submenu">
+                    <a class="nav-link text-white <?= ($page ?? '') === 'analytics_overview' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=analytics_overview">
+                        <span class="sidebar-text">Overview</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'analytics_activity' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=analytics_activity">
+                        <span class="sidebar-text">Activity</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'analytics_cohorts' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=analytics_cohorts">
+                        <span class="sidebar-text">Cohorts</span>
+                    </a>
+                </nav>
+            </div>
+            <?php } ?>
         </nav>
         <div class="sidebar-footer text-center d-none d-md-block p-2 border-top border-secondary border-opacity-25">
             <button class="btn btn-sm btn-outline-light rounded-circle" id="sidebarToggle" type="button">
