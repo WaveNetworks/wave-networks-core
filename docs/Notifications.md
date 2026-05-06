@@ -122,21 +122,45 @@ set_notification_preference($user_id, $shard_id, 'system_updates', 'daily', true
 
 ### VAPID Configuration
 
-Generate VAPID keys:
+Generate VAPID keys (run from the `admin/` directory):
 
 ```bash
-php vendor/bin/minishlink-web-push generate-keys
+php -r 'require "vendor/autoload.php"; print_r(Minishlink\WebPush\VAPID::createVapidKeys());'
+```
+
+> The old `php vendor/bin/minishlink-web-push generate-keys` helper was removed in
+> minishlink/web-push v9 — call `VAPID::createVapidKeys()` directly as above.
+
+Output is two base64url strings:
+
+```
+[publicKey]  => BIjK...
+[privateKey] => bXkR...
 ```
 
 Add to `config/config.php`:
 
 ```php
 $vapid_subject     = 'mailto:admin@yourdomain.com';
-$vapid_public_key  = 'BIjK...';     // from generate-keys output
-$vapid_private_key = 'bXkR...';     // from generate-keys output
+$vapid_public_key  = 'BIjK...';
+$vapid_private_key = 'bXkR...';
 ```
 
-Or via environment variables: `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`.
+**Where to put them depends on the deployment:**
+
+- **Shared hosting / standard install** — edit `admin/config/config.php`. The env-var
+  fallback in `common.php` only runs when `config.php` does **not** exist, so setting
+  `VAPID_*` env vars on a shared host is silently ignored.
+- **Docker** — set `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in the
+  container environment. (No `config.php` is shipped in the image.)
+
+After updating `config.php`, bounce PHP-FPM or `touch` the file so opcache reloads —
+otherwise `getVapidPublicKey` keeps returning the old empty string and the JS keeps
+showing "Push notifications are not configured on this server."
+
+Push subscription also requires the page to be served over **HTTPS** (or `localhost`).
+On plain HTTP the service worker never registers, so the Enable Push flow fails before
+it ever asks the server for the key.
 
 ### Service Worker
 
