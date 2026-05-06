@@ -42,6 +42,20 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'createApiKey'   => ['key_name'],                // not the key itself
     'sendFeedback'   => ['feedback_type'],           // not the message body
     'login'          => ['email'],                   // not password, not 2fa code
+
+    // ── elevateHER canonical progression events (Task #533) ──
+    // These are stable analytics names. Param keys are IDs/enums only —
+    // no free text, no PII. Add here when wiring a new progression event.
+    'assessment_started'   => ['resuming'],          // 0|1, was the session resumed
+    'assessment_completed' => ['placement_stage'],   // '00'..'10' stage key
+    'stage_viewed'         => ['stage'],             // '00'..'10'
+    'stage_advanced'       => ['from', 'to'],        // '00'..'10' numeric strings
+    'content_viewed'       => ['catalog_item_id'],   // catalog slug, not a title
+    'content_completed'    => ['catalog_item_id'],
+    'coach_added'          => ['coach_user_id'],     // numeric FK, no name/email
+    'coach_removed'        => ['coach_user_id'],
+    // alliance_pro_viewed has no params worth recording.
+
     // Add more here as actions ship.
 ];
 
