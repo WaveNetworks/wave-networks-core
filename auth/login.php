@@ -7,18 +7,32 @@ if (!empty($_SESSION['user_id'])) {
     exit;
 }
 
+// If the last error was the unconfirmed-email blocker, surface a resend form
+// pre-filled with the email the user just typed.
+$_show_resend = !empty($_SESSION['error']) && strpos($_SESSION['error'], 'confirm your email') !== false;
+$_typed_email = $_POST['email'] ?? '';
+
 $page_title = 'Login';
 ob_start();
 ?>
 
 <h4 class="card-title mb-3">Sign In</h4>
 
+<?php if ($_show_resend && $_typed_email) { ?>
+<form method="post" action="" class="mb-3 p-3 border rounded bg-light">
+    <input type="hidden" name="action" value="resendConfirmation">
+    <input type="hidden" name="email" value="<?= h($_typed_email) ?>">
+    <p class="small mb-2">Need a new confirmation link for <strong><?= h($_typed_email) ?></strong>?</p>
+    <button type="submit" class="btn btn-sm btn-outline-primary">Resend confirmation email</button>
+</form>
+<?php } ?>
+
 <form method="post" action="">
     <input type="hidden" name="action" value="login">
 
     <div class="mb-3">
         <label for="email" class="form-label">Email Address</label>
-        <input type="email" class="form-control" id="email" name="email" value="<?= h($_POST['email'] ?? '') ?>" required autofocus>
+        <input type="email" class="form-control" id="email" name="email" value="<?= h($_typed_email) ?>" required autofocus>
     </div>
 
     <div class="mb-3">
@@ -71,6 +85,21 @@ if ($saml_providers) { ?>
 
 <div class="text-center">
     <a href="forgot.php" class="small">Forgot your password?</a>
+</div>
+
+<div class="text-center mt-1">
+    <a href="#" class="small" data-bs-toggle="collapse" data-bs-target="#resendConfirmCollapse">Didn't get the confirmation email?</a>
+</div>
+
+<div class="collapse mt-2" id="resendConfirmCollapse">
+    <form method="post" action="" class="p-3 border rounded bg-light">
+        <input type="hidden" name="action" value="resendConfirmation">
+        <div class="mb-2">
+            <label for="resend_email" class="form-label small mb-1">Email address</label>
+            <input type="email" class="form-control form-control-sm" id="resend_email" name="email" value="<?= h($_typed_email) ?>" required>
+        </div>
+        <button type="submit" class="btn btn-sm btn-outline-primary">Resend confirmation email</button>
+    </form>
 </div>
 
 <?php

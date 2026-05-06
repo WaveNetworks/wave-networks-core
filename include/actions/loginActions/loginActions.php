@@ -77,7 +77,7 @@ if (($action ?? null) == 'login') {
             record_login($user['user_id'], 'password', 'success');
         }
 
-        // Remember me � reuse existing device from tracking cookie
+        // Remember me � reuse existing device from tracking cookie
         if ($remember === 'yes') {
             $device_id = $_SESSION['device_id'] ?? null;
             if (!$device_id) {
@@ -162,8 +162,8 @@ if (($action ?? null) == 'register') {
 
         $needs_confirm = ($mode === 'confirm') ? 0 : 1;
 
-        $r = db_query("INSERT INTO user (email, password, shard_id, is_confirmed, confirm_hash, created_date)
-                        VALUES ('" . sanitize($email, SQL) . "', '$hashed', '$shard_id', '$needs_confirm', '$confirmHash', NOW())");
+        $r = db_query("INSERT INTO user (email, password, shard_id, is_confirmed, confirm_hash, confirm_hash_created, created_date)
+                        VALUES ('" . sanitize($email, SQL) . "', '$hashed', '$shard_id', '$needs_confirm', '$confirmHash', NOW(), NOW())");
 
         if ($r) {
             $new_id = db_insert_id();
@@ -357,6 +357,44 @@ if (($action ?? null) == 'registerInvite') {
     if (count($errs) > 0) {
         $_SESSION['error'] = implode('<br>', $errs);
     }
+}
+
+// ─── RESEND CONFIRMATION ─────────────────────────────────────────────────────
+
+if (($action ?? null) == 'resendConfirmation') {
+    $email = trim($_POST['email'] ?? '');
+    $generic_msg = 'If an account exists for that address and needs confirmation, a new email has been sent.';
+
+    if (!valid_email($email)) {
+        $_SESSION['error'] = 'Please enter a valid email address.';
+    } else {
+        // Throttle: at most 1 resend per email per 5 minutes
+        $safe_email = sanitize($email, SQL);
+        $tr = db_fetch(db_query("SELECT last_sent_at FROM confirmation_resend_throttle WHERE email = '$safe_email'"));
+        if ($tr && strtotime($tr['last_sent_at']) > (time() - 300)) {
+            $_SESSION['error'] = 'Please wait a few minutes before requesting another email.';
+        } else {
+            // Look up user; only act on unconfirmed accounts. Always show generic
+            // message so callers can't enumerate which addresses are pending.
+            $user = get_user_by_email($email);
+            if ($user && empty($user['is_confirmed'])) {
+                $newHash = generateHashCode(100);
+                $uid = (int)$user['user_id'];
+                db_query("UPDATE user SET confirm_hash = '" . sanitize($newHash, SQL) . "', confirm_hash_created = NOW() WHERE user_id = '$uid'");
+                send_confirmation_email($email, $newHash);
+            }
+
+            // Record throttle for valid + unknown alike — keeps timing equal and
+            // prevents enumeration via differing rate-limit behavior.
+            db_query("INSERT INTO confirmation_resend_throttle (email, last_sent_at) VALUES ('$safe_email', NOW())
+                      ON DUPLICATE KEY UPDATE last_sent_at = NOW()");
+
+            $_SESSION['success'] = $generic_msg;
+        }
+    }
+
+    header('Location: login.php');
+    exit;
 }
 
 // ─── VERIFY 2FA ──────────────────────────────────────────────────────────────
