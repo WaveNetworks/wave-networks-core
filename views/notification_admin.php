@@ -5,9 +5,99 @@
  */
 $page_title = 'Notification Admin';
 $categories = get_notification_categories();
+
+// Push / VAPID setup state
+$vapid_pub_now = function_exists('get_vapid_public_key') ? get_vapid_public_key() : '';
+$vapid_subject_now = $vapid_subject ?? '';
+$vapid_env_managed = function_exists('vapid_is_env_managed') ? vapid_is_env_managed() : false;
+$vapid_writable    = function_exists('vapid_config_writable') ? vapid_config_writable() : false;
+$vapid_configured  = !empty($vapid_pub_now);
 ?>
 
 <h4 class="mb-4">Notification Management</h4>
+
+<!-- Push Setup (VAPID) -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-broadcast-pin me-1"></i> Web Push Setup (VAPID)</h6>
+        <span class="badge <?= $vapid_configured ? 'bg-success' : 'bg-secondary' ?>" id="vapidStatusBadge">
+            <?= $vapid_configured ? 'VAPID configured' : 'Not configured' ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <?php if ($vapid_env_managed) { ?>
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                <strong>Configured via environment.</strong>
+                VAPID keys are managed by the container environment (<code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code>).
+                Update them in your Docker / container env to rotate.
+            </div>
+        <?php } else { ?>
+            <p class="small text-muted mb-3">
+                Web Push needs a VAPID key pair signed by a contact (subject) URL.
+                Generate them once here — keys are written to
+                <code>admin/config/notifications_config.php</code> (gitignored) and the new public
+                key becomes available to <code>get_vapid_public_key()</code> immediately.
+            </p>
+
+            <?php if (!$vapid_writable) { ?>
+                <div class="alert alert-warning small mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    The config directory <code><?= h(realpath(__DIR__ . '/../config') ?: __DIR__ . '/../config') ?></code>
+                    is not writable by PHP. Generate will return the keys on screen for you to paste in by hand.
+                </div>
+            <?php } ?>
+
+            <form id="vapidGenerateForm" onsubmit="generateVapidKeys(event)">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Subject (mailto:) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="vapid_subject"
+                               id="vapidSubject"
+                               value="<?= h($vapid_subject_now) ?>"
+                               placeholder="mailto:admin@yourdomain.com" required>
+                        <div class="form-text small">Push services use this to contact you about delivery issues.</div>
+                    </div>
+                    <div class="col-md-6 d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-sm btn-primary" id="vapidGenerateBtn">
+                            <i class="bi bi-key"></i>
+                            <?= $vapid_configured ? 'Rotate Keys' : 'Generate VAPID Keys' ?>
+                        </button>
+                        <?php if ($vapid_configured) { ?>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="saveVapidSubject()">
+                            <i class="bi bi-check-lg"></i> Save Subject Only
+                        </button>
+                        <?php } ?>
+                    </div>
+                </div>
+            </form>
+
+            <?php if ($vapid_configured) { ?>
+                <hr>
+                <p class="small mb-1"><strong>Current public key</strong></p>
+                <code class="d-block small p-2 bg-light rounded text-break"><?= h($vapid_pub_now) ?></code>
+                <p class="small text-muted mt-2 mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Rotating keys invalidates all existing browser push subscriptions —
+                    they'll be cleaned up automatically the next time we try to send to them
+                    (the push service returns <code>410 Gone</code>). Users may need to
+                    re-enable push from their notification preferences.
+                </p>
+            <?php } ?>
+
+            <!-- Result panel for read-only file systems -->
+            <div id="vapidPasteFallback" class="mt-3 d-none">
+                <div class="alert alert-warning small mb-2">
+                    Keys generated but the config file could not be written. Copy the snippet below into <code><?= h(__DIR__ . '/../config/notifications_config.php') ?></code> by hand, then bounce PHP-FPM.
+                </div>
+                <textarea class="form-control form-control-sm font-monospace" rows="6" id="vapidPasteSnippet" readonly></textarea>
+                <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copyVapidSnippet()">
+                    <i class="bi bi-clipboard"></i> Copy snippet
+                </button>
+            </div>
+        <?php } ?>
+    </div>
+</div>
 
 <div class="row">
     <!-- Send Broadcast -->
@@ -225,5 +315,61 @@ function deleteCategory(id, name) {
             location.reload();
         }
     });
+}
+
+// ─── VAPID / Push Setup ─────────────────────────────────────────────────────
+
+function generateVapidKeys(e) {
+    e.preventDefault();
+    var subject = document.getElementById('vapidSubject').value.trim();
+    if (!subject) { return; }
+
+    var btn = document.getElementById('vapidGenerateBtn');
+    var alreadyConfigured = btn.textContent.indexOf('Rotate') !== -1;
+    if (alreadyConfigured && !confirm(
+        'Rotate VAPID keys?\n\n' +
+        'All existing browser push subscriptions will become invalid. ' +
+        'They self-clean via 410-Gone on the next send, but users may need to ' +
+        're-enable push from notification preferences.\n\n' +
+        'Continue?'
+    )) { return; }
+
+    btn.disabled = true;
+    var originalHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Generating…';
+
+    apiPost('generateVapidKeys', { vapid_subject: subject }, function(json) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+
+        if (json.error) { return; }
+
+        var r = json.results || {};
+        if (r.saved === false && r.paste_snippet) {
+            // Read-only FS path — show paste fallback
+            document.getElementById('vapidPasteSnippet').value = r.paste_snippet;
+            document.getElementById('vapidPasteFallback').classList.remove('d-none');
+        } else if (r.saved) {
+            // Reload so the public-key block + status badge re-render with the
+            // new bootstrap-loaded values.
+            setTimeout(function(){ location.reload(); }, 600);
+        }
+    });
+}
+
+function saveVapidSubject() {
+    var subject = document.getElementById('vapidSubject').value.trim();
+    if (!subject) { return; }
+    apiPost('saveVapidSubject', { vapid_subject: subject }, function(json) {
+        if (!json.error) {
+            // No reload needed — just confirm via toast that bs-init shows.
+        }
+    });
+}
+
+function copyVapidSnippet() {
+    var ta = document.getElementById('vapidPasteSnippet');
+    ta.select();
+    document.execCommand('copy');
 }
 </script>

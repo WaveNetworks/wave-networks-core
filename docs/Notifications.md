@@ -122,7 +122,21 @@ set_notification_preference($user_id, $shard_id, 'system_updates', 'daily', true
 
 ### VAPID Configuration
 
-Generate VAPID keys (run from the `admin/` directory):
+**Recommended: in-app setup.** Sign in as an admin, open
+**Notifications → Notification Admin** and use the **Web Push Setup (VAPID)** card:
+
+1. Enter a subject (e.g. `mailto:admin@yourdomain.com`).
+2. Click **Generate VAPID Keys**.
+3. The keys are written atomically to `admin/config/notifications_config.php`
+   (gitignored) and opcache is invalidated, so the new public key is live
+   immediately — no PHP-FPM restart required.
+4. Browsers can now subscribe via the Enable Push flow.
+
+Re-running **Rotate Keys** invalidates all existing subscriptions; they self-clean
+on the next send via the push service's `410 Gone` response.
+
+**Manual / read-only fallback.** If the config directory is not writable (or you
+prefer to manage keys by hand), generate them yourself:
 
 ```bash
 php -r 'require "vendor/autoload.php"; print_r(Minishlink\WebPush\VAPID::createVapidKeys());'
@@ -138,7 +152,9 @@ Output is two base64url strings:
 [privateKey] => bXkR...
 ```
 
-Add to `config/config.php`:
+Then either copy `admin/config/notifications_config.sample.php` to
+`admin/config/notifications_config.php` and fill in the values, or add the same
+three globals to `admin/config/config.php` directly:
 
 ```php
 $vapid_subject     = 'mailto:admin@yourdomain.com';
@@ -148,15 +164,21 @@ $vapid_private_key = 'bXkR...';
 
 **Where to put them depends on the deployment:**
 
-- **Shared hosting / standard install** — edit `admin/config/config.php`. The env-var
-  fallback in `common.php` only runs when `config.php` does **not** exist, so setting
+- **Shared hosting / standard install** — the in-app generator writes to
+  `admin/config/notifications_config.php`. If you can't use the UI, edit either
+  that partial or `admin/config/config.php` directly. The env-var fallback in
+  `common.php` only runs when `config.php` does **not** exist, so setting
   `VAPID_*` env vars on a shared host is silently ignored.
-- **Docker** — set `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in the
-  container environment. (No `config.php` is shipped in the image.)
+- **Docker** — set `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in
+  the container environment. The in-app **Generate** button is hidden in this
+  mode and the card shows "Configured via environment" instead. No `config.php`
+  is shipped in the image.
 
-After updating `config.php`, bounce PHP-FPM or `touch` the file so opcache reloads —
-otherwise `getVapidPublicKey` keeps returning the old empty string and the JS keeps
-showing "Push notifications are not configured on this server."
+When editing `config.php` (or `notifications_config.php`) by hand, bounce PHP-FPM
+or `touch` the file so opcache reloads — otherwise `getVapidPublicKey` keeps
+returning the old empty string and the JS keeps showing "Push notifications are
+not configured on this server." The in-app generator already does the equivalent
+via `opcache_invalidate()`.
 
 Push subscription also requires the page to be served over **HTTPS** (or `localhost`).
 On plain HTTP the service worker never registers, so the Enable Push flow fails before

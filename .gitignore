@@ -2,6 +2,7 @@
 config/config.php
 config/config.php.prod
 config/_notes/
+config/notifications_config.php
 
 # Deploy credentials (sample is committed)
 deploy_config.py
