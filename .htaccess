@@ -10,8 +10,8 @@ ErrorDocument 500 /admin/error.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # /admin/ directory index → redirect to login
-    RewriteRule ^$ /admin/auth/login.php [R=302,L]
+    # /admin/ directory index (and explicit /admin/index.php) → redirect to login
+    RewriteRule ^(index\.php)?$ /admin/auth/login.php [R=302,L]
 
     # Block access to sensitive directories
     RewriteRule ^(vendor|db_migrations|cron|tests|include|config|views|snippets|docker)(/|$) - [F,L]
