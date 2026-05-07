@@ -407,6 +407,14 @@ $trigger_events   = function_exists('list_email_trigger_events')   ? list_email_
 
 <?php if ($active_email_tab === 'campaigns') { ?>
 <!-- ═══ CAMPAIGNS TAB ═══ -->
+<div class="alert alert-info d-flex align-items-center py-2 mb-3" role="alert">
+    <i class="bi bi-info-circle me-2"></i>
+    <div class="small">
+        Campaigns chain together <strong>email templates</strong>. To view or edit the
+        subject/body of a template, open the
+        <a href="?page=email&amp;tab=templates" class="alert-link">Templates tab</a>.
+    </div>
+</div>
 <div class="row">
     <div class="col-lg-5 mb-4">
         <div class="card">
@@ -520,7 +528,12 @@ $trigger_events   = function_exists('list_email_trigger_events')   ? list_email_
                     <input type="number" class="form-control form-control-sm" name="delay_minutes" id="step_delay" min="0" value="0">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small">Template</label>
+                    <label class="form-label small d-flex justify-content-between align-items-center">
+                        <span>Template</span>
+                        <a href="?page=email&amp;tab=templates" target="_blank" class="small text-decoration-none" title="Edit template content in Templates tab">
+                            <i class="bi bi-pencil-square"></i> Edit content
+                        </a>
+                    </label>
                     <select class="form-select form-select-sm" name="template_slug" id="step_template" required>
                         <option value="">— Pick template —</option>
                         <?php foreach ($email_templates as $t) { ?>
