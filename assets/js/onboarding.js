@@ -72,10 +72,9 @@
       modal.hide();
     });
     document.getElementById('wnOnbStart').addEventListener('click', function () {
-      post('tourStart', { tour_slug: slug }).then(function () {
-        modal.hide();
-        runTour(0);
-      });
+      post('tourStart', { tour_slug: slug });
+      modal.hide();
+      runTour(0);
     });
   }
 
