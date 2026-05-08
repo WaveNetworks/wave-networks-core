@@ -29,6 +29,7 @@ function get_available_scopes() {
         'monitoring:write'=> 'Trigger checks, create tasks, send reports, manage CRs',
         'actions:read'    => 'Read user/device action logs and use_case derivations',
         'tests:write'     => 'Write use_case rows and use_case_test_run results',
+        'elevateher_debug:read' => 'Read elevateHER chat_event_log, framework_data, assessment sessions for diagnostics',
     ];
 }
 
