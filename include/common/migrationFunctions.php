@@ -132,13 +132,46 @@ function get_current_db_version($conn) {
 }
 
 /**
+ * Per-target-version filesystem flag indicating "migrations have been
+ * confirmed up-to-date for this version on this host". Avoids opening
+ * connections (especially shard primes) on every request just to read the
+ * version row. Flag filename includes the target version, so bumping
+ * $db_version / $shard_version invalidates automatically.
+ *
+ * Namespace by $dbInstance so admin instances on the same host (e.g. a
+ * Docker dev box running multiple child apps) don't share flags.
+ */
+function _wn_migration_flag_path($scope, $target_version) {
+    global $dbInstance;
+    $instance = preg_replace('/[^a-zA-Z0-9_-]/', '_', (string)($dbInstance ?? 'default'));
+    $version_str = number_format((float)$target_version, 1, '.', '');
+    return rtrim(sys_get_temp_dir(), '/') . "/wncore_migrated_{$instance}_{$scope}_v{$version_str}";
+}
+
+function _wn_migration_flag_exists($scope, $target_version) {
+    static $cache = [];
+    $key = "$scope/$target_version";
+    if (isset($cache[$key])) return $cache[$key];
+    return $cache[$key] = is_file(_wn_migration_flag_path($scope, $target_version));
+}
+
+function _wn_migration_flag_set($scope, $target_version) {
+    @file_put_contents(_wn_migration_flag_path($scope, $target_version), (string)time());
+}
+
+/**
  * Check and migrate the main database.
  */
 function check_and_migrate_main_db() {
     global $db, $db_version;
 
+    if (_wn_migration_flag_exists('main', $db_version)) return;
+
     $current = get_current_db_version($db);
-    if ($current >= $db_version) return;
+    if ($current >= $db_version) {
+        _wn_migration_flag_set('main', $db_version);
+        return;
+    }
 
     // Determine migration directory
     $base_dir = defined('APP_MIGRATION_DIR') ? APP_MIGRATION_DIR : (__DIR__ . '/../../db_migrations/');
@@ -153,25 +186,39 @@ function check_and_migrate_main_db() {
 
         run_migration($db, $file, 'main', $ver);
     }
+
+    if (get_current_db_version($db) >= $db_version) {
+        _wn_migration_flag_set('main', $db_version);
+    }
 }
 
 /**
  * Check and migrate all shard databases.
+ *
+ * Gated by a per-target-version flag so steady-state requests skip the
+ * shard prime entirely. Pre-flag behavior was to prime every shard on
+ * every request just to read its version row — significant connection
+ * pressure under load (max_connections incident 2026-05-08).
  */
 function check_and_migrate_all_shards() {
     global $shardConfigs, $shard_version;
 
     if (empty($shardConfigs)) return;
+    if (_wn_migration_flag_exists('shards', $shard_version)) return;
 
     // Determine migration directory
     $base_dir = defined('APP_MIGRATION_DIR') ? APP_MIGRATION_DIR : (__DIR__ . '/../../db_migrations/');
 
     $available = get_available_migrations('shard', $base_dir);
-    if (empty($available)) return;
+    if (empty($available)) {
+        _wn_migration_flag_set('shards', $shard_version);
+        return;
+    }
 
+    $all_at_target = true;
     foreach ($shardConfigs as $shard_id => $cfg) {
         $conn = prime_shard($shard_id);
-        if (!$conn) continue;
+        if (!$conn) { $all_at_target = false; continue; }
 
         $current = get_current_db_version($conn);
         if ($current >= $shard_version) continue;
@@ -185,5 +232,9 @@ function check_and_migrate_all_shards() {
 
             run_migration($conn, $file, "shard/$shard_id", $ver);
         }
+
+        if (get_current_db_version($conn) < $shard_version) $all_at_target = false;
     }
+
+    if ($all_at_target) _wn_migration_flag_set('shards', $shard_version);
 }

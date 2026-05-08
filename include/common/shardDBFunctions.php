@@ -33,7 +33,10 @@ function prime_shard($shard_id) {
             "mysql:host={$cfg['host']};dbname={$cfg['name']};charset=utf8mb4",
             $cfg['user'],
             $cfg['pass'],
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            [
+                PDO::ATTR_PERSISTENT => true,
+                PDO::ATTR_ERRMODE    => PDO::ERRMODE_EXCEPTION,
+            ]
         );
         $shard_connections[$shard_id] = $conn;
         return $conn;

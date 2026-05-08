@@ -73,9 +73,15 @@ if (!empty($files_location)) {
     if (!is_dir($files_location . 'branding/')) { @mkdir($files_location . 'branding/', 0755, true); }
 }
 
-// 3. PDO connection
-$db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
-$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+// 3. PDO connection (persistent — see common.php).
+$db = new PDO(
+    "mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4",
+    $dbUserName, $dbPassword,
+    [
+        PDO::ATTR_PERSISTENT => true,
+        PDO::ATTR_ERRMODE    => PDO::ERRMODE_EXCEPTION,
+    ]
+);
 
 // 4. Glob-include all helpers
 foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }

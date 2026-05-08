@@ -46,7 +46,9 @@ if (!empty($files_location)) {
     if (!is_dir($files_location . 'branding/')) { @mkdir($files_location . 'branding/', 0755, true); }
 }
 
-// 3. PDO connection
+// 3. PDO connection. NOT persistent — common_readonly.php is the bootstrap
+// for CLI cron scripts which run as one-shot processes and exit. Persistent
+// would do nothing here since there's no FPM worker to reuse the socket.
 $db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
