@@ -172,19 +172,26 @@ def build_action_path(actions: list) -> list:
 
 # ── Main ────────────────────────────────────────────────────────────────
 def derive_for_app(app: str, since: str | None, dry_run: bool,
-                   email: str | None = None) -> int:
+                   email: str | None = None, all_users: bool = False) -> int:
     log.info("── %s ──", app)
-    res = api("apiListTestSessionActions",
-              source_app=app, since=since, email=email, limit=2000)
+    api_args = dict(source_app=app, since=since, email=email, limit=2000)
+    if all_users:
+        api_args["all_users"] = 1
+    res = api("apiListTestSessionActions", **api_args)
     sessions = res.get("sessions") or []
     total_actions = res.get("action_count") or 0
     if not sessions:
-        log.info("  no test-user actions for source_app=%s", app)
+        log.info("  no actions for source_app=%s%s",
+                 app, " (all-users mode)" if all_users else "")
         return 0
 
-    log.info("  test user: %s shard=%s",
-             res.get("test_user", {}).get("email"),
-             res.get("test_user", {}).get("shard_id"))
+    if all_users:
+        log.info("  all-users mode: %d distinct user(s)",
+                 res.get("user_count") or 0)
+    else:
+        log.info("  test user: %s shard=%s",
+                 res.get("test_user", {}).get("email"),
+                 res.get("test_user", {}).get("shard_id"))
     log.info("  %d session(s), %d total actions",
              len(sessions), total_actions)
 
@@ -234,6 +241,13 @@ def main() -> int:
                     help="Derive from this user's logs instead of the "
                          "canonical is_test_account user. Useful before "
                          "the test user has generated real history.")
+    ap.add_argument("--all-users", action="store_true",
+                    help="Derive across every user's action log (not just "
+                         "the test user). Use for on-demand admin-triggered "
+                         "refreshes when you want broad coverage from real "
+                         "organic journeys. Cron should leave this OFF — "
+                         "test-user-only is reproducible and benefits from "
+                         "the infinite retention exemption.")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print clusters; do not UPSERT.")
     ap.add_argument("--verbose", "-v", action="store_true")
@@ -253,7 +267,8 @@ def main() -> int:
     total = 0
     for app in apps:
         try:
-            total += derive_for_app(app, args.since, args.dry_run, args.email)
+            total += derive_for_app(app, args.since, args.dry_run, args.email,
+                                    all_users=args.all_users)
         except Exception as e:
             log.error("[%s] %s", app, e)
     log.info("Done. wrote %d use_case row(s) across %d app(s) %s",
