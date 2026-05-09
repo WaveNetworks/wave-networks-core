@@ -437,8 +437,12 @@ but are not wired into server.php. Add handlers to server.php as needed.
   "mcpServers": { "wave-networks-admin": {
     "command": "php",
     "args": ["/path/to/admin/mcp/server.php"],
-    "env": { "WN_API_URL": "https://dswa.org/admin/api/index.php", "WN_API_KEY": "wn_sk_..." }
+    "env": { "WN_API_URL": "https://YOUR_HOST/admin/api/index.php", "WN_API_KEY": "wn_sk_..." }
   }}
+
+  Replace YOUR_HOST with whichever deployment you're targeting
+  (e.g. nokemo.com, dswa.org, hireasupport.com — each has its own
+  admin DB and its own service_api_key table).
 
 Logs to stderr via mcp_log(). Warns if WN_API_KEY is unset.
 
