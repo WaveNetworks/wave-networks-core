@@ -134,3 +134,37 @@ if (($_POST['action'] ?? '') == 'getUseCaseDetail') {
         $_SESSION['error'] = implode('<br>', $errs);
     }
 }
+
+// ─── refreshUseCases — admin trigger for derive + spec generation ──────────
+//
+// Replaces the "SSH in and run admin/scripts/derive_use_cases.py" empty-state
+// hint with an in-UI button. Runs the same wrapper the daily cron uses
+// (refresh_use_case_specs_all.sh), which loops every configured deployment
+// and re-derives use_cases from each test user's action log.
+//
+// Admin only. shell_exec'd with a 5-minute cap (the script is normally
+// fast — slow only if first-time npm install hits).
+if (($_POST['action'] ?? '') == 'refreshUseCases') {
+    if (!has_role('admin')) {
+        $_SESSION['error'] = 'Admin access required.';
+    } else {
+        $script = '/mnt/data/nokemo/scripts/refresh_use_case_specs_all.sh';
+        if (!is_file($script) || !is_executable($script)) {
+            $_SESSION['error'] = "refresh script not found or not executable at $script";
+        } elseif (!function_exists('shell_exec')) {
+            $_SESSION['error'] = 'shell_exec is disabled on this host';
+        } else {
+            $started = microtime(true);
+            // Cap at 300s; capture both stdout + stderr for the operator.
+            $cmd = sprintf('timeout 300 %s 2>&1', escapeshellarg($script));
+            $out = shell_exec($cmd);
+            $elapsed_ms = (int) ((microtime(true) - $started) * 1000);
+            $tail_lines = array_slice(preg_split("/\r?\n/", trim((string)$out)), -40);
+
+            $data['elapsed_ms'] = $elapsed_ms;
+            $data['output_tail'] = $tail_lines;
+            $data['output_full_length'] = strlen((string)$out);
+            $_SESSION['success'] = 'Refresh complete in ' . round($elapsed_ms / 1000, 1) . 's. See output_tail for details.';
+        }
+    }
+}

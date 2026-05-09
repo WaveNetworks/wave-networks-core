@@ -50,6 +50,10 @@ $page_title = 'Use Cases';
                 </select>
 
                 <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search slug / name..." style="width: 200px;" onkeyup="debounceSearch()">
+
+                <button class="btn btn-sm btn-outline-primary" id="refreshBtn" onclick="refreshUseCases()" title="Re-derive use_cases from the latest test-user action log + regenerate Playwright specs">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
             </div>
         </div>
     </div>
@@ -120,7 +124,7 @@ function loadUseCases() {
         updateAppFilter(json.results.apps || []);
 
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">No use cases match. Run <code>admin/scripts/derive_use_cases.py</code> to generate from action logs.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">No use cases match. Click <strong>Refresh</strong> to re-derive from the latest test-user action logs, or wait for the nightly 4 AM cron.</td></tr>';
         } else {
             var html = '';
             items.forEach(function(item) {
@@ -297,6 +301,28 @@ function escHtml(str) {
 }
 function escAttr(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+
+function refreshUseCases() {
+    var btn = document.getElementById('refreshBtn');
+    if (!btn) return;
+    var originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Refreshing…';
+    apiPost('refreshUseCases', {}, function(json) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        if (json.error) {
+            alert('Refresh failed: ' + json.error);
+            return;
+        }
+        var elapsed = (json.results && json.results.elapsed_ms) ? Math.round(json.results.elapsed_ms / 100) / 10 : '?';
+        var tail = (json.results && json.results.output_tail) || [];
+        var msg = 'Refresh done in ' + elapsed + 's.\n\nLast lines of output:\n' + tail.join('\n');
+        if (typeof console !== 'undefined') console.log('[refreshUseCases]', json.results);
+        alert(msg);
+        loadUseCases();
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function() { loadUseCases(); });
