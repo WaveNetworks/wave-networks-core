@@ -371,7 +371,7 @@ $stats = get_feedback_stats();
                         // Thumbnail + viewport hint, only when a capture exists.
                         var thumb = '';
                         if (row.screenshot_path) {
-                            var src = 'feedback/screenshot/' + row.feedback_id;
+                            var src = '../feedback/screenshot/' + row.feedback_id;
                             var vp = (row.viewport_w && row.viewport_h) ? (row.viewport_w + '×' + row.viewport_h) : '';
                             thumb = '<img src="' + src + '" alt="capture" ' +
                                 'onclick="viewFeedbackScreenshot(' + row.feedback_id + ')" ' +
@@ -724,7 +724,7 @@ $stats = get_feedback_stats();
         var row = fbData[fid] || {};
         _screenshotFid = fid;
 
-        document.getElementById('screenshotImg').src = 'feedback/screenshot/' + fid + '?t=' + Date.now();
+        document.getElementById('screenshotImg').src = '../feedback/screenshot/' + fid + '?t=' + Date.now();
 
         // Render context list — typed columns + parsed context_json.
         var ctx = {};
