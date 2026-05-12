@@ -62,6 +62,15 @@ QUERY_RX      = re.compile(r"""querySelector(?:All)?\s*\(\s*['"]([^'"]+)['"]""")
 # so we can match templated ids
 GET_BY_ID_CONCAT_RX = re.compile(r"""getElementById\s*\(\s*['"]([^'"]+)['"]\s*\+""")
 
+# v2 wrappers do `$_POST['action'] = 'foo';` before `include …`-ing the v1
+# handler. We parse those to learn that calling `journey/enter-node` is
+# the same as calling `enterNode`.
+V2_ALIAS_RX = re.compile(
+    r"""\$_POST\[['"]action['"]\]\s*=\s*['"]([^'"]+)['"]""")
+# v2 action handlers use $v2_action === 'foo' inside resource files
+V2_ACTION_RX = re.compile(
+    r"""\$v2_action\s*===\s*['"]([^'"]+)['"]""")
+
 
 def scan_js_selectors(mobile_root: str) -> dict:
     out = {"ids": set(), "id_prefixes": set(), "selectors": set()}
@@ -77,6 +86,59 @@ def scan_js_selectors(mobile_root: str) -> dict:
         for m in QUERY_RX.finditer(txt):
             out["selectors"].add(m.group(1))
     return out
+
+
+def scan_v2_aliases(desktop_root: str) -> dict:
+    """
+    Read every v2 action file and return a mapping:
+        v2_path  ->  set of v1 action names the resource ultimately runs.
+
+    pwt's v2 wrappers either:
+      1. set $_POST['action']='someV1Name' and include the v1 handler, or
+      2. handle the work inline keyed on $v2_action === 'kebab-case-name'.
+
+    We capture both forms. Used to credit mobile callers of e.g.
+    `journey/enter-node` as wiring the desktop `enterNode` action.
+    """
+    aliases = {}   # path-string -> set of equivalent v1 action names
+    v2_dir = os.path.join(desktop_root, "include", "actions", "apiActions", "v2")
+    if not os.path.isdir(v2_dir):
+        return aliases
+    for path in glob.glob(os.path.join(v2_dir, "*.php")):
+        resource = os.path.basename(path)[:-4]
+        # Strip "Actions" suffix and lower-case (journeyActions.php -> journey)
+        if resource.endswith("Actions"):
+            resource = resource[:-len("Actions")]
+
+        try:
+            txt = open(path, "r", encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+
+        # v1 actions explicitly named in delegate-style wrappers
+        v1_names = set(V2_ALIAS_RX.findall(txt))
+        # v2 sub-actions ($v2_action === 'foo' inside the resource file)
+        v2_subs  = set(V2_ACTION_RX.findall(txt))
+
+        # Each v2 sub-action maps to: the v1 name it delegates to (if any
+        # explicit `$_POST['action']='X'` appears in the same block) or
+        # the camelCase form of its own slug, which often matches the v1.
+        for sub in v2_subs:
+            v2_path = f"{resource}/{sub}"
+            aliases.setdefault(v2_path, set())
+            # Add the v1 names that appear in this file — over-attribution
+            # is fine here, the diff just wants to know "any v1 call lit
+            # up by this v2 path?" not the exact dispatch.
+            aliases[v2_path].update(v1_names)
+            # Convert kebab-case to camelCase as a heuristic fallback.
+            cc = re.sub(r"-([a-z])", lambda m: m.group(1).upper(), sub)
+            aliases[v2_path].add(cc)
+
+        # Also expose the bare resource for endpoints that have no
+        # sub-action (e.g. GET /tokens returning the balance).
+        if v1_names:
+            aliases.setdefault(resource, set()).update(v1_names)
+    return aliases
 
 
 def signature_in_mobile(sig: str, mobile_index_sigs: set, mobile_js: dict) -> str:
@@ -126,8 +188,15 @@ def signature_in_mobile(sig: str, mobile_index_sigs: set, mobile_js: dict) -> st
     return "missing"
 
 
-def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict, source_app: str) -> list:
-    """Emit a mobile_parity row for each desktop element."""
+def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict,
+              mobile_action_index: dict, source_app: str) -> list:
+    """Emit a mobile_parity row for each desktop element + action.
+
+    mobile_action_index — what mobile JS actually calls, EXPANDED via the
+    v2 alias mapping. So a mobile `apiPost('journey/enter-node')` becomes
+    `{ 'journey/enter-node', 'enterNode' }` in the lookup set, and a
+    desktop `apiPost('enterNode')` correctly matches as wired.
+    """
     view = desktop_contract["view"]
     mobile_index_sigs = {e["signature"] for e in mobile_contract["elements"]}
 
@@ -147,32 +216,48 @@ def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict, so
             "notes":          _notes_for(e),
         })
 
-    # API call rows — one per desktop apiPost / apiClient call
-    desktop_calls = {s["target"] for s in desktop_contract["scripts"] if s["kind"].startswith(("api_post","api_client"))}
-    mobile_calls = set()
-    for path in glob.glob(os.path.join(os.path.dirname(mobile_contract["source"]), "js", "*.js")):
-        try:
-            mj = open(path).read()
-        except OSError:
-            continue
-        for m in re.finditer(r"""apiPost\s*\(\s*['"]([^'"]+)['"]""", mj):
-            mobile_calls.add(m.group(1))
-        for m in re.finditer(r"""apiClient\s*\.\s*(?:post|get|put|delete)\s*\(\s*['"]([^'"]+)['"]""", mj):
-            mobile_calls.add(m.group(1))
+    desktop_calls = {s["target"] for s in desktop_contract["scripts"]
+                     if s["kind"].startswith(("api_post","api_client"))}
     for target in desktop_calls:
+        is_wired = target in mobile_action_index
         rows.append({
             "source_app":    source_app,
             "category":      "action",
             "feature_key":   f"{view}/api:{target}",
             "feature_name":  f"{view}: api call '{target}'",
             "desktop_source": desktop_contract["source"],
-            "mobile_source":  "mobile/js" if target in mobile_calls else "",
-            "mobile_status":  "wired" if target in mobile_calls else "missing",
+            "mobile_source":  "mobile/js" if is_wired else "",
+            "mobile_status":  "wired" if is_wired else "missing",
             "priority":       "high",
             "notes":          "",
         })
 
     return rows
+
+
+def build_mobile_action_index(mobile_root: str, v2_aliases: dict) -> set:
+    """
+    Build a set containing every action name mobile reaches, INCLUDING
+    the v1 aliases for v2 wrapper calls. So if mobile JS calls
+    `apiPost('journey/enter-node')` and the alias map says
+    `journey/enter-node` → {enterNode}, both forms are credited.
+    """
+    out = set()
+    for path in glob.glob(os.path.join(mobile_root, "js", "*.js")):
+        try:
+            txt = open(path).read()
+        except OSError:
+            continue
+        for m in re.finditer(r"""apiPost\s*\(\s*['"]([^'"]+)['"]""", txt):
+            out.add(m.group(1))
+        for m in re.finditer(r"""apiClient\s*\.\s*(?:post|get|put|delete)\s*\(\s*['"]([^'"]+)['"]""", txt):
+            out.add(m.group(1))
+    # Expand via v2 alias map
+    expanded = set(out)
+    for target in list(out):
+        if target in v2_aliases:
+            expanded.update(v2_aliases[target])
+    return expanded
 
 
 def _priority_for(e: dict) -> str:
@@ -194,7 +279,7 @@ def _notes_for(e: dict) -> str:
     return "; ".join(bits)
 
 
-def post_rows(api_url: str, api_key: str, rows: list, chunk_size: int = 25) -> int:
+def post_rows(api_url: str, api_key: str, rows: list, chunk_size: int = 25, pacing: float = 0.3) -> int:
     """Bulk upsert in chunks. Retries 503/504/timeout up to 3 times with
     exponential backoff — shared hosts intermittently throttle when we
     push hundreds of UPSERTs back-to-back."""
@@ -233,7 +318,7 @@ def post_rows(api_url: str, api_key: str, rows: list, chunk_size: int = 25) -> i
                     delay *= 2
                     continue
                 raise
-        time.sleep(0.3)   # gentle pacing between successful chunks
+        time.sleep(pacing)
     return total
 
 
@@ -246,6 +331,10 @@ def main():
     ap.add_argument("--wn-api-key", required=True)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", help="only diff this view slug (debugging)")
+    ap.add_argument("--chunk-size", type=int, default=8,
+                    help="rows per upsert (small + paced helps with 503s)")
+    ap.add_argument("--pacing-seconds", type=float, default=1.5,
+                    help="sleep between successful chunks")
     args = ap.parse_args()
 
     mobile_index = os.path.join(args.mobile_root, "index.html")
@@ -256,10 +345,19 @@ def main():
     mobile_contract = extract_contract(mobile_index)
     mobile_js = scan_js_selectors(args.mobile_root)
 
+    # Build the v2 alias mapping (mobile_root's parent is the desktop root
+    # for pwt, since /home/jeevan/Desktop/pwt/mobile is the mobile root and
+    # /home/jeevan/Desktop/pwt is where include/actions/apiActions/v2 lives)
+    desktop_root_for_v2 = os.path.dirname(os.path.abspath(args.mobile_root))
+    v2_aliases = scan_v2_aliases(desktop_root_for_v2)
+    mobile_action_index = build_mobile_action_index(args.mobile_root, v2_aliases)
+
     print(f"mobile/index.html: {len(mobile_contract['elements'])} elements")
     print(f"mobile/js scan:    {len(mobile_js['ids'])} getElementById literals, "
           f"{len(mobile_js['id_prefixes'])} dynamic id prefixes, "
           f"{len(mobile_js['selectors'])} querySelectors")
+    print(f"v2 wrapper aliases: {len(v2_aliases)} v2 paths recognized, "
+          f"mobile_action_index has {len(mobile_action_index)} reachable actions")
     print()
 
     all_rows = []
@@ -270,7 +368,8 @@ def main():
         if args.only and view != args.only: continue
 
         desktop_contract = extract_contract(path)
-        rows = diff_view(desktop_contract, mobile_contract, mobile_js, args.source_app)
+        rows = diff_view(desktop_contract, mobile_contract, mobile_js,
+                         mobile_action_index, args.source_app)
         all_rows.extend(rows)
 
         n_total   = len(rows)
@@ -289,7 +388,8 @@ def main():
             print(json.dumps({k: r[k] for k in ("feature_key","desktop_source","priority","notes")}))
         return
 
-    posted = post_rows(args.wn_api_url, args.wn_api_key, all_rows)
+    posted = post_rows(args.wn_api_url, args.wn_api_key, all_rows,
+                       chunk_size=args.chunk_size, pacing=args.pacing_seconds)
     print(f"posted {posted} rows to {args.wn_api_url}")
 
 
