@@ -246,7 +246,7 @@ def main() -> int:
     ap.add_argument("--base-url", required=True,
                     help="Public base URL of the deployed child app, "
                          "e.g. https://nokemo.com")
-    ap.add_argument("--limit", type=int, default=200)
+    ap.add_argument("--limit", type=int, default=1000)
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()
 
