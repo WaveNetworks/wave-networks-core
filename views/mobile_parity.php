@@ -35,6 +35,7 @@ $page_title = 'Mobile Parity';
                     <option value="script">script</option>
                     <option value="snippet">snippet</option>
                     <option value="widget">widget</option>
+                    <option value="element">element</option>
                 </select>
                 <select class="form-select form-select-sm" id="parityStatusFilter" style="width:auto" onchange="loadParity()">
                     <option value="">All status</option>

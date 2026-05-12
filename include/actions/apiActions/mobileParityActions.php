@@ -92,7 +92,7 @@ if (($action ?? null) == 'apiUpsertMobileParity') {
         $pri  = trim((string)($_POST['priority']       ?? 'medium'));
         $note = trim((string)($_POST['notes']          ?? ''));
 
-        $allowed_cat  = ['page','action','script','snippet','widget'];
+        $allowed_cat  = ['page','action','script','snippet','widget','element'];
         $allowed_stat = ['missing','partial','wired','n_a'];
         $allowed_pri  = ['low','medium','high','critical'];
         if ($app === '')                     $errs[] = 'source_app is required.';
@@ -141,7 +141,7 @@ if (($action ?? null) == 'apiBulkUpsertMobileParity') {
         }
         if (!is_array($rows_in)) $errs[] = 'rows must be a JSON array.';
 
-        $allowed_cat  = ['page','action','script','snippet','widget'];
+        $allowed_cat  = ['page','action','script','snippet','widget','element'];
         $allowed_stat = ['missing','partial','wired','n_a'];
         $allowed_pri  = ['low','medium','high','critical'];
         $inserted = 0;
