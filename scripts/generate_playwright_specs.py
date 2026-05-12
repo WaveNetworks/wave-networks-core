@@ -180,7 +180,7 @@ PLAYWRIGHT_CONFIG_TS = """\
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  testDir: 'tests/use-cases',
+  testDir: 'use-cases',
   timeout: 60_000,
   retries: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
