@@ -109,6 +109,11 @@
                 <span class="sidebar-text">Use Cases</span>
             </a>
 
+            <a class="nav-link text-white <?= ($page ?? '') === 'mobile_parity' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=mobile_parity">
+                <i class="bi bi-phone sidebar-icon"></i>
+                <span class="sidebar-text">Mobile Parity</span>
+            </a>
+
             <a class="nav-link text-white <?= ($page ?? '') === 'costs' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=costs">
                 <i class="bi bi-cash-stack sidebar-icon"></i>
                 <span class="sidebar-text">Costs</span>
