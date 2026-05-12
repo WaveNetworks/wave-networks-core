@@ -125,25 +125,76 @@ $page_title = 'Mobile Parity';
 
             if (items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-body-secondary p-3">'
-                    + 'No rows. Run <code>admin/scripts/audit_mobile_parity.py</code> to populate.</td></tr>';
+                    + 'No rows. Run <code>admin/scripts/audit_mobile_parity.py</code> + '
+                    + '<code>admin/scripts/diff_view_contract.py</code> to populate.</td></tr>';
                 return;
             }
-            tbody.innerHTML = items.map(function(r){
-                return '<tr>'
-                    + '<td><span class="badge bg-info text-dark">' + esc(r.category) + '</span></td>'
-                    + '<td><div class="fw-semibold">' + esc(r.feature_name || r.feature_key) + '</div>'
-                    +   '<div class="small text-body-secondary"><code>' + esc(r.feature_key) + '</code> · ' + esc(r.source_app) + '</div></td>'
-                    + '<td class="small"><code>' + esc(r.desktop_source||'') + '</code></td>'
-                    + '<td class="small"><code>' + esc(r.mobile_source||'') + '</code></td>'
-                    + '<td><span class="badge bg-secondary">' + esc(r.priority||'medium') + '</span></td>'
-                    + '<td><select class="form-select form-select-sm parity-status-select" data-parity-id="' + r.parity_id + '" onchange="setParityStatus(this)">'
-                    +   ['missing','partial','wired','n_a'].map(function(s){
-                            return '<option value="'+s+'"' + (s===r.mobile_status?' selected':'') + '>'+s+'</option>';
-                        }).join('')
-                    + '</select></td>'
-                    + '<td></td>'
-                    + '</tr>';
+
+            // Group by view (the feature_key prefix before '/') so each view
+            // becomes a foldable section with its own missing/wired count —
+            // much easier to scan than a flat 500-row table.
+            var groups = {};
+            items.forEach(function(r){
+                var view = (r.feature_key||'').split('/')[0] || '(other)';
+                if (!groups[view]) groups[view] = [];
+                groups[view].push(r);
+            });
+            var viewNames = Object.keys(groups).sort(function(a,b){
+                // Sort by total then by missing count desc — heaviest gaps first
+                var ma = groups[a].filter(function(r){return r.mobile_status==='missing';}).length;
+                var mb = groups[b].filter(function(r){return r.mobile_status==='missing';}).length;
+                return mb - ma;
+            });
+
+            tbody.innerHTML = viewNames.map(function(view){
+                var rows = groups[view];
+                var counts = { missing:0, partial:0, wired:0, n_a:0 };
+                rows.forEach(function(r){ counts[r.mobile_status]++; });
+                var pct = rows.length ? Math.round(100 * counts.wired / rows.length) : 0;
+
+                var header = '<tr class="table-light parity-view-header" data-view="' + esc(view) + '" style="cursor:pointer">'
+                    + '<td colspan="7" class="fw-semibold">'
+                    +   '<i class="bi bi-chevron-right me-1 parity-chevron"></i> '
+                    +   esc(view)
+                    +   ' <span class="text-body-secondary fw-normal small ms-2">'
+                    +     rows.length + ' rows · '
+                    +     '<span class="text-danger">' + counts.missing + ' missing</span> · '
+                    +     '<span class="text-warning">' + counts.partial + ' partial</span> · '
+                    +     '<span class="text-success">' + counts.wired + ' wired</span> · '
+                    +     pct + '% complete'
+                    +   '</span>'
+                    + '</td></tr>';
+
+                var detail = rows.map(function(r){
+                    return '<tr class="parity-row" data-view="' + esc(view) + '" style="display:none">'
+                        + '<td><span class="badge bg-info text-dark">' + esc(r.category) + '</span></td>'
+                        + '<td><div class="small"><code>' + esc((r.feature_key||'').split('/').slice(1).join('/')||r.feature_key) + '</code></div></td>'
+                        + '<td class="small"><code>' + esc(r.desktop_source||'') + '</code></td>'
+                        + '<td class="small"><code>' + esc(r.mobile_source||'') + '</code></td>'
+                        + '<td><span class="badge bg-secondary">' + esc(r.priority||'medium') + '</span></td>'
+                        + '<td><select class="form-select form-select-sm parity-status-select" data-parity-id="' + r.parity_id + '" onchange="setParityStatus(this)">'
+                        +   ['missing','partial','wired','n_a'].map(function(s){
+                                return '<option value="'+s+'"' + (s===r.mobile_status?' selected':'') + '>'+s+'</option>';
+                            }).join('')
+                        + '</select></td>'
+                        + '<td class="small text-body-secondary">' + esc(r.notes||'') + '</td>'
+                        + '</tr>';
+                }).join('');
+                return header + detail;
             }).join('');
+
+            // Wire collapsible view-header rows
+            tbody.querySelectorAll('.parity-view-header').forEach(function(h){
+                h.addEventListener('click', function(){
+                    var view = h.dataset.view;
+                    var chevron = h.querySelector('.parity-chevron');
+                    var open = chevron.classList.toggle('bi-chevron-down');
+                    chevron.classList.toggle('bi-chevron-right', !open);
+                    tbody.querySelectorAll('.parity-row[data-view="'+view.replace(/"/g,'\\"')+'"]').forEach(function(row){
+                        row.style.display = open ? '' : 'none';
+                    });
+                });
+            });
         });
     }
     function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
