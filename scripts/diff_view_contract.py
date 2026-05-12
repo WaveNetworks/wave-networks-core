@@ -141,55 +141,77 @@ def scan_v2_aliases(desktop_root: str) -> dict:
     return aliases
 
 
-def signature_in_mobile(sig: str, mobile_index_sigs: set, mobile_js: dict) -> str:
+def signature_in_mobile(sig: str, mobile_index_sigs: set, mobile_js: dict,
+                        alias_map: dict | None = None) -> tuple[str, str | None]:
     """
     Decide a status string for a desktop signature.
-    Returns one of: 'wired', 'partial', 'missing'.
+    Returns (status, alias_note) where status is 'wired'/'partial'/'missing'
+    and alias_note is set when the match came via the rename map.
     """
     norm = normalize_signature(sig)
+
+    # Explicit rename map: caller supplies aliases keyed by raw signature
+    # (e.g. {"#btnPlayCard": "#btnPlayHand"}). If matched, return wired.
+    if alias_map:
+        mapped = alias_map.get(sig) or alias_map.get(norm)
+        if mapped and (mapped in mobile_index_sigs or normalize_signature(mapped) in
+                       {normalize_signature(s) for s in mobile_index_sigs}):
+            return "wired", f"aliased → {mapped}"
 
     # Plain id signature like '#cardImg-{n}' or '#oracleChat'
     if norm.startswith("#"):
         bare_id = norm[1:]
         # Exact match in mobile static HTML
         if any(normalize_signature(s) == norm for s in mobile_index_sigs):
-            return "wired"
+            return "wired", None
         # Match against JS-built ids
         if "{n}" in bare_id:
             # `cardImg-{n}` — strip the {n} suffix to get a prefix
             prefix = bare_id.split("{n}")[0]
             if prefix in mobile_js["id_prefixes"]:
-                return "wired"   # mobile builds this dynamically
+                return "wired", None   # mobile builds this dynamically
             # Did mobile JS reference the exact literal at some point?
             for j in mobile_js["ids"]:
                 if j.startswith(prefix.rstrip("-")):
-                    return "partial"
+                    return "partial", None
         else:
             if bare_id in mobile_js["ids"]:
-                return "partial"   # JS references it but no static element
-        return "missing"
+                return "partial", None   # JS references it but no static element
+        return "missing", None
 
     # data-* signature like '[data-card-id={n}]'
     if norm.startswith("["):
         attr_key = norm[1:].split("=")[0]
-        # Mobile static element exists with that attr?
         for s in mobile_index_sigs:
             if attr_key in s:
-                return "wired"
-        # Mobile JS uses a `[data-X]` querySelector?
+                return "wired", None
         for js_sel in mobile_js["selectors"]:
             if attr_key in js_sel:
-                return "partial"
-        return "missing"
+                return "partial", None
+        return "missing", None
 
     # tag.classname or tag[name=...] — looser match
     if any(normalize_signature(s) == norm for s in mobile_index_sigs):
-        return "wired"
-    return "missing"
+        return "wired", None
+    return "missing", None
+
+
+def load_alias_map(mobile_root: str) -> dict:
+    """Load mobile/parity_aliases.json if present — manual desktop↔mobile
+    rename map. Format: {"elements": {"#desktopSig": "#mobileSig", ...}}."""
+    path = os.path.join(mobile_root, "parity_aliases.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data.get("elements", {})
 
 
 def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict,
-              mobile_action_index: dict, source_app: str) -> list:
+              mobile_action_index: dict, alias_map: dict, source_app: str) -> list:
     """Emit a mobile_parity row for each desktop element + action.
 
     mobile_action_index — what mobile JS actually calls, EXPANDED via the
@@ -203,7 +225,11 @@ def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict,
     rows = []
     for e in desktop_contract["elements"]:
         sig = e["signature"]
-        status = signature_in_mobile(sig, mobile_index_sigs, mobile_js)
+        status, alias_note = signature_in_mobile(sig, mobile_index_sigs, mobile_js, alias_map)
+        loop_cond_note = _notes_for(e)
+        combined_note = loop_cond_note
+        if alias_note:
+            combined_note = (combined_note + "; " if combined_note else "") + alias_note
         rows.append({
             "source_app":    source_app,
             "category":      "element",
@@ -211,9 +237,9 @@ def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict,
             "feature_name":  f"{view}: {sig}",
             "desktop_source": f"{desktop_contract['source']}:{e['line']}",
             "mobile_source":  "" if status == "missing" else "mobile/index.html",
-            "mobile_status":  status if status != "partial" else "partial",
+            "mobile_status":  status,
             "priority":       _priority_for(e),
-            "notes":          _notes_for(e),
+            "notes":          combined_note,
         })
 
     desktop_calls = {s["target"] for s in desktop_contract["scripts"]
@@ -351,6 +377,7 @@ def main():
     desktop_root_for_v2 = os.path.dirname(os.path.abspath(args.mobile_root))
     v2_aliases = scan_v2_aliases(desktop_root_for_v2)
     mobile_action_index = build_mobile_action_index(args.mobile_root, v2_aliases)
+    alias_map = load_alias_map(args.mobile_root)
 
     print(f"mobile/index.html: {len(mobile_contract['elements'])} elements")
     print(f"mobile/js scan:    {len(mobile_js['ids'])} getElementById literals, "
@@ -358,6 +385,7 @@ def main():
           f"{len(mobile_js['selectors'])} querySelectors")
     print(f"v2 wrapper aliases: {len(v2_aliases)} v2 paths recognized, "
           f"mobile_action_index has {len(mobile_action_index)} reachable actions")
+    print(f"element alias map:  {len(alias_map)} manual desktop→mobile renames")
     print()
 
     all_rows = []
@@ -369,7 +397,7 @@ def main():
 
         desktop_contract = extract_contract(path)
         rows = diff_view(desktop_contract, mobile_contract, mobile_js,
-                         mobile_action_index, args.source_app)
+                         mobile_action_index, alias_map, args.source_app)
         all_rows.extend(rows)
 
         n_total   = len(rows)
