@@ -92,7 +92,42 @@
         applyTheme(theme);
     });
 
+    // Glass-mode themes need the sidebar/topnav to drop their forced
+    // bg-dark / bg-body-tertiary classes so the theme's translucent
+    // background can actually show through.
+    function getSidebarMode(name) {
+        var reg = registeredThemes.find(function(t) { return t.slug === name; });
+        if (reg) return reg.sidebar_mode || 'dark';
+        return 'dark';
+    }
+
+    function setSidebarMode(mode) {
+        var sidebar = document.getElementById('sidebar');
+        var navbar = document.getElementById('topNav');
+        var navLinks = sidebar ? sidebar.querySelectorAll('.nav-link') : [];
+
+        if (mode === 'glass') {
+            if (sidebar) {
+                sidebar.removeAttribute('data-bs-theme');
+                sidebar.classList.remove('bg-dark', 'text-white');
+            }
+            if (navbar) navbar.classList.remove('bg-body-tertiary');
+            navLinks.forEach(function(l) { l.classList.remove('text-white'); });
+        } else {
+            if (sidebar) {
+                sidebar.setAttribute('data-bs-theme', 'dark');
+                sidebar.classList.add('bg-dark', 'text-white');
+            }
+            if (navbar) navbar.classList.add('bg-body-tertiary');
+            navLinks.forEach(function(l) { l.classList.add('text-white'); });
+        }
+    }
+
+    setSidebarMode(getSidebarMode(savedTheme));
+
     function applyTheme(name) {
+        setSidebarMode(getSidebarMode(name));
+
         var link = document.getElementById('themeStylesheet') || document.querySelector('link[href*="bootstrap"]');
         if (!link) return;
 
@@ -104,6 +139,7 @@
             newLink.href = '../../' + reg.css_path;
             newLink.onerror = function() {
                 saveTheme('sandstone');
+                setSidebarMode('dark');
                 link.href = '../assets/bootstrap/css/bootstrap.min.css';
                 newLink.remove();
             };
