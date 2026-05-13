@@ -196,18 +196,27 @@ def signature_in_mobile(sig: str, mobile_index_sigs: set, mobile_js: dict,
     return "missing", None
 
 
-def load_alias_map(mobile_root: str) -> dict:
-    """Load mobile/parity_aliases.json if present — manual desktop↔mobile
-    rename map. Format: {"elements": {"#desktopSig": "#mobileSig", ...}}."""
+def load_alias_config(mobile_root: str) -> dict:
+    """Load mobile/parity_aliases.json — returns the whole config dict.
+    Format: {"elements": {…}, "_skip_views": [...]}."""
     path = os.path.join(mobile_root, "parity_aliases.json")
     if not os.path.isfile(path):
-        return {}
+        return {"elements": {}, "_skip_views": []}
     try:
         with open(path) as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
-        return {}
-    return data.get("elements", {})
+        return {"elements": {}, "_skip_views": []}
+    return {
+        "elements":    data.get("elements", {}),
+        "_skip_views": data.get("_skip_views", []),
+    }
+
+
+def load_alias_map(mobile_root: str) -> dict:
+    """Back-compat shim — returns just the elements map. Prefer
+    load_alias_config() in new callers."""
+    return load_alias_config(mobile_root).get("elements", {})
 
 
 def diff_view(desktop_contract: dict, mobile_contract: dict, mobile_js: dict,
@@ -377,7 +386,9 @@ def main():
     desktop_root_for_v2 = os.path.dirname(os.path.abspath(args.mobile_root))
     v2_aliases = scan_v2_aliases(desktop_root_for_v2)
     mobile_action_index = build_mobile_action_index(args.mobile_root, v2_aliases)
-    alias_map = load_alias_map(args.mobile_root)
+    alias_cfg = load_alias_config(args.mobile_root)
+    alias_map = alias_cfg["elements"]
+    skip_views = set(alias_cfg["_skip_views"])
 
     print(f"mobile/index.html: {len(mobile_contract['elements'])} elements")
     print(f"mobile/js scan:    {len(mobile_js['ids'])} getElementById literals, "
@@ -386,6 +397,8 @@ def main():
     print(f"v2 wrapper aliases: {len(v2_aliases)} v2 paths recognized, "
           f"mobile_action_index has {len(mobile_action_index)} reachable actions")
     print(f"element alias map:  {len(alias_map)} manual desktop→mobile renames")
+    if skip_views:
+        print(f"skipped views:      {sorted(skip_views)} (rows emitted as n_a)")
     print()
 
     all_rows = []
@@ -398,6 +411,13 @@ def main():
         desktop_contract = extract_contract(path)
         rows = diff_view(desktop_contract, mobile_contract, mobile_js,
                          mobile_action_index, alias_map, args.source_app)
+        # _skip_views: flatten every row from these views to mobile_status='n_a'
+        # so the missing/% complete metrics ignore them (e.g. share/share_journey
+        # are public landing pages, not SPA routes).
+        if view in skip_views:
+            for r in rows:
+                r["mobile_status"] = "n_a"
+                r["notes"] = (r["notes"] + "; " if r["notes"] else "") + "view out of scope for mobile SPA"
         all_rows.extend(rows)
 
         n_total   = len(rows)
