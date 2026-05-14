@@ -92,6 +92,7 @@ check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
 // 6. Session (start but NO guard — unauthenticated users need these pages)
+init_session_storage();
 session_start();
 
 // 6b. Device tracking — identify all visitors via persistent cookie

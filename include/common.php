@@ -103,6 +103,7 @@ check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
 // 6. Session guard
+init_session_storage();
 session_start();
 if (empty($_SESSION['user_id'])) {
     // Try auto-login via cookie

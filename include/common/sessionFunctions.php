@@ -48,6 +48,35 @@ function get_display_name() {
 }
 
 /**
+ * Configure per-deployment session storage before session_start().
+ *
+ * Default session.save_path is /tmp, which on shared hosts produces
+ * "Permission denied" / "Failed to read session data" warnings when
+ * another tenant or PHP-FPM pool writes /tmp/sess_* files under a
+ * different UID, or when /tmp cleanup races a live request. Route
+ * session files to a dedicated directory inside $files_location
+ * (outside webroot, owned by this site's UID) so each deployment
+ * owns its own session storage.
+ */
+function init_session_storage() {
+    global $files_location;
+
+    if (empty($files_location)) { return; }
+
+    $sessionDir = rtrim($files_location, '/') . '/sessions';
+
+    if (!is_dir($sessionDir)) {
+        if (!@mkdir($sessionDir, 0700, true) && !is_dir($sessionDir)) {
+            return;
+        }
+    }
+
+    if (!is_writable($sessionDir)) { return; }
+
+    session_save_path($sessionDir);
+}
+
+/**
  * Destroy session and clear auto-login cookie.
  */
 function logout() {

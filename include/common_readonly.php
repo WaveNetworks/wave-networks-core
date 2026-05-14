@@ -57,6 +57,7 @@ foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 
 // 5. Session
+init_session_storage();
 session_start();
 
 // 6. definition.php

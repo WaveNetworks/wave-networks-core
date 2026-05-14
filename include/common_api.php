@@ -94,6 +94,7 @@ check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
 // 6. Session
+init_session_storage();
 session_start();
 
 // 6b. Service API key authentication (Bearer token)
