@@ -13,6 +13,10 @@ ErrorDocument 500 /admin/error.php
     # /admin/ directory index (and explicit /admin/index.php) → redirect to login
     RewriteRule ^(index\.php)?$ /admin/auth/login.php [R=302,L]
 
+    # Friendly login URL aliases → redirect to the real login page
+    # Catches /admin/login, /admin/login/, /admin/signin, /admin/sign-in (case-insensitive)
+    RewriteRule ^(login|signin|sign-in)/?$ /admin/auth/login.php [R=302,L,NC]
+
     # Block access to sensitive directories
     RewriteRule ^(vendor|db_migrations|cron|tests|include|config|views|snippets|docker)(/|$) - [F,L]
 
