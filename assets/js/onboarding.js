@@ -42,6 +42,30 @@
     return '<p>' + out + '</p>';
   }
 
+  // Build an embedded player for a YouTube link, Google Drive link, or a direct
+  // (or uploaded) video file URL. Returns '' when no usable URL is supplied.
+  function videoEmbed(url) {
+    url = String(url == null ? '' : url).trim();
+    if (!url) return '';
+    var yt = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    if (yt) {
+      return '<div class="ratio ratio-16x9 mb-3">'
+        + '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(yt[1]) + '"'
+        + ' title="Tour video" frameborder="0"'
+        + ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"'
+        + ' allowfullscreen></iframe></div>';
+    }
+    var gd = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([A-Za-z0-9_-]+)/);
+    if (gd) {
+      return '<div class="ratio ratio-16x9 mb-3">'
+        + '<iframe src="https://drive.google.com/file/d/' + encodeURIComponent(gd[1]) + '/preview"'
+        + ' title="Tour video" frameborder="0" allow="autoplay" allowfullscreen></iframe></div>';
+    }
+    return '<div class="ratio ratio-16x9 mb-3">'
+      + '<video src="' + escapeHtml(url) + '" controls playsinline preload="metadata"'
+      + ' style="width:100%;height:100%;background:#000;"></video></div>';
+  }
+
   function showWelcome() {
     var modalHtml = ''
       + '<div class="modal fade" id="wnOnboardingWelcome" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">'
@@ -50,7 +74,7 @@
       + '      <div class="modal-header">'
       + '        <h5 class="modal-title">' + escapeHtml(tour.welcome_title || tour.name) + '</h5>'
       + '      </div>'
-      + '      <div class="modal-body">' + md(tour.welcome_body_md || '') + '</div>'
+      + '      <div class="modal-body">' + videoEmbed(tour.welcome_video_url) + md(tour.welcome_body_md || '') + '</div>'
       + '      <div class="modal-footer">'
       + '        <button type="button" class="btn btn-outline-secondary" id="wnOnbSkip">' + escapeHtml(tour.welcome_cta_secondary || 'Explore on my own') + '</button>'
       + '        <button type="button" class="btn btn-primary" id="wnOnbStart">' + escapeHtml(tour.welcome_cta_primary || 'Take the tour') + '</button>'

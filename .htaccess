@@ -23,6 +23,9 @@ ErrorDocument 500 /admin/error.php
     # Serve branding assets from files directory via branding.php proxy
     RewriteRule ^branding/(.+)$ branding.php?f=$1 [L,QSA]
 
+    # Serve onboarding tour media (uploaded welcome videos) via tour_media.php proxy
+    RewriteRule ^tour_media/(.+)$ tour_media.php?f=$1 [L,QSA]
+
     # Serve admin feedback screenshots (admin-only auth in PHP)
     RewriteRule ^feedback/screenshot/([0-9]+)$ feedback_screenshot.php?id=$1 [L,QSA]
 

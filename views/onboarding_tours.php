@@ -89,11 +89,12 @@ $shard_id_self = $_SESSION['shard_id'] ?? '';
 <?php } else {
     $e = $editing ?: [
         'slug' => '', 'name' => '', 'welcome_title' => '', 'welcome_body_md' => '',
+        'welcome_video_url' => '',
         'welcome_cta_primary' => 'Take the tour', 'welcome_cta_secondary' => 'Explore on my own',
         'is_active' => 1,
     ];
 ?>
-<form method="post">
+<form method="post" enctype="multipart/form-data">
     <input type="hidden" name="action" value="saveOnboardingTour">
 
     <div class="card mb-4">
@@ -117,6 +118,19 @@ $shard_id_self = $_SESSION['shard_id'] ?? '';
             <div class="mb-3">
                 <label class="form-label">Welcome body (markdown)</label>
                 <textarea class="form-control" name="welcome_body_md" rows="4"><?= h($e['welcome_body_md']) ?></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Welcome video (optional)</label>
+                <input type="url" class="form-control" name="welcome_video_url" value="<?= h($e['welcome_video_url'] ?? '') ?>" placeholder="https://www.youtube.com/watch?v=…  or  https://drive.google.com/file/d/…/view  or  https://…/intro.mp4">
+                <div class="form-text">
+                    Paste a YouTube link, a Google Drive share link, or a direct video file URL (.mp4/.webm).
+                    A player is shown above the welcome text. Recommended for larger videos.
+                </div>
+                <div class="input-group input-group-sm mt-2">
+                    <span class="input-group-text">…or upload a file</span>
+                    <input type="file" class="form-control" name="welcome_video_file" accept="video/mp4,video/webm,video/ogg">
+                </div>
+                <div class="form-text">An uploaded file replaces the URL above. Upload size may be limited by server config — use a YouTube/Drive link for large videos.</div>
             </div>
             <div class="row mb-3">
                 <div class="col-md-6">

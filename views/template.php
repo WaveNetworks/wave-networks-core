@@ -337,6 +337,7 @@ if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id']))
                 'name'                  => $__onb['tour']['name'],
                 'welcome_title'         => $__onb['tour']['welcome_title'],
                 'welcome_body_md'       => $__onb['tour']['welcome_body_md'],
+                'welcome_video_url'     => $__onb['tour']['welcome_video_url'] ?? '',
                 'welcome_cta_primary'   => $__onb['tour']['welcome_cta_primary'],
                 'welcome_cta_secondary' => $__onb['tour']['welcome_cta_secondary'],
             ],
@@ -360,7 +361,7 @@ if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id']))
             $__payload,
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES
         ) . ";</script>\n";
-        echo '<script src="../assets/js/onboarding.js?v=20260506"></script>' . "\n";
+        echo '<script src="../assets/js/onboarding.js?v=20260522"></script>' . "\n";
     }
 }
 ?>

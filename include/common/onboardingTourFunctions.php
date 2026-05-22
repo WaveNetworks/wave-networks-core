@@ -152,22 +152,24 @@ function register_onboarding_tour($slug, $config = [], $steps = []) {
     $s_name    = sanitize($config['name'] ?? $slug, SQL);
     $s_title   = sanitize($config['welcome_title'] ?? '', SQL);
     $s_body    = sanitize($config['welcome_body_md'] ?? '', SQL);
+    $s_video   = sanitize($config['welcome_video_url'] ?? '', SQL);
     $s_cta1    = sanitize($config['welcome_cta_primary'] ?? 'Take the tour', SQL);
     $s_cta2    = sanitize($config['welcome_cta_secondary'] ?? 'Explore on my own', SQL);
     $s_active  = !empty($config['is_active']) ? 1 : (isset($config['is_active']) ? 0 : 1);
     $s_app     = sanitize($config['created_by_app'] ?? 'core', SQL);
 
     db_query("INSERT INTO onboarding_tour
-                (slug, name, welcome_title, welcome_body_md,
+                (slug, name, welcome_title, welcome_body_md, welcome_video_url,
                  welcome_cta_primary, welcome_cta_secondary,
                  is_active, created_by_app)
               VALUES
-                ('$s_slug', '$s_name', '$s_title', '$s_body',
+                ('$s_slug', '$s_name', '$s_title', '$s_body', '$s_video',
                  '$s_cta1', '$s_cta2', '$s_active', '$s_app')
               ON DUPLICATE KEY UPDATE
                 name = VALUES(name),
                 welcome_title = VALUES(welcome_title),
                 welcome_body_md = VALUES(welcome_body_md),
+                welcome_video_url = VALUES(welcome_video_url),
                 welcome_cta_primary = VALUES(welcome_cta_primary),
                 welcome_cta_secondary = VALUES(welcome_cta_secondary),
                 is_active = VALUES(is_active)");
