@@ -97,3 +97,49 @@ if (($action ?? null) == 'apiGetCostSummary') {
         $_SESSION['success'] = 'OK';
     }
 }
+
+// ── Delete cost entries by filter (cleanup of bad/duplicate rows) ─────────────
+// Requires source_app so an unfiltered mass-delete is impossible. Supports
+// dry_run=1 to preview the count. Used to purge phantom COGS rows.
+if (($action ?? null) == 'apiDeleteCosts') {
+    if (require_api_scope('costs:write')) {
+        $errs = [];
+        $source_app = trim($_POST['source_app'] ?? '');
+        if ($source_app === '') {
+            $errs['source_app'] = 'source_app is required (refusing an unfiltered delete).';
+        }
+
+        if (count($errs) <= 0) {
+            $where = "source_app = '" . sanitize($source_app, SQL) . "'";
+            if (!empty($_POST['cost_type'])) $where .= " AND cost_type = '" . sanitize($_POST['cost_type'], SQL) . "'";
+            if (!empty($_POST['vendor']))    $where .= " AND vendor = '" . sanitize($_POST['vendor'], SQL) . "'";
+            if (isset($_POST['min_amount']) && is_numeric($_POST['min_amount'])) $where .= " AND amount >= " . floatval($_POST['min_amount']);
+            if (isset($_POST['max_amount']) && is_numeric($_POST['max_amount'])) $where .= " AND amount <= " . floatval($_POST['max_amount']);
+            if (!empty($_POST['from_date'])) $where .= " AND created >= '" . sanitize($_POST['from_date'], SQL) . "'";
+            if (!empty($_POST['to_date']))   $where .= " AND created <= '" . sanitize($_POST['to_date'], SQL) . "'";
+
+            $cnt_r = db_query("SELECT COUNT(*) AS c FROM cost_entry WHERE $where");
+            if ($cnt_r === false) {
+                $_SESSION['error'] = db_error();
+            } else {
+                $rows  = db_fetch_all($cnt_r);
+                $count = (int) ($rows[0]['c'] ?? 0);
+                if (!empty($_POST['dry_run'])) {
+                    $data['would_delete'] = $count;
+                    $data['where']        = $where;
+                    $_SESSION['success']  = "Dry run: $count cost entr(ies) match.";
+                } else {
+                    $del = db_query("DELETE FROM cost_entry WHERE $where");
+                    if ($del === false) {
+                        $_SESSION['error'] = db_error();
+                    } else {
+                        $data['deleted'] = $count;
+                        $_SESSION['success'] = "Deleted $count cost entr(ies).";
+                    }
+                }
+            }
+        } else {
+            $_SESSION['error'] = implode(' ', $errs);
+        }
+    }
+}
