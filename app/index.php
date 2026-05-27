@@ -20,6 +20,7 @@ $views = [
     'user_create'     => __DIR__ . '/../views/user_create.php',
     'roles'           => __DIR__ . '/../views/roles.php',
     'settings'        => __DIR__ . '/../views/settings.php',
+    'media'           => __DIR__ . '/../views/media.php',
     'oauth_providers' => __DIR__ . '/../views/oauth_providers.php',
     'saml_providers'       => __DIR__ . '/../views/saml_providers.php',
     'costs'                => __DIR__ . '/../views/costs.php',

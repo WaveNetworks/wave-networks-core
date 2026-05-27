@@ -58,6 +58,10 @@
                 <i class="bi bi-people sidebar-icon"></i>
                 <span class="sidebar-text">Users</span>
             </a>
+            <a class="nav-link text-white <?= ($page ?? '') === 'media' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=media">
+                <i class="bi bi-images sidebar-icon"></i>
+                <span class="sidebar-text">Media</span>
+            </a>
             <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration', 'error_log', 'api_keys', 'onboarding_tours']); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#settingsMenu" role="button"
