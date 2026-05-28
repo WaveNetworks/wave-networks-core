@@ -121,7 +121,7 @@ $shard_id_self = $_SESSION['shard_id'] ?? '';
             </div>
             <div class="mb-3">
                 <label class="form-label">Welcome video (optional)</label>
-                <input type="url" class="form-control" name="welcome_video_url" value="<?= h($e['welcome_video_url'] ?? '') ?>" placeholder="https://www.youtube.com/watch?v=…  or  https://drive.google.com/file/d/…/view  or  https://…/intro.mp4">
+                <input type="text" class="form-control" name="welcome_video_url" value="<?= h($e['welcome_video_url'] ?? '') ?>" placeholder="https://www.youtube.com/watch?v=…  or  https://drive.google.com/file/d/…/view  or  https://…/intro.mp4  or  /admin/tour_media/…">
                 <div class="form-text">
                     Paste a YouTube link, a Google Drive share link, or a direct video file URL (.mp4/.webm).
                     A player is shown above the welcome text. Recommended for larger videos.
