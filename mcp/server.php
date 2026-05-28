@@ -196,6 +196,31 @@ $tools = [
             'required' => ['feedback_id', 'change_request_id'],
         ],
     ],
+    [
+        'name'        => 'list_media',
+        'description' => 'List media-library assets uploaded to THIS app\'s admin. Use to find images, logos, ad backgrounds, PDFs, etc. for embedding in pages/cards/emails — call BEFORE hard-coding any placeholder image URL. Each asset includes its public URL ready to embed.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'search'      => ['type' => 'string',  'description' => 'Match in title or original filename (e.g. "women", "logo", "hero")'],
+                'mime_prefix' => ['type' => 'string',  'description' => 'e.g. "image/" for images only, "image/png" for PNGs'],
+                'ext'         => ['type' => 'string',  'description' => 'Exact extension filter, e.g. "png", "svg"'],
+                'page'        => ['type' => 'integer', 'description' => 'Page number (default 1)'],
+                'per_page'    => ['type' => 'integer', 'description' => 'Items per page (default 50, max 100)'],
+            ],
+        ],
+    ],
+    [
+        'name'        => 'get_media',
+        'description' => 'Get one media-library asset by id. Returns the public URL, mime type, dimensions, file size, title and original filename.',
+        'inputSchema' => [
+            'type'       => 'object',
+            'properties' => [
+                'asset_id' => ['type' => 'integer', 'description' => 'The media asset id'],
+            ],
+            'required' => ['asset_id'],
+        ],
+    ],
 ];
 
 // ─── HTTP API Helper ─────────────────────────────────────────────────────────
@@ -414,6 +439,36 @@ function handle_tool_call($id, $toolName, $args) {
                 return make_tool_result($id, $resp['error'], true);
             }
             return make_tool_result($id, $resp['success'] ?? 'Feedback grouped.');
+
+        case 'list_media':
+            $params = array();
+            foreach (['search', 'mime_prefix', 'ext', 'page', 'per_page'] as $k) {
+                if (isset($args[$k])) { $params[$k] = $args[$k]; }
+            }
+            $resp = api_call('apiListMedia', $params);
+            if (!empty($resp['error'])) { return make_tool_result($id, $resp['error'], true); }
+            $r   = $resp['results'] ?? array();
+            $out = "Found " . ($r['total'] ?? 0) . " media asset(s) in this app's library (page " . ($r['page'] ?? 1) . ", " . count($r['assets'] ?? array()) . " shown):\n";
+            foreach (($r['assets'] ?? array()) as $a) {
+                $out .= "  - #" . $a['asset_id'] . " " . ($a['title'] ?: $a['original_name']) . " (" . $a['mime_type'];
+                if (!empty($a['width'])) { $out .= ", " . $a['width'] . "x" . $a['height']; }
+                $out .= ")\n    URL: " . $a['url'] . "\n";
+            }
+            return make_tool_result($id, $out);
+
+        case 'get_media':
+            if (!isset($args['asset_id'])) {
+                return make_tool_result($id, 'asset_id is required', true);
+            }
+            $resp = api_call('apiGetMedia', ['asset_id' => $args['asset_id']]);
+            if (!empty($resp['error'])) { return make_tool_result($id, $resp['error'], true); }
+            $a = $resp['results']['asset'] ?? null;
+            if (!$a) { return make_tool_result($id, 'Asset not found', true); }
+            $out = "#" . $a['asset_id'] . " " . ($a['title'] ?: $a['original_name']) . "\n";
+            $out .= "  mime: " . $a['mime_type'] . "  size: " . $a['file_size'] . " bytes\n";
+            if (!empty($a['width'])) { $out .= "  dimensions: " . $a['width'] . "x" . $a['height'] . "\n"; }
+            $out .= "  URL: " . $a['url'] . "\n";
+            return make_tool_result($id, $out);
 
         default:
             return make_error($id, -32601, "Unknown tool: $toolName");
