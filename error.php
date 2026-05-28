@@ -32,7 +32,12 @@ try {
     $method = $_SERVER['REQUEST_METHOD'] ?? '';
     // Browser DevTools auto-fetch source maps for vendored CSS/JS; these 404s
     // are not real errors and just spam the security monitor.
-    $is_noise = ($status === 404 && preg_match('#\.(css|js)\.map($|\?)#', $uri));
+    // Media proxy 404s (media/branding/tour_media) are also noise — they happen
+    // when stored content references a deleted or never-existing asset.
+    $is_noise = ($status === 404 && (
+        preg_match('#\.(css|js)\.map($|\?)#', $uri)
+        || preg_match('#/admin/(media|branding|tour_media)/#', $uri)
+    ));
     if (function_exists('log_error_to_db') && !$is_noise) {
         $msg = "HTTP $status: $method $uri";
         log_error_to_db('WARNING', $msg, __FILE__, 0, null);
