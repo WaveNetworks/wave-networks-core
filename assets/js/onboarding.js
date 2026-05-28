@@ -129,13 +129,13 @@
 
     var overlay = document.createElement('div');
     overlay.id = 'wnOnboardingOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1080;pointer-events:auto;';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100000;pointer-events:auto;';
     document.body.appendChild(overlay);
 
     var pop = document.createElement('div');
     pop.id = 'wnOnboardingPopover';
     pop.className = 'card shadow';
-    pop.style.cssText = 'position:fixed;z-index:1090;max-width:360px;min-width:280px;';
+    pop.style.cssText = 'position:fixed;z-index:100010;max-width:360px;min-width:280px;';
     pop.innerHTML = ''
       + '<div class="card-body">'
       + '  <h6 class="card-title mb-2">' + escapeHtml(step.title || '') + '</h6>'
@@ -197,7 +197,7 @@
   if (!document.getElementById('wn-onb-style')) {
     var s = document.createElement('style');
     s.id = 'wn-onb-style';
-    s.textContent = '.wn-onb-highlight{position:relative;z-index:1085;box-shadow:0 0 0 4px rgba(13,110,253,.85),0 0 0 9999px rgba(0,0,0,0);border-radius:4px;}';
+    s.textContent = '.wn-onb-highlight{position:relative;z-index:100005;box-shadow:0 0 0 4px rgba(13,110,253,.85),0 0 0 9999px rgba(0,0,0,0);border-radius:4px;}';
     document.head.appendChild(s);
   }
 
