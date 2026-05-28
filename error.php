@@ -34,9 +34,13 @@ try {
     // are not real errors and just spam the security monitor.
     // Media proxy 404s (media/branding/tour_media) are also noise — they happen
     // when stored content references a deleted or never-existing asset.
+    // Probes for opcache reset/flush scripts (opcache_flush.php, opcache_reset.php)
+    // are vulnerability-scanner noise — we deliberately don't expose such an
+    // endpoint, so these 404s are expected scanner traffic, not a real bug.
     $is_noise = ($status === 404 && (
         preg_match('#\.(css|js)\.map($|\?)#', $uri)
         || preg_match('#/admin/(media|branding|tour_media)/#', $uri)
+        || preg_match('#/opcache_(flush|reset)\.php($|\?)#', $uri)
     ));
     if (function_exists('log_error_to_db') && !$is_noise) {
         $msg = "HTTP $status: $method $uri";
