@@ -512,6 +512,10 @@ function get_change_requests($filters = []) {
         $s = sanitize($filters['priority'], SQL);
         $where[] = "cr.priority = '$s'";
     }
+    if (!empty($filters['source_app'])) {
+        $s = sanitize($filters['source_app'], SQL);
+        $where[] = "cr.source_app = '$s'";
+    }
     if (!empty($filters['search'])) {
         $s = sanitize($filters['search'], SQL);
         $where[] = "(cr.title LIKE '%$s%' OR cr.description LIKE '%$s%')";

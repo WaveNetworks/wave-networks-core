@@ -93,6 +93,7 @@ if (($action ?? null) == 'apiListChangeRequests') {
         if (!empty($_POST['status']))       $filters['status']       = $_POST['status'];
         if (!empty($_POST['request_type'])) $filters['request_type'] = $_POST['request_type'];
         if (!empty($_POST['priority']))     $filters['priority']     = $_POST['priority'];
+        if (!empty($_POST['source_app']))   $filters['source_app']   = $_POST['source_app'];
         if (!empty($_POST['search']))       $filters['search']       = $_POST['search'];
         if (!empty($_POST['page']))         $filters['page']         = $_POST['page'];
         if (!empty($_POST['per_page']))     $filters['per_page']     = $_POST['per_page'];
