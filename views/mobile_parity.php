@@ -88,7 +88,7 @@ $page_title = 'Mobile Parity';
     function loadParity() {
         var tbody = document.getElementById('parityTbody');
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-body-secondary p-3">Loading…</td></tr>';
-        apiPost('apiListMobileParity', {
+        apiPost('memberListMobileParity', {
             source_app:    document.getElementById('parityAppFilter').value,
             category:      document.getElementById('parityCatFilter').value,
             mobile_status: document.getElementById('parityStatusFilter').value,
@@ -208,7 +208,7 @@ $page_title = 'Mobile Parity';
         var parityId = sel.dataset.parityId;
         var status   = sel.value;
         sel.disabled = true;
-        apiPost('apiSetMobileParityStatus', { parity_id: parityId, mobile_status: status }, function(json){
+        apiPost('memberSetMobileParityStatus', { parity_id: parityId, mobile_status: status }, function(json){
             sel.disabled = false;
             if (json.error) {
                 if (typeof showToast === 'function') showToast('danger', json.error);
