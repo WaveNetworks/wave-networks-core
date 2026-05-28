@@ -44,7 +44,7 @@ function media_human_size(int $bytes): string {
 <!-- Upload -->
 <div class="card mb-4">
     <div class="card-body">
-        <form method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+        <form method="post" enctype="multipart/form-data" class="row g-2 align-items-start">
             <input type="hidden" name="action" value="uploadMedia">
             <div class="col-12 col-md-5">
                 <label class="form-label small fw-semibold">File</label>
@@ -58,6 +58,7 @@ function media_human_size(int $bytes): string {
                        placeholder="e.g. elevateHER community ad — women (transparent)">
             </div>
             <div class="col-12 col-md-2 d-grid">
+                <label class="form-label small fw-semibold d-none d-md-block" aria-hidden="true">&nbsp;</label>
                 <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>Upload</button>
             </div>
         </form>
