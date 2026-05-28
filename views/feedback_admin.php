@@ -459,10 +459,11 @@ $stats = get_feedback_stats();
         document.getElementById('crEditId').value = '';
         document.getElementById('crFeedbackId').value = fid;
         document.getElementById('crTitle').value = '';
-        var desc = row.message || '';
-        var ctxBlock = renderChatContextBlock(row);
-        if (ctxBlock) desc += '\n' + ctxBlock;
-        document.getElementById('crDescription').value = desc;
+        // Description starts as the raw message only. The server appends the
+        // full captured context (page URL, viewport, screenshot, chat
+        // transcript) via build_feedback_context_block() when the feedback is
+        // grouped onto the CR, so we don't duplicate it client-side here.
+        document.getElementById('crDescription').value = row.message || '';
         document.getElementById('crType').value = 'change';
         document.getElementById('crPriority').value = 'medium';
         document.getElementById('crModalTitle').textContent = 'Create Change Request from Feedback';

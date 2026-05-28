@@ -288,6 +288,73 @@ function get_feedback_by_id($feedback_id) {
 }
 
 /**
+ * Build an enriched plaintext context block for a feedback row, suitable for
+ * appending to a change_request.description so the downstream builder agent
+ * inherits the page URL, viewport, screenshot URL and chat transcript that we
+ * capture at submission time but otherwise strip before the task is created.
+ *
+ * Mirrors the JS renderChatContextBlock() in views/feedback_admin.php so the
+ * admin UI and server-side enrichment stay in sync. Returns '' when there is
+ * nothing worth appending.
+ *
+ * @param array $fb Feedback row (as returned by get_feedback_by_id)
+ * @return string
+ */
+function build_feedback_context_block($fb) {
+    if (!is_array($fb) || empty($fb['feedback_id'])) return '';
+
+    $fid   = (int) $fb['feedback_id'];
+    $lines = [];
+    $lines[] = '--- Feedback context ---';
+    $lines[] = 'Feedback #' . $fid . (!empty($fb['created']) ? ' · ' . $fb['created'] : '');
+
+    // Page URL — prefer the form-submitted capture_url, fall back to referer.
+    $page = '';
+    if (!empty($fb['capture_url']))   $page = $fb['capture_url'];
+    elseif (!empty($fb['page_url']))  $page = $fb['page_url'];
+    if ($page !== '') $lines[] = 'Page: ' . $page;
+
+    // Viewport — skip when both dimensions are absent/zero.
+    $vw = isset($fb['viewport_w']) ? (int) $fb['viewport_w'] : 0;
+    $vh = isset($fb['viewport_h']) ? (int) $fb['viewport_h'] : 0;
+    if ($vw > 0 || $vh > 0) $lines[] = 'Viewport: ' . $vw . 'x' . $vh;
+
+    // Screenshot — served by admin/feedback_screenshot.php (admin-only proxy).
+    if (!empty($fb['screenshot_path'])) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? '';
+        $prefix = $host !== '' ? $scheme . '://' . $host : '';
+        $lines[] = 'Screenshot: ' . $prefix . '/admin/feedback/screenshot/' . $fid;
+    }
+
+    // Chat transcript — parse context_json.chat.messages, last 20 turns.
+    if (!empty($fb['context_json'])) {
+        $ctx = json_decode($fb['context_json'], true);
+        $messages = $ctx['chat']['messages'] ?? null;
+        if (is_array($messages) && count($messages) > 0) {
+            $turns = array_slice($messages, -20);
+            $lines[] = 'Chat transcript (last ' . count($turns) . ' turns):';
+            foreach ($turns as $m) {
+                if (!is_array($m)) continue;
+                $role = ($m['role'] ?? '') === 'user' ? 'user' : 'assistant';
+                $text = $m['text'] ?? ($m['content'] ?? '');
+                if (!is_string($text)) $text = json_encode($text);
+                $text = trim(preg_replace('/\s+/', ' ', $text));
+                if (mb_strlen($text) > 500) $text = mb_substr($text, 0, 500) . '…';
+                $lines[] = '  [' . $role . '] ' . $text;
+            }
+        }
+    }
+
+    $lines[] = '--- end ---';
+
+    // Nothing beyond the wrapper + id header → not worth appending.
+    if (count($lines) <= 3) return '';
+
+    return implode("\n", $lines);
+}
+
+/**
  * Get feedback statistics.
  *
  * @return array
@@ -582,6 +649,25 @@ function group_feedback_with_request($feedback_id, $change_request_id) {
     $fid  = intval($feedback_id);
     $crid = intval($change_request_id);
     $result = (bool) db_query("UPDATE feedback SET change_request_id = '$crid', status = 'grouped' WHERE feedback_id = '$fid'");
+
+    // Enrich the CR description with the rich context captured at submission
+    // time (page URL, viewport, screenshot, chat transcript) so the downstream
+    // builder agent doesn't have to fix issues blind. Idempotent: skips if a
+    // block for this feedback id was already appended.
+    if ($result) {
+        $fb_row = get_feedback_by_id($fid);
+        $block  = build_feedback_context_block($fb_row);
+        if ($block !== '') {
+            $cr_row = db_fetch(db_query("SELECT description FROM change_request WHERE change_request_id = '$crid'"));
+            $cur    = $cr_row['description'] ?? '';
+            if (strpos($cur, 'Feedback #' . $fid . ' ·') === false
+                && strpos($cur, 'Feedback #' . $fid . "\n") === false) {
+                $new_desc = rtrim($cur) . "\n\n" . $block;
+                $s_desc   = sanitize($new_desc, SQL);
+                db_query("UPDATE change_request SET description = '$s_desc' WHERE change_request_id = '$crid'");
+            }
+        }
+    }
 
     // Notify the feedback author that their feedback led to a change request
     if ($result) {
