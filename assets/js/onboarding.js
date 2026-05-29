@@ -122,6 +122,23 @@
     }
 
     var step = steps[idx];
+
+    // Honor a step's navigate action: if this step belongs to a different
+    // page, persist progress and load that page so the highlight lands on the
+    // right view. The tour resumes at this step (status=in_progress) once the
+    // page reloads. Guards against a redirect loop by only navigating when the
+    // current ?page= differs from the step's target page.
+    if (step && typeof step.action === 'string' && step.action.indexOf('navigate:') === 0) {
+      var navUrl = step.action.slice('navigate:'.length);
+      var wantPage = (navUrl.match(/[?&]page=([^&]+)/) || [])[1] || '';
+      var curPage = (location.search.match(/[?&]page=([^&]+)/) || [])[1] || '';
+      if (wantPage && wantPage !== curPage) {
+        clearPopover();
+        location.href = navUrl;
+        return;
+      }
+    }
+
     var target = step.selector ? document.querySelector(step.selector) : null;
     var rect = target ? target.getBoundingClientRect() : null;
 
