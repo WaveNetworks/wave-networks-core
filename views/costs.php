@@ -12,6 +12,59 @@ $recurring = get_recurring_costs();
     <h3>Cost Tracking</h3>
 </div>
 
+<!-- Subscriptions + Quota (flat-fee SaaS vendors with a quota — generic per-vendor) -->
+<?php $subs = function_exists('get_subscription_usage_summary') ? get_subscription_usage_summary() : []; ?>
+<?php if (count($subs) > 0) { ?>
+<div class="mb-4">
+    <h6 class="text-muted mb-2">Subscriptions &amp; Quota</h6>
+    <div class="row g-3">
+        <?php foreach ($subs as $s) {
+            $barClass = $s['over_quota'] ? 'bg-danger' : ($s['over_warn'] ? 'bg-warning' : 'bg-success');
+            $barPct   = $s['quota'] > 0 ? min(100, $s['pct']) : 0;
+            $unit     = h($s['unit_type']);
+        ?>
+        <div class="col-md-6 col-xl-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title mb-0"><?= h($s['label']) ?></h6>
+                    <div class="text-muted small mb-3">
+                        <?php if ($s['plan_label'] !== '') { ?><?= h(ucfirst($s['plan_label'])) ?> · <?php } ?>$<?= number_format($s['monthly_cost'], 2) ?>/mo
+                    </div>
+
+                    <?php if (!$s['has_data']) { ?>
+                        <p class="text-muted small mb-0"><i class="bi bi-hourglass-split"></i> No usage recorded this month yet.</p>
+                    <?php } else { ?>
+                        <?php if ($s['quota'] > 0) { ?>
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span><?= ucfirst($unit) ?> this month</span>
+                            <span><?= number_format($s['units_used']) ?> / <?= number_format($s['quota']) ?></span>
+                        </div>
+                        <div class="progress mb-2" style="height: 10px;">
+                            <div class="progress-bar <?= $barClass ?>" role="progressbar" style="width: <?= $barPct ?>%;" aria-valuenow="<?= $barPct ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="small mb-2 <?= $s['over_warn'] ? 'text-warning' : 'text-muted' ?>"><?= $s['pct'] ?>% of quota</div>
+                        <?php } else { ?>
+                        <div class="small mb-2"><?= number_format($s['units_used']) ?> <?= $unit ?> this month <span class="text-muted">(unlimited plan)</span></div>
+                        <?php } ?>
+
+                        <?php if ($s['hours_est'] !== null) { ?>
+                        <div class="small <?= $s['over_hours'] ? 'text-warning' : 'text-muted' ?>">
+                            ~<?= $s['hours_est'] ?>h est.<?php if ($s['hour_quota'] > 0) { ?> / <?= (int)$s['hour_quota'] ?>h soft cap<?php } ?>
+                        </div>
+                        <?php } ?>
+                        <div class="small text-muted">Active days: <?= (int)$s['active_days'] ?> · Avg: <?= number_format($s['avg_per_day']) ?>/day</div>
+                        <?php if ($s['quota'] > 0) { ?>
+                        <div class="small text-muted">Forecast month-end: <?= number_format($s['forecast']) ?> (<?= $s['forecast_pct'] ?>%)</div>
+                        <?php } ?>
+                    <?php } ?>
+                </div>
+            </div>
+        </div>
+        <?php } ?>
+    </div>
+</div>
+<?php } ?>
+
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" role="tablist">
     <li class="nav-item">

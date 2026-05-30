@@ -391,3 +391,166 @@ function get_cost_by_vendor($from = null, $to = null) {
 
     return $r ? db_fetch_all($r) : [];
 }
+
+/**
+ * Record a per-event usage row for a subscription-model vendor.
+ *
+ * Subscription vendors (UnrealSpeech TTS, future image/video SaaS) charge a
+ * flat monthly fee against a quota, NOT per event. So the cost_entry row carries
+ * amount = $0 — it's an audit trail of consumed units, not a charge. The actual
+ * bill lives in cost_recurring (see ensure_subscription_recurring). Pay-per-event
+ * vendors (Anthropic, OpenAI, DeepSeek) keep using record_cost() with a real amount.
+ *
+ * @param string $vendor     e.g. 'unrealspeech'
+ * @param int    $units_used chars / seconds / requests — whatever the vendor meters
+ * @param string $unit_type  'chars' | 'seconds' | 'requests' | 'tokens'
+ * @param array  $opts       user_id, source_app, description, plan, quota,
+ *                           metadata (extra fields merged into metadata JSON)
+ * @return int|false         cost_id on success, false on failure
+ */
+function record_subscription_usage($vendor, $units_used, $unit_type, $opts = []) {
+    $meta = array_merge([
+        'service'   => $vendor,
+        'units'     => (int) $units_used,
+        'unit_type' => $unit_type,
+        'plan'      => $opts['plan']  ?? null,
+        'quota'     => $opts['quota'] ?? null,
+    ], $opts['metadata'] ?? []);
+
+    return record_cost(
+        'cogs',
+        $opts['source_app'] ?? 'unknown',
+        $opts['description'] ?? "Subscription usage: $vendor",
+        0.0,                                  // amount = $0; subscription paid via cost_recurring
+        [
+            'user_id'  => $opts['user_id'] ?? null,
+            'vendor'   => $vendor,
+            'metadata' => json_encode($meta),
+        ]
+    );
+}
+
+/**
+ * Ensure exactly one cost_recurring row exists for a subscription vendor.
+ *
+ * Idempotent upsert keyed on the UNIQUE (vendor, frequency) tuple (migration 4.6),
+ * so callers can fire this once per request and config changes (plan/price) flow
+ * straight through to the dashboard. Quota + plan details ride in metadata JSON so
+ * the admin widget can render a generic per-vendor quota bar with no vendor-specific
+ * code in admin core.
+ *
+ * @param string $vendor         e.g. 'unrealspeech'
+ * @param float  $monthly_amount flat monthly fee (USD)
+ * @param string $description     human-readable label (e.g. "UnrealSpeech basic plan")
+ * @param array  $opts            frequency, cost_type, created_by, metadata (array)
+ * @return bool
+ */
+function ensure_subscription_recurring($vendor, $monthly_amount, $description, $opts = []) {
+    if ($vendor === null || $vendor === '') {
+        return false;
+    }
+
+    $v          = sanitize($vendor, SQL);
+    $amt        = number_format((float) $monthly_amount, 2, '.', '');
+    $desc       = sanitize($description, SQL);
+    $freq       = sanitize($opts['frequency'] ?? 'monthly', SQL);
+    $ctype      = sanitize($opts['cost_type'] ?? 'cogs', SQL);
+    $created_by = (int) ($opts['created_by'] ?? ($_SESSION['user_id'] ?? 0));
+    $meta       = isset($opts['metadata']) ? sanitize(json_encode($opts['metadata']), SQL) : null;
+    $meta_col   = $meta !== null ? "'$meta'" : 'NULL';
+
+    return (bool) db_query(
+        "INSERT INTO cost_recurring (cost_type, description, amount, frequency, vendor, metadata, is_active, created_by)
+         VALUES ('$ctype', '$desc', '$amt', '$freq', '$v', $meta_col, 1, '$created_by')
+         ON DUPLICATE KEY UPDATE
+            amount      = VALUES(amount),
+            description = VALUES(description),
+            metadata    = VALUES(metadata),
+            cost_type   = VALUES(cost_type),
+            is_active   = 1"
+    );
+}
+
+/**
+ * Build the per-vendor "Subscriptions + Quota" widget data for ?page=costs.
+ *
+ * Generic: renders for ANY vendor that has a cost_recurring row with a non-NULL
+ * vendor AND a record_subscription_usage() history this month. Units consumed are
+ * summed from cost_entry.metadata (admin-local DB — the only source admin core can
+ * reach; cross-app rollups live in each app's own DB). Degrades gracefully: a vendor
+ * with a recurring row but no usage yet returns has_data = false so the view can show
+ * "no data yet" instead of a misleading zero bar.
+ *
+ * @return array list of widget rows
+ */
+function get_subscription_usage_summary() {
+    $r = db_query("SELECT vendor, amount, description, metadata
+                   FROM cost_recurring
+                   WHERE is_active = 1 AND vendor IS NOT NULL AND vendor <> ''
+                   ORDER BY vendor");
+    if (!$r) return [];
+
+    // Month-to-date window + month math, computed once.
+    $month_start = date('Y-m-01 00:00:00');
+    $day_of_month = (int) date('j');
+    $days_in_month = (int) date('t');
+
+    $out = [];
+    foreach (db_fetch_all($r) as $row) {
+        $vendor = $row['vendor'];
+        $v      = sanitize($vendor, SQL);
+        $ms     = sanitize($month_start, SQL);
+        $meta   = json_decode($row['metadata'] ?? '', true) ?: [];
+
+        $unit_type   = $meta['unit_type']  ?? 'units';
+        $quota       = (int) ($meta['quota']      ?? 0);   // 0 = unlimited
+        $hour_quota  = (int) ($meta['hour_quota'] ?? 0);
+        $warn_pct    = (int) ($meta['warn_pct']   ?? 80);
+        $cps         = max(1, (int) ($meta['chars_per_second'] ?? 14));
+        $plan_label  = $meta['plan'] ?? '';
+
+        $usage = db_fetch(db_query(
+            "SELECT COALESCE(SUM(CAST(JSON_EXTRACT(metadata, '$.units') AS UNSIGNED)), 0) AS units,
+                    COUNT(DISTINCT DATE(created)) AS active_days
+             FROM cost_entry
+             WHERE vendor = '$v' AND created >= '$ms'"
+        ));
+
+        $units   = (int) ($usage['units'] ?? 0);
+        $active  = (int) ($usage['active_days'] ?? 0);
+        $has_data = $units > 0;
+
+        $pct = ($quota > 0) ? round($units / $quota * 100, 1) : 0;
+        // Forecast month-end by linear run-rate on elapsed days.
+        $forecast = ($day_of_month > 0) ? (int) round($units / $day_of_month * $days_in_month) : $units;
+        $forecast_pct = ($quota > 0) ? round($forecast / $quota * 100, 1) : 0;
+        $avg_per_day  = ($active > 0) ? (int) round($units / $active) : 0;
+
+        // Hours estimate (chars → seconds → hours), only meaningful for char metering.
+        $hours_est  = ($unit_type === 'chars') ? round($units / $cps / 3600, 1) : null;
+
+        $out[] = [
+            'vendor'       => $vendor,
+            'label'        => $row['description'] ?: $vendor,
+            'plan_label'   => $plan_label,
+            'monthly_cost' => (float) $row['amount'],
+            'unit_type'    => $unit_type,
+            'units_used'   => $units,
+            'quota'        => $quota,
+            'pct'          => $pct,
+            'warn_pct'     => $warn_pct,
+            'over_warn'    => $quota > 0 && $pct >= $warn_pct,
+            'over_quota'   => $quota > 0 && $pct >= 100,
+            'hours_est'    => $hours_est,
+            'hour_quota'   => $hour_quota,
+            'over_hours'   => $hour_quota > 0 && $hours_est !== null && $hours_est > $hour_quota,
+            'active_days'  => $active,
+            'avg_per_day'  => $avg_per_day,
+            'forecast'     => $forecast,
+            'forecast_pct' => $forecast_pct,
+            'has_data'     => $has_data,
+        ];
+    }
+
+    return $out;
+}
