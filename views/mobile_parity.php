@@ -219,6 +219,14 @@ $page_title = 'Mobile Parity';
         });
     };
 
-    loadParity();
+    // Wait for bs-init.js (which defines apiPost) to load. On direct page load
+    // the bs-init.js script tag sits below this view's <script> in template.php,
+    // so calling apiPost() at parse time throws ReferenceError. On SPA nav the
+    // race doesn't fire because the page is already fully loaded.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadParity);
+    } else {
+        loadParity();
+    }
 })();
 </script>
