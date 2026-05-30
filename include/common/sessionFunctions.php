@@ -63,6 +63,13 @@ function init_session_storage() {
 
     if (empty($files_location)) { return; }
 
+    // session.save_path cannot be changed once a session is active. This
+    // happens when a CLI/cron process bootstraps twice (e.g. cron.php loads
+    // common_readonly.php → session_start(), then a job includes common.php
+    // which calls init_session_storage() again). Bail quietly instead of
+    // emitting a "Session save path cannot be changed" warning.
+    if (session_status() === PHP_SESSION_ACTIVE) { return; }
+
     $sessionDir = rtrim($files_location, '/') . '/sessions';
 
     if (!is_dir($sessionDir)) {
