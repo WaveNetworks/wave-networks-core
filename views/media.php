@@ -103,6 +103,11 @@ function media_human_size(int $bytes): string {
                 </div>
             </div>
             <div class="card-footer p-1 bg-transparent border-0 text-end">
+                <button type="button" class="btn btn-sm btn-link p-0 me-2" style="font-size:0.75rem;"
+                        data-bs-toggle="modal" data-bs-target="#replaceMediaModal"
+                        data-asset-id="<?= (int)$a['asset_id'] ?>"
+                        data-asset-ext="<?= h(strtolower($a['ext'])) ?>"
+                        data-asset-name="<?= h($a['title'] ?: $a['original_name']) ?>"><i class="bi bi-arrow-repeat"></i> Replace</button>
                 <form method="post" onsubmit="return confirm('Delete this media asset? Any pages using its URL will break.');" class="d-inline">
                     <input type="hidden" name="action" value="deleteMedia">
                     <input type="hidden" name="asset_id" value="<?= (int)$a['asset_id'] ?>">
@@ -115,7 +120,45 @@ function media_human_size(int $bytes): string {
 </div>
 <?php } ?>
 
+<!-- Replace media modal -->
+<div class="modal fade" id="replaceMediaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" enctype="multipart/form-data" class="modal-content">
+            <input type="hidden" name="action" value="replaceMedia">
+            <input type="hidden" name="asset_id" id="replaceAssetId" value="">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Replace media</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">Replacing <strong id="replaceAssetName"></strong> keeps the same URL — any pages already using it pick up the new file automatically.</p>
+                <label class="form-label small fw-semibold">New file</label>
+                <input type="file" class="form-control form-control-sm" name="media" id="replaceMediaFile" required>
+                <div class="form-text">Must be the same file type (<span id="replaceAssetExt"></span>) so the existing URL keeps serving the correct format.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-arrow-repeat me-1"></i>Replace</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+var replaceMediaModal = document.getElementById('replaceMediaModal');
+if (replaceMediaModal) {
+    replaceMediaModal.addEventListener('show.bs.modal', function (event) {
+        var btn = event.relatedTarget;
+        if (!btn) return;
+        var ext = btn.getAttribute('data-asset-ext') || '';
+        document.getElementById('replaceAssetId').value = btn.getAttribute('data-asset-id') || '';
+        document.getElementById('replaceAssetName').textContent = btn.getAttribute('data-asset-name') || 'this asset';
+        document.getElementById('replaceAssetExt').textContent = '.' + ext;
+        var file = document.getElementById('replaceMediaFile');
+        file.value = '';
+        file.setAttribute('accept', ext ? '.' + ext : '');
+    });
+}
 function copyMediaUrl(inputId, btn) {
     var inp = document.getElementById(inputId);
     if (!inp) return;
