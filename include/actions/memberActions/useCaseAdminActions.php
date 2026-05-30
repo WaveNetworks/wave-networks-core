@@ -114,7 +114,8 @@ if (($_POST['action'] ?? '') == 'getUseCaseDetail') {
             $_SESSION['error'] = 'Use case not found.';
         } else {
             $rr = db_query_prepared(
-                "SELECT run_id, run_at, permutation, status, duration_ms, fail_reason
+                "SELECT run_id, run_at, permutation, status, duration_ms, fail_reason,
+                        screenshot_paths
                  FROM use_case_test_run
                  WHERE use_case_id = ?
                  ORDER BY run_id DESC

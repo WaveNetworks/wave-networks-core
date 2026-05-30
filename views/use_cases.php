@@ -86,6 +86,24 @@ $page_title = 'Use Cases';
     </div>
 </div>
 
+<!-- Screenshot lightbox -->
+<div class="modal fade" id="shotModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="shotModalLabel">Screenshot</h6>
+                <a id="shotModalOpen" href="#" target="_blank" class="btn btn-sm btn-outline-secondary ms-auto me-2">
+                    <i class="bi bi-box-arrow-up-right"></i> Open
+                </a>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center bg-body-tertiary">
+                <img id="shotModalImg" src="" alt="" class="img-fluid" style="max-height:78vh;">
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 var currentPage = 1;
 var totalItems  = 0;
@@ -268,7 +286,7 @@ function loadDetail(id) {
         if (runs.length === 0) {
             html += '<div class="text-muted small">No test runs yet — the Playwright suite has not exercised this case.</div>';
         } else {
-            html += '<table class="table table-sm small mb-0">';
+            html += '<table class="table table-sm small mb-0 align-middle">';
             html += '<thead><tr><th>When</th><th>Permutation</th><th>Status</th><th class="text-end">ms</th></tr></thead><tbody>';
             runs.forEach(function(r) {
                 var sb = statusBadge(({pass:'passing',fail:'failing',flaky:'flaky',skipped:'pending'})[r.status] || r.status);
@@ -278,6 +296,10 @@ function loadDetail(id) {
                 html += '<td>' + sb + '</td>';
                 html += '<td class="text-end">' + (r.duration_ms || '—') + '</td>';
                 html += '</tr>';
+                var shots = runScreenshots(r);
+                if (shots.length) {
+                    html += '<tr><td colspan="4" class="pt-0 pb-2">' + renderThumbs(shots) + '</td></tr>';
+                }
             });
             html += '</tbody></table>';
         }
@@ -286,6 +308,51 @@ function loadDetail(id) {
 
         content.innerHTML = html;
     });
+}
+
+// Build viewable screenshot descriptors for a run. screenshot_paths is a
+// JSON array of runner-local paths; we serve by run_id + basename through
+// use_case_screenshot.php (the files are uploaded post-run).
+function runScreenshots(r) {
+    var paths = [];
+    try { paths = JSON.parse(r.screenshot_paths || '[]') || []; } catch (e) { paths = []; }
+    if (!Array.isArray(paths)) paths = [];
+    var out = [];
+    paths.forEach(function(p) {
+        var name = String(p).split('/').pop();
+        if (!name || !/\.png$/i.test(name)) return;
+        out.push({
+            name: name,
+            url:  'use_case_screenshot.php?run_id=' + encodeURIComponent(r.run_id) + '&f=' + encodeURIComponent(name)
+        });
+    });
+    return out;
+}
+
+function renderThumbs(shots) {
+    var html = '<div class="d-flex flex-wrap gap-2">';
+    shots.forEach(function(s) {
+        html += '<a href="#" onclick="showShot(\'' + escAttr(s.url) + '\',\'' + escAttr(s.name) + '\');return false;" '
+             +  'title="' + escAttr(s.name) + '">';
+        html += '<img src="' + escAttr(s.url) + '" alt="' + escAttr(s.name) + '" '
+             +  'onerror="this.closest(\'a\').style.display=\'none\';" '
+             +  'style="height:64px;width:auto;border:1px solid var(--bs-border-color);border-radius:4px;object-fit:cover;">';
+        html += '</a>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function showShot(url, name) {
+    document.getElementById('shotModalImg').src = url;
+    document.getElementById('shotModalLabel').textContent = name || 'Screenshot';
+    document.getElementById('shotModalOpen').href = url;
+    var el = document.getElementById('shotModal');
+    if (window.bootstrap && bootstrap.Modal) {
+        bootstrap.Modal.getOrCreateInstance(el).show();
+    } else {
+        window.open(url, '_blank');
+    }
 }
 
 function changePage(dir) {

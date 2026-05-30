@@ -503,6 +503,79 @@ if (($action ?? null) == 'apiRecordUseCaseTestRun') {
     }
 }
 
+// ── Upload a screenshot file for a recorded run ─────────────────────────
+// The runner POSTs each PNG (multipart: field `screenshot`) tagged with the
+// use_case_test_run.run_id returned by apiRecordUseCaseTestRun. Files land
+// outside the webroot at $files_location/use_case_screenshots/{run_id}/{name}
+// and are served back to admins via use_case_screenshot.php. This is what
+// makes the admin "browse runs + screenshots" UI show actual images instead
+// of dead local paths.
+if (($action ?? null) == 'apiUploadUseCaseScreenshot') {
+    if (require_api_scope('tests:write')) {
+        $errs   = [];
+        $run_id = (int)($_POST['run_id'] ?? 0);
+        if ($run_id <= 0) $errs[] = 'run_id is required.';
+
+        $file = $_FILES['screenshot'] ?? null;
+        if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $errs[] = 'screenshot file upload is required (multipart field "screenshot").';
+        } elseif (($file['size'] ?? 0) > 8 * 1024 * 1024) {
+            $errs[] = 'screenshot exceeds 8MB cap.';
+        }
+
+        // Name comes from the supplied filename; fall back to the upload name.
+        $name = use_case_screenshot_safe_name($_POST['name'] ?? ($file['name'] ?? ''));
+        if ($name === null) $errs[] = 'name must be a .png basename.';
+
+        // Verify the run row actually exists so a leaked key can't scatter
+        // files under arbitrary run_id folders.
+        if (empty($errs)) {
+            $chk = db_query_prepared(
+                "SELECT run_id FROM use_case_test_run WHERE run_id = ?",
+                [$run_id]
+            );
+            if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
+                $errs[] = "run_id $run_id not found.";
+            }
+        }
+
+        // Confirm it's really a PNG (magic bytes), not a renamed payload.
+        if (empty($errs)) {
+            $fh  = @fopen($file['tmp_name'], 'rb');
+            $sig = $fh ? fread($fh, 8) : '';
+            if ($fh) fclose($fh);
+            if ($sig !== "\x89PNG\r\n\x1a\n") {
+                $errs[] = 'file is not a valid PNG.';
+            }
+        }
+
+        if (empty($errs)) {
+            $base = use_case_screenshots_base_dir();
+            if (!$base) {
+                $_SESSION['error'] = 'files_location is not configured.';
+            } else {
+                $dir = $base . $run_id . '/';
+                if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+                $dest = $dir . $name;
+                if (!@move_uploaded_file($file['tmp_name'], $dest)) {
+                    // Fallback for non-HTTP-upload contexts / CLI tests.
+                    @copy($file['tmp_name'], $dest);
+                }
+                if (!is_file($dest)) {
+                    $_SESSION['error'] = 'failed to store screenshot.';
+                } else {
+                    $data['run_id'] = $run_id;
+                    $data['name']   = $name;
+                    $data['url']    = 'use_case_screenshot.php?run_id=' . $run_id . '&f=' . rawurlencode($name);
+                    $_SESSION['success'] = 'OK';
+                }
+            }
+        } else {
+            $_SESSION['error'] = implode('<br>', $errs);
+        }
+    }
+}
+
 // ── List runs for a use_case (latest first) ─────────────────────────────
 if (($action ?? null) == 'apiListUseCaseTestRuns') {
     if (require_api_scope('actions:read')) {
