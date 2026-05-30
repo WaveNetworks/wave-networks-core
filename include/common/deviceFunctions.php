@@ -86,14 +86,20 @@ function get_or_create_device() {
     }
     $device_id = register_device($cookie_id, $user_id);
 
+    // Cookies are only meaningful for HTTP requests. Under CLI/cron there are
+    // no response headers, and a cron job that emits output (e.g. cron.php's
+    // "Cron started" echo) before bootstrapping the device would trigger a
+    // "headers already sent" WARNING. Skip the write in those cases.
     $is_secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-    setcookie($cookie_name, $cookie_id, [
-        'expires'  => time() + $cookie_lifetime,
-        'path'     => '/',
-        'secure'   => $is_secure,
-        'httponly'  => true,
-        'samesite' => 'Lax',
-    ]);
+    if (PHP_SAPI !== 'cli' && !headers_sent()) {
+        setcookie($cookie_name, $cookie_id, [
+            'expires'  => time() + $cookie_lifetime,
+            'path'     => '/',
+            'secure'   => $is_secure,
+            'httponly'  => true,
+            'samesite' => 'Lax',
+        ]);
+    }
     $_SESSION['device_id'] = $device_id;
 
     return $device_id;
