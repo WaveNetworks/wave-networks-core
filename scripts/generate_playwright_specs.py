@@ -116,7 +116,7 @@ def emit_spec(use_case: dict, source_app: str, base_url: str) -> str:
             f"    await test.step('step {i+1}: page={page_value}', async () => {{\n"
             f"      const resp = await page.goto('{target}', {{ waitUntil: 'load' }});\n"
             f"      expect(resp?.status() ?? 0, 'HTTP status').toBeLessThan(500);\n"
-            f"      await page.screenshot({{ path: `tests/screenshots/${{runId}}/{slug}/{i+1:02d}_{page_value}.png`, fullPage: true }});\n"
+            f"      await page.screenshot({{ path: `screenshots/${{runId}}/{slug}/{i+1:02d}_{page_value}.png`, fullPage: true }});\n"
             f"    }});"
         )
 
