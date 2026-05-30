@@ -31,6 +31,11 @@
         });
     }
 
+    // Expose logo re-evaluation so theme.js can call it after it changes the
+    // sidebar's forced-dark mode (glass themes drop data-bs-theme="dark",
+    // which flips the sidebar logo from the dark variant to the light one).
+    window.wnUpdateLogos = function () { updateLogos(getMode()); };
+
     // Sync icon and logos to whatever the head script already set
     syncIcon(getMode());
     updateLogos(getMode());

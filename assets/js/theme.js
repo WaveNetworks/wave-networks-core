@@ -121,6 +121,10 @@
             if (navbar) navbar.classList.add('bg-body-tertiary');
             navLinks.forEach(function(l) { l.classList.add('text-white'); });
         }
+
+        // The sidebar's forced-dark state just changed — re-pick the brand
+        // logo so a light/glass sidebar shows the light-mode logo variant.
+        if (window.wnUpdateLogos) window.wnUpdateLogos();
     }
 
     setSidebarMode(getSidebarMode(savedTheme));
