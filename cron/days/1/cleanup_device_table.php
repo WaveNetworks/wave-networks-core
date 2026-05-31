@@ -62,13 +62,9 @@ try {
     // login_history is added by migration 2.6 — tolerate older schemas.
 }
 
-// ── 3. Surface rowcounts in admin error_log at INFO so ops can monitor
-//        whether cleanup is keeping up with new growth, without tailing cron. ──
-$summary = "device cleanup: deleted $device_deleted anonymous device rows older than "
-         . "$cutoff_days days; deleted $login_deleted login_history rows older than $login_days days";
-if (function_exists('log_error_to_db')) {
-    log_error_to_db('INFO', $summary, __FILE__, __LINE__);
-}
-
+// ── 3. Surface rowcounts on cron stdout so ops can monitor whether cleanup
+//        is keeping up with new growth. Deliberately NOT logged to error_log:
+//        routine INFO rows get scraped by the monitoring poller and re-spawn
+//        a Fix: task every day, drowning real errors in noise. ──
 echo "    cleanup_device_table: device_deleted=$device_deleted (>$cutoff_days d), "
    . "login_history_deleted=$login_deleted (>$login_days d)\n";
