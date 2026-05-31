@@ -178,6 +178,13 @@ executed by cron.php on their respective intervals.
 Daily (cron/days/1/):
   cleanup_error_log.php        — deletes error_log entries older than 30 days
   cleanup_expired_tokens.php   — deletes forgot tokens > 7 days, api_key > 90 days
+  cleanup_device_table.php     — deletes anonymous device rows (user_id NULL/0)
+                                 whose last_used/created is older than
+                                 DEVICE_CLEANUP_DAYS (default 30). NEVER deletes
+                                 user-linked rows. Also prunes login_history
+                                 older than LOGIN_HISTORY_CLEANUP_DAYS
+                                 (default 365, min 30). OPTIMIZEs device only
+                                 when >1000 rows pruned.
 
 Monthly (cron/months/1/):
   purge_deleted_users.php      — deletes read notifications > 90 days, orphaned devices
