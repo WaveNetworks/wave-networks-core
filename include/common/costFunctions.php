@@ -6,19 +6,21 @@
  */
 
 /**
- * Schema backstop: guarantee the `vendor` columns exist on cost_entry and
- * cost_recurring even when the migration runner dropped the DDL.
+ * Schema backstop: guarantee the `vendor` and `metadata` columns exist on
+ * cost_entry and cost_recurring even when the migration runner dropped the DDL.
  *
  * makershost runs MariaDB, where the admin-core migration runner wraps each
  * migration in a transaction and DDL implicit-commits can non-deterministically
  * DROP an ALTER (migration 3.0 adds cost_entry.vendor, 4.6 adds
- * cost_recurring.vendor). When that drop happens on a deployed host, every
+ * cost_recurring.vendor + cost_recurring.metadata, 2.7 creates cost_entry with
+ * metadata). When that drop happens on a deployed host, every
  * record_cost()/ensure_subscription_recurring() INSERT hits
- * "Unknown column 'vendor' in 'INSERT INTO'" and the whole TTS/cost write 500s
- * (nokemo tasks #806, #807 — observed on dswa.org/elevateher). This idempotent
- * autocommit ensure repairs the column on the fly. `ADD COLUMN IF NOT EXISTS`
- * is MariaDB-native and a cheap no-op once the column is present, so we run it
- * at most once per request behind a static guard.
+ * "Unknown column 'vendor'/'metadata' in 'INSERT INTO'" and the whole TTS/cost
+ * write 500s (nokemo tasks #806, #807 for vendor; #808, #809 for metadata —
+ * observed on dswa.org/elevateher). This idempotent autocommit ensure repairs
+ * the columns on the fly. `ADD COLUMN IF NOT EXISTS` is MariaDB-native and a
+ * cheap no-op once the column is present, so we run it at most once per request
+ * behind a static guard.
  */
 function ensure_cost_schema() {
     static $done = false;
@@ -26,6 +28,8 @@ function ensure_cost_schema() {
     $done = true;
     @db_query("ALTER TABLE cost_entry ADD COLUMN IF NOT EXISTS vendor VARCHAR(200) DEFAULT NULL AFTER source_app");
     @db_query("ALTER TABLE cost_recurring ADD COLUMN IF NOT EXISTS vendor VARCHAR(200) DEFAULT NULL");
+    @db_query("ALTER TABLE cost_entry ADD COLUMN IF NOT EXISTS metadata JSON DEFAULT NULL");
+    @db_query("ALTER TABLE cost_recurring ADD COLUMN IF NOT EXISTS metadata JSON DEFAULT NULL");
 }
 
 /**
