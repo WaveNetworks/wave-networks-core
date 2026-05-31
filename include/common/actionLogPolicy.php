@@ -56,6 +56,17 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'coach_removed'        => ['coach_user_id'],
     // alliance_pro_viewed has no params worth recording.
 
+    // ── Acquisition funnel stages (Task #793, Part A) ──
+    // Funnel stages ride the existing log_user_action() write path as named
+    // actions (no parallel logging table). Param keys are enums/IDs only —
+    // no PII, no free text. The reserved `_experiments` key (A/B variant
+    // assignment) is wired in #795; allowlisted here so it survives once
+    // that lands. Add new funnel stages declared via declare_funnel() here.
+    'acq_landing_viewed' => ['source_app', 'segment', '_experiments'],
+    'acq_signup_started' => ['source_app', 'segment', '_experiments'],
+    'acq_registered'     => ['source_app', 'segment', '_experiments'],
+    'acq_activated'      => ['source_app', 'segment', '_experiments'],
+
     // Add more here as actions ship.
 ];
 
