@@ -6,6 +6,29 @@
  */
 
 /**
+ * Schema backstop: guarantee the `vendor` columns exist on cost_entry and
+ * cost_recurring even when the migration runner dropped the DDL.
+ *
+ * makershost runs MariaDB, where the admin-core migration runner wraps each
+ * migration in a transaction and DDL implicit-commits can non-deterministically
+ * DROP an ALTER (migration 3.0 adds cost_entry.vendor, 4.6 adds
+ * cost_recurring.vendor). When that drop happens on a deployed host, every
+ * record_cost()/ensure_subscription_recurring() INSERT hits
+ * "Unknown column 'vendor' in 'INSERT INTO'" and the whole TTS/cost write 500s
+ * (nokemo tasks #806, #807 — observed on dswa.org/elevateher). This idempotent
+ * autocommit ensure repairs the column on the fly. `ADD COLUMN IF NOT EXISTS`
+ * is MariaDB-native and a cheap no-op once the column is present, so we run it
+ * at most once per request behind a static guard.
+ */
+function ensure_cost_schema() {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    @db_query("ALTER TABLE cost_entry ADD COLUMN IF NOT EXISTS vendor VARCHAR(200) DEFAULT NULL AFTER source_app");
+    @db_query("ALTER TABLE cost_recurring ADD COLUMN IF NOT EXISTS vendor VARCHAR(200) DEFAULT NULL");
+}
+
+/**
  * Record a single cost entry.
  *
  * @param string $cost_type  'cogs', 'cac', or 'support'
@@ -20,6 +43,8 @@ function record_cost($cost_type, $source_app, $description, $amount, $opts = [])
     if (!in_array($cost_type, $valid_types)) {
         return false;
     }
+
+    ensure_cost_schema();
 
     $s_type        = sanitize($cost_type, SQL);
     $s_source      = sanitize($source_app, SQL);
@@ -449,6 +474,8 @@ function ensure_subscription_recurring($vendor, $monthly_amount, $description, $
     if ($vendor === null || $vendor === '') {
         return false;
     }
+
+    ensure_cost_schema();
 
     $v          = sanitize($vendor, SQL);
     $amt        = number_format((float) $monthly_amount, 2, '.', '');
