@@ -22,6 +22,124 @@ $shard_count     = 0;
 
 $yesterday = date('Y-m-d', strtotime('-1 day'));
 
+// ── 0. Acquisition funnel rollup (task #804) — MUST run BEFORE the TTL ──
+// deletes below. This daily cron is the ONLY thing that prunes the raw logs
+// (user_action_log 24h, device_action_log 7d), so at the top of the run
+// yesterday's raw rows are all still present. We recompute BOTH the prior day
+// and the current (partial) day every run; the upsert into the kept-forever
+// acquisition_funnel_daily aggregate is idempotent, so re-running is safe and
+// a late-arriving event or a stage first seen today is still captured. Window:
+// once-daily + 24h user retention means yesterday's user-stage rows are fully
+// captured only because nothing deletes them until step 1 runs immediately
+// after this; never move this block below the deletes.
+$funnel_rows = 0;
+ensure_acquisition_tables();
+
+$defs = db_query_prepared(
+    "SELECT source_app, stage_key FROM acquisition_funnel_def", []
+)->fetchAll(PDO::FETCH_ASSOC);
+
+if ($defs) {
+    $registered = [];   // "app|stage_key" => true (only count declared pairs)
+    $stage_set  = [];   // distinct stage_key list for the IN clause
+    foreach ($defs as $d) {
+        $registered[$d['source_app'] . '|' . $d['stage_key']] = true;
+        $stage_set[$d['stage_key']] = true;
+    }
+    $stage_keys = array_keys($stage_set);
+    $keyPh = implode(',', array_fill(0, count($stage_keys), '?'));
+
+    // Test-account exclusion: drop Playwright noise. Test users live on MAIN
+    // (user.is_test_account); their anonymous device rows are excluded via the
+    // device→user link in the device table.
+    $test_user_ids = array_column(db_query_prepared(
+        "SELECT user_id FROM user WHERE is_test_account = 1", []
+    )->fetchAll(PDO::FETCH_ASSOC), 'user_id');
+    $test_user_ids = array_map('intval', $test_user_ids);
+
+    $test_device_ids = [];
+    if ($test_user_ids) {
+        $uPh = implode(',', array_fill(0, count($test_user_ids), '?'));
+        $test_device_ids = array_column(db_query_prepared(
+            "SELECT device_id FROM device WHERE user_id IN ($uPh)", $test_user_ids
+        )->fetchAll(PDO::FETCH_ASSOC), 'device_id');
+        $test_device_ids = array_map('intval', $test_device_ids);
+    }
+
+    // Recompute prior + current day each run (idempotent upsert).
+    foreach ([$yesterday, date('Y-m-d')] as $day) {
+        $start = $day . ' 00:00:00';
+        $end   = date('Y-m-d 00:00:00', strtotime($day . ' +1 day'));
+
+        // Accumulator keyed by "app|stage|segment". Device/user ID SETS dedup
+        // across the anonymous (device_action_log) ↔ registered
+        // (user_action_log) boundary by shared device_id.
+        $acc = [];
+        $bump = function ($app, $stage, $seg, $device_id, $user_id, $cnt) use (&$acc, $registered) {
+            if (empty($registered[$app . '|' . $stage])) { return; }
+            $seg = substr((string)$seg, 0, 50);
+            $k = $app . '|' . $stage . '|' . $seg;
+            if (!isset($acc[$k])) {
+                $acc[$k] = ['app' => $app, 'stage' => $stage, 'seg' => $seg,
+                            'devices' => [], 'users' => [], 'events' => 0];
+            }
+            if ($device_id !== null) { $acc[$k]['devices'][(int)$device_id] = 1; }
+            if ($user_id   !== null) { $acc[$k]['users'][(int)$user_id]     = 1; }
+            $acc[$k]['events'] += (int)$cnt;
+        };
+
+        // Anonymous / pre-register stages from MAIN device_action_log.
+        $dParams = array_merge($stage_keys, [$start, $end]);
+        $dSql = "SELECT source_app, action,
+                        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(params_json, '\$.segment')), '') AS segment,
+                        device_id, COUNT(*) AS cnt
+                 FROM device_action_log
+                 WHERE action IN ($keyPh) AND created >= ? AND created < ?";
+        if ($test_device_ids) {
+            $dSql .= " AND device_id NOT IN (" . implode(',', array_fill(0, count($test_device_ids), '?')) . ")";
+            $dParams = array_merge($dParams, $test_device_ids);
+        }
+        $dSql .= " GROUP BY source_app, action, segment, device_id";
+        foreach (db_query_prepared($dSql, $dParams)->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $bump($r['source_app'], $r['action'], $r['segment'], $r['device_id'], null, $r['cnt']);
+        }
+
+        // Registered stages from each SHARD's user_action_log.
+        foreach ($shardConfigs as $shard_name => $cfg) {
+            prime_shard($shard_name);
+            $sParams = array_merge($stage_keys, [$start, $end]);
+            $sSql = "SELECT source_app, action,
+                            COALESCE(JSON_UNQUOTE(JSON_EXTRACT(params_json, '\$.segment')), '') AS segment,
+                            user_id, device_id, COUNT(*) AS cnt
+                     FROM user_action_log
+                     WHERE action IN ($keyPh) AND created >= ? AND created < ?";
+            if ($test_user_ids) {
+                $sSql .= " AND user_id NOT IN (" . implode(',', array_fill(0, count($test_user_ids), '?')) . ")";
+                $sParams = array_merge($sParams, $test_user_ids);
+            }
+            $sSql .= " GROUP BY source_app, action, segment, user_id, device_id";
+            foreach (db_query_shard_prepared($shard_name, $sSql, $sParams)->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $bump($r['source_app'], $r['action'], $r['segment'], $r['device_id'], $r['user_id'], $r['cnt']);
+            }
+        }
+
+        // Idempotent upsert into the durable, kept-forever aggregate.
+        foreach ($acc as $a) {
+            db_query_prepared(
+                "INSERT INTO acquisition_funnel_daily
+                    (day, source_app, stage_key, segment, unique_devices, unique_users, event_count)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                    unique_devices = VALUES(unique_devices),
+                    unique_users   = VALUES(unique_users),
+                    event_count    = VALUES(event_count)",
+                [$day, $a['app'], $a['stage'], $a['seg'],
+                 count($a['devices']), count($a['users']), $a['events']]);
+            $funnel_rows++;
+        }
+    }
+}
+
 // ── 1. Per-shard TTL delete + roll-up ──
 foreach ($shardConfigs as $shard_name => $cfg) {
     prime_shard($shard_name);
@@ -166,4 +284,4 @@ foreach ($metrics as $m) {
     $metric_rows++;
 }
 
-echo "    cleanup_action_log: shards=$shard_count, deleted=$total_deleted, summarized=$total_summarized, metric_rows=$metric_rows\n";
+echo "    cleanup_action_log: shards=$shard_count, deleted=$total_deleted, summarized=$total_summarized, metric_rows=$metric_rows, funnel_rows=$funnel_rows\n";
