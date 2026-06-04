@@ -30,6 +30,7 @@ $views = [
     'reports_acquisition'  => __DIR__ . '/../views/reports_acquisition.php',
     'reports_retention'    => __DIR__ . '/../views/reports_retention.php',
     'reports_forecast'     => __DIR__ . '/../views/reports_forecast.php',
+    'experiments'          => __DIR__ . '/../views/experiments.php',
     'analytics_overview'   => __DIR__ . '/../views/analytics_overview.php',
     'analytics_activity'   => __DIR__ . '/../views/analytics_activity.php',
     'analytics_cohorts'    => __DIR__ . '/../views/analytics_cohorts.php',

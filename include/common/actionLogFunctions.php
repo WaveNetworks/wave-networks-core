@@ -58,6 +58,19 @@ function log_user_action($action_name, $result = 'success', $params = [], $durat
             // Fail-safe: unknown action → log with empty params, never raw body.
             $params = [];
         }
+
+        // Auto-stamp A/B experiment assignments onto EVERY event (Task #795).
+        // Added AFTER the allowlist filter so it survives redaction regardless of
+        // the action, and read-only + request-cached so it costs at most one query
+        // per request. The nightly rollup reads event_data._experiments to split
+        // the funnel by variant. Empty when the device is in no active experiment.
+        if (function_exists('get_all_assignments_for_device')) {
+            try {
+                $exp_assignments = get_all_assignments_for_device((string)$device_id, $app);
+                if ($exp_assignments) { $params['_experiments'] = $exp_assignments; }
+            } catch (Exception $e) { /* never block logging on experiment lookup */ }
+        }
+
         $params_json = json_encode($params);
 
         $ip         = $_SERVER['REMOTE_ADDR'] ?? null;

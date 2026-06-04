@@ -186,6 +186,13 @@ if (($action ?? null) == 'register') {
                 record_consent($new_id, 'privacy_policy', 'granted', $pp_ver ? (int)$pp_ver['version_id'] : null);
             }
 
+            // Claim anonymous A/B experiment assignments to the new user (Task #795)
+            // so this device's pre-register variant exposure links to the user_id.
+            if (function_exists('claim_experiment_assignments') && function_exists('current_device_id')) {
+                $cdid = current_device_id();
+                if ($cdid) { claim_experiment_assignments($cdid, (int)$new_id); }
+            }
+
             // Send confirmation email if needed
             if ($mode === 'confirm') {
                 send_confirmation_email($email, $confirmHash);
@@ -345,6 +352,12 @@ if (($action ?? null) == 'registerInvite') {
 
             // Mark invite as used
             db_query("UPDATE invite SET used = 1 WHERE invite_id = '{$invite['invite_id']}'");
+
+            // Claim anonymous A/B experiment assignments to the new user (Task #795).
+            if (function_exists('claim_experiment_assignments') && function_exists('current_device_id')) {
+                $cdid = current_device_id();
+                if ($cdid) { claim_experiment_assignments($cdid, (int)$new_id); }
+            }
 
             $_SESSION['success'] = 'Account created! You can now log in.';
             header('Location: login.php');

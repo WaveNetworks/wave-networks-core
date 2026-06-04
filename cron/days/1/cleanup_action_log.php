@@ -42,9 +42,11 @@ $defs = db_query_prepared(
 if ($defs) {
     $registered = [];   // "app|stage_key" => true (only count declared pairs)
     $stage_set  = [];   // distinct stage_key list for the IN clause
+    $app_stages = [];   // source_app => [stage_key, ...]  (for experiment rollup)
     foreach ($defs as $d) {
         $registered[$d['source_app'] . '|' . $d['stage_key']] = true;
         $stage_set[$d['stage_key']] = true;
+        $app_stages[$d['source_app']][] = $d['stage_key'];
     }
     $stage_keys = array_keys($stage_set);
     $keyPh = implode(',', array_fill(0, count($stage_keys), '?'));
@@ -136,6 +138,114 @@ if ($defs) {
                 [$day, $a['app'], $a['stage'], $a['seg'],
                  count($a['devices']), count($a['users']), $a['events']]);
             $funnel_rows++;
+        }
+    }
+}
+
+// ── 0b. Experiment funnel rollup (task #795) — ALSO before the TTL deletes ──
+// For every ACTIVE experiment, split its app's funnel stages by the variant
+// recorded in event_data._experiments.{slug}. Same dedup model as the
+// acquisition rollup (device/user ID sets across the anonymous↔registered
+// boundary). Idempotent upsert into the kept-forever experiment_funnel_daily.
+$exp_funnel_rows = 0;
+ensure_experiment_tables();
+
+$active_experiments = db_query_prepared(
+    "SELECT experiment_id, source_app, slug FROM experiment WHERE status = 'active'", []
+)->fetchAll(PDO::FETCH_ASSOC);
+
+if ($active_experiments) {
+    // Test-account exclusion sets (recomputed here so this block is independent
+    // of whether any acquisition funnel defs exist).
+    $x_test_user_ids = array_map('intval', array_column(db_query_prepared(
+        "SELECT user_id FROM user WHERE is_test_account = 1", []
+    )->fetchAll(PDO::FETCH_ASSOC), 'user_id'));
+    $x_test_device_ids = [];
+    if ($x_test_user_ids) {
+        $uPh = implode(',', array_fill(0, count($x_test_user_ids), '?'));
+        $x_test_device_ids = array_map('intval', array_column(db_query_prepared(
+            "SELECT device_id FROM device WHERE user_id IN ($uPh)", $x_test_user_ids
+        )->fetchAll(PDO::FETCH_ASSOC), 'device_id'));
+    }
+
+    foreach ($active_experiments as $exp) {
+        $eid  = (int)$exp['experiment_id'];
+        $app  = $exp['source_app'];
+        $slug = $exp['slug'];
+        // JSON path member is interpolated, not bindable — fail closed on odd slugs.
+        if (!preg_match('/^[A-Za-z0-9_.\-]+$/', $slug)) { continue; }
+        $stages = $app_stages[$app] ?? null;
+        if (!$stages) { continue; }
+        $stages = array_values(array_unique($stages));
+        $stagePh = implode(',', array_fill(0, count($stages), '?'));
+        $jsonPath = "JSON_UNQUOTE(JSON_EXTRACT(params_json, '$._experiments.\"$slug\"'))";
+
+        foreach ([$yesterday, date('Y-m-d')] as $day) {
+            $start = $day . ' 00:00:00';
+            $end   = date('Y-m-d 00:00:00', strtotime($day . ' +1 day'));
+
+            // acc keyed by "variant|stage": device/user ID sets + event count.
+            $acc = [];
+            $bump = function ($variant, $stage, $device_id, $user_id, $cnt) use (&$acc) {
+                if ($variant === null || $variant === '') { return; }
+                $k = $variant . '|' . $stage;
+                if (!isset($acc[$k])) {
+                    $acc[$k] = ['variant' => $variant, 'stage' => $stage,
+                                'devices' => [], 'users' => [], 'events' => 0];
+                }
+                if ($device_id !== null) { $acc[$k]['devices'][(int)$device_id] = 1; }
+                if ($user_id   !== null) { $acc[$k]['users'][(int)$user_id]     = 1; }
+                $acc[$k]['events'] += (int)$cnt;
+            };
+
+            // Anonymous stages from MAIN device_action_log.
+            $dSql = "SELECT action, $jsonPath AS variant, device_id, COUNT(*) AS cnt
+                     FROM device_action_log
+                     WHERE source_app = ? AND action IN ($stagePh)
+                       AND created >= ? AND created < ?
+                       AND $jsonPath IS NOT NULL";
+            $dParams = array_merge([$app], $stages, [$start, $end]);
+            if ($x_test_device_ids) {
+                $dSql .= " AND device_id NOT IN (" . implode(',', array_fill(0, count($x_test_device_ids), '?')) . ")";
+                $dParams = array_merge($dParams, $x_test_device_ids);
+            }
+            $dSql .= " GROUP BY action, variant, device_id";
+            foreach (db_query_prepared($dSql, $dParams)->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $bump($r['variant'], $r['action'], $r['device_id'], null, $r['cnt']);
+            }
+
+            // Registered stages from each SHARD's user_action_log.
+            foreach ($shardConfigs as $shard_name => $cfg) {
+                prime_shard($shard_name);
+                $sSql = "SELECT action, $jsonPath AS variant, user_id, device_id, COUNT(*) AS cnt
+                         FROM user_action_log
+                         WHERE source_app = ? AND action IN ($stagePh)
+                           AND created >= ? AND created < ?
+                           AND $jsonPath IS NOT NULL";
+                $sParams = array_merge([$app], $stages, [$start, $end]);
+                if ($x_test_user_ids) {
+                    $sSql .= " AND user_id NOT IN (" . implode(',', array_fill(0, count($x_test_user_ids), '?')) . ")";
+                    $sParams = array_merge($sParams, $x_test_user_ids);
+                }
+                $sSql .= " GROUP BY action, variant, user_id, device_id";
+                foreach (db_query_shard_prepared($shard_name, $sSql, $sParams)->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $bump($r['variant'], $r['action'], $r['device_id'], $r['user_id'], $r['cnt']);
+                }
+            }
+
+            foreach ($acc as $a) {
+                db_query_prepared(
+                    "INSERT INTO experiment_funnel_daily
+                        (day, experiment_id, variant_key, stage_key, unique_devices, unique_users, event_count)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE
+                        unique_devices = VALUES(unique_devices),
+                        unique_users   = VALUES(unique_users),
+                        event_count    = VALUES(event_count)",
+                    [$day, $eid, $a['variant'], $a['stage'],
+                     count($a['devices']), count($a['users']), $a['events']]);
+                $exp_funnel_rows++;
+            }
         }
     }
 }
@@ -284,4 +394,4 @@ foreach ($metrics as $m) {
     $metric_rows++;
 }
 
-echo "    cleanup_action_log: shards=$shard_count, deleted=$total_deleted, summarized=$total_summarized, metric_rows=$metric_rows, funnel_rows=$funnel_rows\n";
+echo "    cleanup_action_log: shards=$shard_count, deleted=$total_deleted, summarized=$total_summarized, metric_rows=$metric_rows, funnel_rows=$funnel_rows, exp_funnel_rows=$exp_funnel_rows\n";

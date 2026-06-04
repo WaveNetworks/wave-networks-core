@@ -67,6 +67,10 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'acq_registered'     => ['source_app', 'segment', '_experiments'],
     'acq_activated'      => ['source_app', 'segment', '_experiments'],
 
+    // ── A/B experiment assignment audit event (Task #795) ──
+    // Emitted once per device per experiment on first assignment. IDs/enums only.
+    'experiment_assigned' => ['slug', 'variant', '_experiments'],
+
     // Add more here as actions ship.
 ];
 
