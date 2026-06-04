@@ -128,7 +128,7 @@
                 <span class="sidebar-text">Stripe</span>
             </a>
 
-            <?php $reportsOpen = str_starts_with($page ?? '', 'reports') || ($page ?? '') === 'experiments'; ?>
+            <?php $reportsOpen = str_starts_with($page ?? '', 'reports') || in_array($page ?? '', ['experiments', 'acquisition'], true); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#reportsMenu" role="button"
                aria-expanded="<?= $reportsOpen ? 'true' : 'false' ?>" aria-controls="reportsMenu">
@@ -149,6 +149,9 @@
                     </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'reports_forecast' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=reports_forecast">
                         <span class="sidebar-text">Forecast</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'acquisition' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=acquisition">
+                        <span class="sidebar-text">Funnel</span>
                     </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'experiments' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=experiments">
                         <span class="sidebar-text">Experiments</span>

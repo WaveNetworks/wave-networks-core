@@ -128,3 +128,69 @@ function get_funnel_def(string $source_app): array
     );
     return db_fetch_all($stmt);
 }
+
+/**
+ * List every app that has a declared funnel and/or rollup data, so the
+ * dashboard (#805) can populate its app selector. Union of both tables so an
+ * app shows up whether it has only a definition, only data, or both.
+ *
+ * @return string[] Distinct source_app slugs, ascending.
+ */
+function get_acquisition_apps(): array
+{
+    ensure_acquisition_tables();
+    $rows = db_fetch_all(db_query(
+        "SELECT `source_app` FROM `acquisition_funnel_def`
+         UNION
+         SELECT `source_app` FROM `acquisition_funnel_daily`
+         ORDER BY `source_app` ASC"
+    ));
+    $out = [];
+    foreach ($rows as $r) {
+        $app = trim((string)$r['source_app']);
+        if ($app !== '') { $out[] = $app; }
+    }
+    return $out;
+}
+
+/**
+ * Aggregate an app's funnel over a date range from acquisition_funnel_daily.
+ * Sums the durable daily rollup so the dashboard can render per-stage
+ * unique_devices / unique_users / event_count and stage-to-stage drop-off.
+ *
+ * @param string $source_app App slug.
+ * @param string $from        Inclusive start date (YYYY-MM-DD).
+ * @param string $to          Inclusive end date (YYYY-MM-DD).
+ * @param string $segment     Segment bucket; '' is the canonical "all" bucket.
+ *                            Pass null to sum across every segment.
+ * @return array Map stage_key => ['unique_devices'=>int,'unique_users'=>int,'event_count'=>int].
+ */
+function get_acquisition_funnel(string $source_app, string $from, string $to, ?string $segment = ''): array
+{
+    ensure_acquisition_tables();
+
+    $sql = "SELECT `stage_key`,
+                   SUM(`unique_devices`) AS unique_devices,
+                   SUM(`unique_users`)   AS unique_users,
+                   SUM(`event_count`)    AS event_count
+              FROM `acquisition_funnel_daily`
+             WHERE `source_app` = ?
+               AND `day` BETWEEN ? AND ?";
+    $params = [trim($source_app), $from, $to];
+    if ($segment !== null) {
+        $sql .= " AND `segment` = ?";
+        $params[] = $segment;
+    }
+    $sql .= " GROUP BY `stage_key`";
+
+    $rows = db_fetch_all(db_query_prepared($sql, $params));
+    $out = [];
+    foreach ($rows as $r) {
+        $out[$r['stage_key']] = [
+            'unique_devices' => (int)$r['unique_devices'],
+            'unique_users'   => (int)$r['unique_users'],
+            'event_count'    => (int)$r['event_count'],
+        ];
+    }
+    return $out;
+}
