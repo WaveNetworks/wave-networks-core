@@ -33,6 +33,30 @@ function ensure_cost_schema() {
 }
 
 /**
+ * Return true if $column exists on $table right now. Result is cached per
+ * request. This is the second line of defense behind ensure_cost_schema():
+ * when the migration runner has re-dropped vendor/metadata AND the ADD COLUMN
+ * backstop can't repair it (e.g. the DB user lacks ALTER privilege on the
+ * deployed host), we still want the INSERT to succeed by simply omitting the
+ * missing column rather than 500ing with "Unknown column ... in 'INSERT INTO'".
+ * That recurring INSERT error is what spawned nokemo tasks #806–#809 and #825.
+ */
+function cost_table_has_column($table, $column) {
+    static $cache = [];
+    $t = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    if (!isset($cache[$t])) {
+        $cache[$t] = [];
+        $r = @db_query("SHOW COLUMNS FROM `$t`");
+        if ($r) {
+            while ($row = db_fetch($r)) {
+                $cache[$t][$row['Field']] = true;
+            }
+        }
+    }
+    return isset($cache[$t][$column]);
+}
+
+/**
  * Record a single cost entry.
  *
  * @param string $cost_type  'cogs', 'cac', or 'support'
@@ -63,8 +87,24 @@ function record_cost($cost_type, $source_app, $description, $amount, $opts = [])
     $meta_col   = $metadata !== null ? "'$metadata'" : 'NULL';
     $vendor_col = $vendor !== null ? "'$vendor'" : 'NULL';
 
-    $r = db_query("INSERT INTO cost_entry (cost_type, source_app, vendor, user_id, description, amount, currency, metadata)
-                    VALUES ('$s_type', '$s_source', $vendor_col, $user_col, '$s_desc', '$s_amount', '$s_currency', $meta_col)");
+    // Build the column list from columns that actually exist on this host, so a
+    // runner-dropped vendor/metadata column degrades to a partial insert instead
+    // of an "Unknown column" fatal (see cost_table_has_column).
+    $cols = ['cost_type', 'source_app'];
+    $vals = ["'$s_type'", "'$s_source'"];
+    if (cost_table_has_column('cost_entry', 'vendor')) {
+        $cols[] = 'vendor';
+        $vals[] = $vendor_col;
+    }
+    $cols = array_merge($cols, ['user_id', 'description', 'amount', 'currency']);
+    $vals = array_merge($vals, [$user_col, "'$s_desc'", "'$s_amount'", "'$s_currency'"]);
+    if (cost_table_has_column('cost_entry', 'metadata')) {
+        $cols[] = 'metadata';
+        $vals[] = $meta_col;
+    }
+
+    $r = db_query("INSERT INTO cost_entry (" . implode(', ', $cols) . ")
+                    VALUES (" . implode(', ', $vals) . ")");
 
     if (!$r) {
         return false;
