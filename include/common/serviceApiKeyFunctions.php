@@ -31,6 +31,7 @@ function get_available_scopes() {
         'tests:write'     => 'Write use_case rows and use_case_test_run results',
         'elevateher_debug:read' => 'Read elevateHER chat_event_log, framework_data, assessment sessions for diagnostics',
         'media:read'      => 'Read media library assets (URLs, metadata) — for builder/agent embedding',
+        'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
     ];
 }
 
