@@ -37,10 +37,15 @@ try {
     // Probes for opcache reset/flush scripts (opcache_flush.php, opcache_reset.php)
     // are vulnerability-scanner noise — we deliberately don't expose such an
     // endpoint, so these 404s are expected scanner traffic, not a real bug.
+    // Bare GETs of the deny-protected internal directories (vendor, db_migrations,
+    // cron, tests, include, config, views, snippets) are scanner attempts to list
+    // server-side source — they're never legitimately web-fetched (they're PHP
+    // includes), so the .htaccess deny + this 404 is expected probe traffic.
     $is_noise = ($status === 404 && (
         preg_match('#\.(css|js)\.map($|\?)#', $uri)
         || preg_match('#/admin/(media|branding|tour_media)/#', $uri)
         || preg_match('#/opcache_(flush|reset)\.php($|\?)#', $uri)
+        || preg_match('#/admin/(vendor|db_migrations|cron|tests|include|config|views|snippets)/#', $uri)
     ));
     if (function_exists('log_error_to_db') && !$is_noise) {
         $msg = "HTTP $status: $method $uri";
