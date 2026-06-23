@@ -131,6 +131,9 @@ if (($_POST['action'] ?? '') == 'sendBroadcastNotification') {
     $action_url    = trim($_POST['action_url'] ?? '');
     $action_label  = trim($_POST['action_label'] ?? '');
 
+    // Auto-prefix a bare URL with https:// (or a bare email with mailto:)
+    if ($action_url !== '') { $action_url = normalize_url_or_mailto($action_url); }
+
     if (!$title) { $errs['title'] = 'Title is required.'; }
     if (!$body)  { $errs['body'] = 'Message body is required.'; }
 

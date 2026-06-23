@@ -29,6 +29,8 @@ if (($_POST['action'] ?? '') == 'generateVapidKeys') {
         global $vapid_subject;
         $subject = $vapid_subject ?: '';
     }
+    // Auto-prefix a bare email with mailto: / a bare URL with https://
+    $subject = normalize_url_or_mailto($subject);
     if (!$subject) {
         $errs['subject'] = 'Subject (mailto:...) is required.';
     } elseif (!preg_match('#^(mailto:|https?://)#i', $subject)) {
@@ -96,6 +98,8 @@ if (($_POST['action'] ?? '') == 'saveVapidSubject') {
     }
 
     $subject = trim($_POST['vapid_subject'] ?? '');
+    // Auto-prefix a bare email with mailto: / a bare URL with https://
+    $subject = normalize_url_or_mailto($subject);
     if (!$subject) {
         $errs['subject'] = 'Subject (mailto:...) is required.';
     } elseif (!preg_match('#^(mailto:|https?://)#i', $subject)) {

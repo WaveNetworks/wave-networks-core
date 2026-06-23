@@ -126,7 +126,7 @@ $vapid_configured  = !empty($vapid_pub_now);
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Action URL <span class="text-muted small">(optional)</span></label>
-                        <input type="url" class="form-control" name="action_url" placeholder="https://...">
+                        <input type="url" class="form-control" name="action_url" id="broadcastActionUrl" placeholder="https://...">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Action Label <span class="text-muted small">(optional)</span></label>
@@ -248,6 +248,24 @@ $vapid_configured  = !empty($vapid_pub_now);
 </div>
 
 <script>
+// Auto-prefix bare emails (mailto:) and bare URLs/domains (https://) so the
+// browser and server don't reject schemeless input on this page.
+function wnNormalizeUrlMailto(v) {
+    v = (v || '').trim();
+    if (!v) return v;
+    if (/^(mailto:|tel:|https?:\/\/)/i.test(v)) return v;
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return 'mailto:' + v;
+    return 'https://' + v;
+}
+['vapidSubject', 'broadcastActionUrl'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('blur', function() {
+        var n = wnNormalizeUrlMailto(el.value);
+        if (n !== el.value) { el.value = n; }
+    });
+});
+
 function sendBroadcast(e) {
     e.preventDefault();
     var form = document.getElementById('broadcastForm');
@@ -257,6 +275,7 @@ function sendBroadcast(e) {
 
     var data = {};
     new FormData(form).forEach(function(v, k) { data[k] = v; });
+    if (data.action_url) { data.action_url = wnNormalizeUrlMailto(data.action_url); }
 
     apiPost('sendBroadcastNotification', data, function(json) {
         btn.disabled = false;
@@ -321,7 +340,7 @@ function deleteCategory(id, name) {
 
 function generateVapidKeys(e) {
     e.preventDefault();
-    var subject = document.getElementById('vapidSubject').value.trim();
+    var subject = wnNormalizeUrlMailto(document.getElementById('vapidSubject').value);
     if (!subject) { return; }
 
     var btn = document.getElementById('vapidGenerateBtn');
@@ -358,7 +377,7 @@ function generateVapidKeys(e) {
 }
 
 function saveVapidSubject() {
-    var subject = document.getElementById('vapidSubject').value.trim();
+    var subject = wnNormalizeUrlMailto(document.getElementById('vapidSubject').value);
     if (!subject) { return; }
     apiPost('saveVapidSubject', { vapid_subject: subject }, function(json) {
         if (!json.error) {
