@@ -106,8 +106,18 @@ function run_migration($conn, $file, $type, $version) {
         $_SESSION['error'] = $msg;
         error_log($msg);
 
+        // Transient connection-loss errors are not code defects:
+        //   2006 = MySQL server has gone away
+        //   2013 = Lost connection to MySQL server during query
+        // db_version was not bumped, so the idempotent runner re-runs this
+        // migration on the next request and completes. Don't escalate these to
+        // the admin error_log DB, or the monitor spawns Fix: tasks for a
+        // self-healing blip forever (still logged to PHP error_log above).
+        $code = isset($e->errorInfo[1]) ? (string)$e->errorInfo[1] : '';
+        $transient_conn_codes = ['2006', '2013'];
+
         // Log to admin error_log DB table as a system-level warning
-        if (function_exists('log_error_to_db')) {
+        if (function_exists('log_error_to_db') && !in_array($code, $transient_conn_codes, true)) {
             log_error_to_db('WARNING', $msg, $file, 0, $e->getTraceAsString());
         }
         return false;
