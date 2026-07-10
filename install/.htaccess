@@ -16,3 +16,15 @@
         Allow from all
     </IfModule>
 </Files>
+
+# provision.php is the token-gated web provisioning endpoint (inert without the
+# per-deployment $provision_token). Allow it so the openclaw runner can reach it.
+<Files "provision.php">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</Files>
