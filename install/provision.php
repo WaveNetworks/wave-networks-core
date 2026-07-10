@@ -73,7 +73,18 @@ if ($row) {
 }
 
 // ── Mint the scoped monitoring service key ───────────────────────────────────
-$scopes = ['error_log:read', 'monitoring:read', 'monitoring:write'];
+// The nokemo monitor needs the FULL set: error_log:write to resolve remote
+// errors, and feedback:read/write/admin to poll feedback, open change requests
+// from it, and auto-approve them into builder tasks. Minting only read+monitoring
+// scopes (the original set) silently broke error auto-resolve AND the whole
+// feedback→change-request→task pipeline on every provisioned app (found on
+// vivajee 2026-07-10: "Missing required scope: error_log:write", zero feedback
+// tasks). Keep this in sync with get_available_scopes().
+$scopes = [
+    'error_log:read', 'error_log:write',
+    'monitoring:read', 'monitoring:write',
+    'feedback:read', 'feedback:write', 'feedback:admin',
+];
 $res = create_service_api_key($label, $scopes, $uid);
 if (!$res || empty($res['full_key'])) { _prov_fail(500, 'failed to mint service key'); }
 
