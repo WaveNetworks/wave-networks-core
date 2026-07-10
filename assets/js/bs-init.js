@@ -73,6 +73,21 @@ function showAlert(type, message) {
     } catch(e) {
         container.prepend(alert);
     }
+
+    // Auto-dismiss after a few seconds so messages/errors don't linger forever.
+    // Uses Bootstrap's Alert.close() to respect the fade-out animation and clean
+    // up the node; the manual close button still works before the timer fires.
+    setTimeout(function() {
+        if (!alert.parentNode) return;
+        try {
+            var inst = (window.bootstrap && bootstrap.Alert)
+                ? bootstrap.Alert.getOrCreateInstance(alert)
+                : null;
+            if (inst) { inst.close(); } else { alert.remove(); }
+        } catch(e) {
+            alert.remove();
+        }
+    }, 6000);
 }
 
 // ─── SESSION HEARTBEAT ─────────────────────────────────────────────────────
