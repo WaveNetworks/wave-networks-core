@@ -102,25 +102,28 @@ $shard_version = $shard_version ?? 1.3;
 check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
-// 6. Session guard
-init_session_storage();
-session_start();
-if (empty($_SESSION['user_id'])) {
-    // Try auto-login via cookie
-    $auto_logged = false;
-    if (isset($_COOKIE['wn_auto_login'])) {
-        $user = validate_api_key($_COOKIE['wn_auto_login']);
-        if ($user) {
-            load_user_session($user);
-            $auto_logged = true;
-        } else {
-            setcookie('wn_auto_login', '', time() - 3600, '/', '', false, true);
+// 6. Session guard (browser requests only — CLI/cron has no session and
+// cannot emit headers after job output has already started)
+if (php_sapi_name() !== 'cli') {
+    init_session_storage();
+    session_start();
+    if (empty($_SESSION['user_id'])) {
+        // Try auto-login via cookie
+        $auto_logged = false;
+        if (isset($_COOKIE['wn_auto_login'])) {
+            $user = validate_api_key($_COOKIE['wn_auto_login']);
+            if ($user) {
+                load_user_session($user);
+                $auto_logged = true;
+            } else {
+                setcookie('wn_auto_login', '', time() - 3600, '/', '', false, true);
+            }
         }
-    }
 
-    if (!$auto_logged) {
-        header('Location: ../auth/login.php');
-        exit;
+        if (!$auto_logged) {
+            header('Location: ../auth/login.php');
+            exit;
+        }
     }
 }
 
