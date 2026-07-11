@@ -196,11 +196,19 @@ if (($action ?? null) == 'register') {
             // Send confirmation email if needed
             if ($mode === 'confirm') {
                 send_confirmation_email($email, $confirmHash);
+                $_SESSION['pending_confirm_email'] = $email;
+                // Prefer a dedicated "check your email" page if the app ships one;
+                // otherwise fall back to login + flash (keeps other apps working).
+                $authdir = dirname($_SERVER['SCRIPT_FILENAME'] ?? '');
+                if ($authdir !== '' && is_file($authdir . '/confirm-pending.php')) {
+                    header('Location: confirm-pending.php');
+                    exit;
+                }
                 $_SESSION['success'] = 'Account created! Please check your email to confirm.';
-            } else {
-                $_SESSION['success'] = 'Account created! You can now log in.';
+                header('Location: login.php');
+                exit;
             }
-
+            $_SESSION['success'] = 'Account created! You can now log in.';
             header('Location: login.php');
             exit;
         } else {
@@ -406,6 +414,11 @@ if (($action ?? null) == 'resendConfirmation') {
         }
     }
 
+    // Stay on the "check your email" page if the resend came from there.
+    if (($_POST['return'] ?? '') === 'pending' && is_file(dirname($_SERVER['SCRIPT_FILENAME'] ?? '') . '/confirm-pending.php')) {
+        header('Location: confirm-pending.php');
+        exit;
+    }
     header('Location: login.php');
     exit;
 }
