@@ -55,7 +55,7 @@ function media_human_size(int $bytes): string {
             <div class="col-12 col-md-5">
                 <label class="form-label small fw-semibold">Title <span class="text-muted fw-normal">(optional)</span></label>
                 <input type="text" class="form-control form-control-sm" name="title" maxlength="255"
-                       placeholder="e.g. elevateHER community ad — women (transparent)">
+                       placeholder="e.g. Homepage hero banner (transparent)">
             </div>
             <div class="col-12 col-md-2 d-grid">
                 <label class="form-label small fw-semibold d-none d-md-block" aria-hidden="true">&nbsp;</label>
