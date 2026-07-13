@@ -351,6 +351,153 @@ broadcast_notification('your-app-alerts', 'Title', 'Body', $opts);
 Users control frequency and push preferences per category from core's UI.
 System categories (is_system=1) cannot be turned off by users.
 
+## Adoption Layer (REQUIRED — every child app must declare one)
+Core gives you an email queue, a notification bus, a tour engine, and a drip
+engine. Nothing in this spec previously told you to USE them. That is why
+generated apps ship functionally complete and feel dead on day one: no empty
+states, no first-run guidance, no lifecycle email, no way for a new user to
+learn what the app expects of them.
+
+The Adoption Layer closes that. It is a single declarative file —
+`your-app/adoption.json` — describing how a stranger becomes competent in your
+app. It is a required build artifact, not documentation.
+
+**The organizing idea:** the product is not the app, it is the user's
+capability. So the file is written in the user's voice ("I can ..."), never the
+feature's ("uses the gig editor").
+
+### File location
+```
+your-app/adoption.json      <- git-tracked, required
+```
+
+### Schema (schema_version 1.0)
+```json
+{
+  "schema_version": "1.0",
+  "app": "hireasupport",
+
+  "metaphor": "A market stall. Sellers set out gigs; buyers pick one up and pay.",
+
+  "concepts": [
+    {
+      "key": "gig",
+      "term": "Gig",
+      "plural": "Gigs",
+      "definition": "One task a seller will do, for one fixed price.",
+      "never_call_it": ["job", "listing", "service", "task"]
+    }
+  ],
+
+  "personas": [
+    {
+      "key": "seller",
+      "label": "Seller",
+      "aha": {
+        "statement": "I got paid for my first gig.",
+        "action": "orderPaid",
+        "target_days": 7
+      }
+    }
+  ],
+
+  "ladder": [
+    {
+      "rung": 1,
+      "persona": "seller",
+      "capability": "I can describe what I offer.",
+      "evidence": { "action": "saveGig", "count": 1 },
+
+      "checklist": {
+        "title": "Post your first gig",
+        "body_md": "One thing you'll do, for one price. You can add more later.",
+        "cta_label": "Create a gig",
+        "cta_url": "?page=gigs&new=1"
+      },
+
+      "tour": {
+        "selector": "#newGigBtn",
+        "title": "Start here",
+        "body_md": "Everything you sell lives behind this button.",
+        "position": "bottom"
+      },
+
+      "nudge": { "after_days": 2, "title": "Your stall is still empty",
+                 "body": "Post one gig and buyers can find you." },
+
+      "comms": { "after_days": 3, "template_slug": "seller_no_gig_yet",
+                 "subject": "You're one gig away from getting hired",
+                 "body_md": "Hi {{ first_name }} — ..." }
+    },
+    {
+      "rung": 2,
+      "persona": "seller",
+      "capability": "I can get paid without asking anyone how.",
+      "evidence": { "action": "orderPaid", "count": 1 },
+      "terminal": true,
+      "checklist": { "title": "Get your first order", "body_md": "...",
+                     "cta_label": "Share your stall", "cta_url": "?page=share" }
+    }
+  ],
+
+  "surfaces": [
+    {
+      "page": "gigs",
+      "kind": "list",
+      "empty_state": {
+        "headline": "No gigs yet",
+        "body": "A gig is one thing you'll do, for one price.",
+        "cta_label": "Create your first gig",
+        "cta_url": "?page=gigs&new=1",
+        "icon": "bi-briefcase"
+      }
+    }
+  ]
+}
+```
+
+### The rules (enforced, not advisory)
+1. **Every persona has exactly one `aha`** — the first moment of real value.
+   Not "completed profile." The thing they came for.
+2. **`aha.action` and `evidence.action` must be real action names.** They are
+   matched against `user_action_log.action`, so an action file must dispatch
+   them. If it isn't logged, it didn't happen. Never add a parallel progress
+   table — see the user action logging section in `admin/CLAUDE.md`.
+3. **`capability` is the user's voice: first person, present tense.** "I can get
+   paid without asking anyone how." If you cannot phrase a rung that way, it is
+   not a rung — it is a feature, and it does not belong on the ladder.
+4. **Every rung declares a `checklist` entry.** The ladder must be visible to
+   the user. A tour is a one-shot thing people skip; the checklist persists.
+5. **Every non-terminal rung declares a `nudge` (in-app) and `comms` (email).**
+   The final rung may set `"terminal": true` and omit both.
+6. **Suppression is automatic.** A rung's `comms` registers with `skip_event` =
+   its own `evidence.action`, so reaching the rung cancels its pending mail.
+   Do not hand-roll suppression, and never send on a bare timer.
+7. **Every list or table surface must declare an `empty_state`.** This is the
+   single largest reason an app feels dead on first run.
+8. **`concepts[].never_call_it` terms must not appear in user-facing copy.** One
+   word per concept, everywhere — buttons, emails, errors, empty states. This is
+   what makes a technical app learnable.
+
+### How it maps to core (none of this is new plumbing)
+| adoption.json | Core primitive |
+|---|---|
+| `personas[].aha` | `declare_funnel()` + `register_milestone_event()` |
+| `ladder[].evidence` | `user_action_log.action` / `user_action_summary` |
+| `ladder[].checklist` | `onboarding_checklist` + `onboarding_checklist_state` |
+| `ladder[].tour` | `register_onboarding_tour($slug, $config, $steps)` |
+| `ladder[].nudge` | `send_notification()` (uses `action_url` + `action_label`) |
+| `ladder[].comms` | `email_template` + `enroll_in_drip()` + `fire_email_event()` |
+| `surfaces[].empty_state` | `render_empty_state()` |
+
+### Status
+The schema above is normative as of schema_version 1.0. The core runtime that
+consumes it — `adoptionSync.php`, the checklist tables, the stall-detection
+cron, and the CI completeness scanner — is being built. Until it lands, seed the
+layer by hand from the same JSON using the primitives in the table above
+(`elevateher/include/common/dswaOnboardingSeed.php` is a worked example). The
+file is required either way, so the cutover is mechanical rather than a rewrite.
+
 ## Docker development
 Child app's docker-compose.yml runs 3 services:
 - `app` — PHP 8.2 Apache. Source COPIED into image at build time from both
@@ -399,6 +546,12 @@ Deny: include/, config/, views/, snippets/, db_migrations/
 - Alter or drop core tables in child app migrations
 - Reuse core's database name for your app DB
 - Write to admin's shard tables from child app code
+- Ship an app without an adoption.json — it is a required build artifact
+- Render a list or table view with no empty state
+- Send lifecycle email on a bare timer — bind it to a ladder rung so reaching
+  the rung cancels the mail
+- Track onboarding progress in your own table — derive it from the action log
+- Use two different words for the same concept in user-facing copy
 
 ## SCSS theme customization (detailed)
 Themes live in `assets/themes/{theme-name}/` — each folder is self-contained:
