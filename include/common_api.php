@@ -93,9 +93,31 @@ $shard_version = $shard_version ?? 1.3;
 check_and_migrate_main_db();
 check_and_migrate_all_shards();
 
-// 6. Session
-init_session_storage();
-session_start();
+// 6. Session — or, for a bundled mobile client, deliberately no session at all.
+//
+// CORS first: WKWebView enforces it, so a bundled client gets nothing without these
+// headers, and a preflight must be answered before anything else runs.
+if (function_exists('wn_send_cors_headers')) { wn_send_cors_headers(); }
+
+// A device token authenticates the request by itself. Starting a PHP session for it
+// would write a session file (they are file-backed, in $files_location/sessions) on
+// every poll from every phone — pure garbage on a shared host. So for these requests
+// $_SESSION is an ordinary in-memory array: load_user_session() fills it, every
+// downstream action reads it exactly as always, and nothing is persisted.
+$_DEVICE_TOKEN_AUTH = false;
+if (function_exists('wn_device_token') && wn_device_token() !== '') {
+    $_SESSION = [];
+    $_DEVICE_TOKEN_AUTH = (bool)wn_authenticate_device_token();
+
+    if (!$_DEVICE_TOKEN_AUTH) {
+        if (!headers_sent()) { http_response_code(401); }
+        echo json_encode(['error' => 'Login required.', 'success' => '', 'info' => '', 'warning' => '', 'results' => []]);
+        exit;
+    }
+} else {
+    init_session_storage();
+    session_start();
+}
 
 // 6b. Service API key authentication (Bearer token)
 $_SERVICE_API_KEY = null;
