@@ -64,6 +64,17 @@ if (file_exists($configFile)) {
     }
 }
 
+// 2a. Notifications config partial — written by the admin UI (Push Setup).
+// Loaded AFTER the main config / env block so it wins on those globals,
+// and so the env-var fallback for Docker still applies when the partial
+// is absent. Gitignored — see config/notifications_config.sample.php.
+// Kept in sync with common.php / common_api.php so get_vapid_public_key()
+// resolves the generated key in every bootstrap context.
+$notificationsConfigFile = __DIR__ . '/../config/notifications_config.php';
+if (file_exists($notificationsConfigFile)) {
+    include($notificationsConfigFile);
+}
+
 // 2b. Ensure files directory exists
 if (!empty($files_location)) {
     if (!is_dir($files_location)) { @mkdir($files_location, 0755, true); }
