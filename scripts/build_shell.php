@@ -50,8 +50,14 @@ if (!is_file($appRoot . '/views/template.php')) {
 if (is_file($appRoot . '/include/mobile/shell_stubs.php')) {
     include($appRoot . '/include/mobile/shell_stubs.php');
 }
+// The app's definition.php declares CHILD_APP_NAME (+ version) with no DB or bootstrap — load
+// it so the chrome's brand name, <title> and sidebar brand render the REAL app name, not the
+// neutral 'App' placeholder. (Conventionally just define()s; guarded by is_file.)
+if (is_file($appRoot . '/include/definition.php')) {
+    include_once($appRoot . '/include/definition.php');
+}
 if (!function_exists('h')) { function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES); } }
-if (!function_exists('get_branding')) { function get_branding(){ return ['site_name'=>'App','theme_color'=>'#666666','logo_path'=>'','logo_dark_path'=>'','favicon_path'=>'']; } }
+if (!function_exists('get_branding')) { function get_branding(){ $n = defined('CHILD_APP_NAME') ? CHILD_APP_NAME : 'App'; return ['site_name'=>$n,'theme_color'=>'#666666','logo_path'=>'','logo_dark_path'=>'','favicon_path'=>'']; } }
 if (!function_exists('get_app_theme_css_url')) { function get_app_theme_css_url(){ return '__THEME_CSS__'; } }
 if (!function_exists('has_role')) { function has_role($r){ return false; } }
 if (!function_exists('child_prime_shard')) { function child_prime_shard($s){} }
