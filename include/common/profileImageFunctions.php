@@ -43,9 +43,13 @@ function upload_profile_image($user_id, $shard_id, $file) {
         return ['success' => false, 'error' => 'Only JPEG, PNG, WebP, and GIF images are allowed.'];
     }
 
-    // Validate file size (2 MB max)
-    if ($file['size'] > 2 * 1024 * 1024) {
-        return ['success' => false, 'error' => 'Image must be 2 MB or smaller.'];
+    // Validate file size. The original is downscaled to a 200px thumbnail
+    // server-side (see generate_profile_thumbnail), so we accept generously
+    // large uploads and let the server shrink them. The real ceiling in
+    // production is PHP's upload_max_filesize / post_max_size — child apps
+    // raise those via a webroot .user.ini so this app-level cap is reachable.
+    if ($file['size'] > 12 * 1024 * 1024) {
+        return ['success' => false, 'error' => 'Image must be 12 MB or smaller.'];
     }
 
     // Ensure homedir exists
