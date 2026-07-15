@@ -5,7 +5,7 @@
  *
  * WHY THIS EXISTS
  * A Cordova/WebView build loads its UI from the device filesystem, so its origin is
- * `file://` (Android) or an app scheme (iOS WKWebView). Session cookies are unreliable
+ * a device-local origin (Android https://localhost, iOS app scheme, older file://) (iOS WKWebView). Session cookies are unreliable
  * or absent there, and WKWebView enforces CORS on every request the page makes. Neither
  * problem is solvable in a child app — both live in this bootstrap.
  *
@@ -97,6 +97,7 @@ function wn_cors_origins() {
     $default = [
         'null',                     // file:// (Android WebView, and any local bundle)
         'file://',
+        'https://localhost',        // Android WebView (cordova-android default origin)
         'app://localhost',          // iOS WKWebView with a custom scheme
         'ionic://localhost',
         'capacitor://localhost',
