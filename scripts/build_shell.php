@@ -107,6 +107,19 @@ foreach ($assetMap as $from => $to) {
 $html = str_replace('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js', 'js/vendor/bootstrap.bundle.min.js', $html);
 $html = preg_replace('#<link[^>]*bootstrap-icons[^>]*>#i', '<link rel="stylesheet" href="assets/icons/bootstrap-icons.css">', $html);
 
+// Edge-to-edge: Android 15 (API 35+) and iOS notches draw content UNDER the system bars.
+// The device shell MUST declare viewport-fit=cover, or env(safe-area-inset-*) stays 0 and the
+// safe-area padding in mobile-shell.scss never applies — the top nav gets clipped by the status
+// bar. Only the built shell is rewritten; the desktop template keeps its own viewport.
+$html = preg_replace_callback(
+    '#(<meta\s+name=["\']viewport["\']\s+content=["\'])([^"\']*)(["\'])#i',
+    function ($m) {
+        return stripos($m[2], 'viewport-fit') !== false
+            ? $m[0] : $m[1] . rtrim($m[2]) . ', viewport-fit=cover' . $m[3];
+    },
+    $html
+);
+
 // Google Fonts → self-hosted (CSP font-src 'self' + offline). Drop preconnects + the CSS.
 $html = preg_replace('#<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>#i', '', $html);
 $html = str_replace('</title>',
