@@ -98,6 +98,9 @@ $db = new PDO(
 // 4. Glob-include all helpers
 foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
+// Mobile engine (child-app spec 05): the fragment splitter + build-time helpers, so the
+// ?page=&mobile=1 fragment endpoint in every child app can call wn_split_view().
+foreach (glob(__DIR__ . '/mobile/*.php') as $f) { include_once($f); }
 
 // 5. Migrations
 $db_version    = $db_version ?? 4.6;
