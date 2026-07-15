@@ -151,6 +151,19 @@ if (php_sapi_name() !== 'cli') {
             }
 
             if (!$auto_logged) {
+                // A mobile fragment request (mobile-web: cookie session, no Bearer token —
+                // the device path is handled above) must get a clean 401, NOT a 302 to the
+                // login PAGE. The shell fetches views as fragments; following a redirect would
+                // splice the full login.php HTML into the content area. On 401 the shell
+                // renders its own bundled login screen. Same contract as the device 401 above.
+                if (!empty($_GET['mobile'])) {
+                    if (!headers_sent()) {
+                        http_response_code(401);
+                        header('Content-Type: application/json');
+                    }
+                    echo json_encode(['error' => 'Login required.', 'success' => '', 'info' => '', 'warning' => '', 'results' => []]);
+                    exit;
+                }
                 header('Location: ../auth/login.php');
                 exit;
             }
