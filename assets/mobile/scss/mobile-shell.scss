@@ -1,0 +1,124 @@
+// mobile-shell.scss — the THIN mobile layer on top of the app's real CSS (spec 05).
+//
+// The chrome and its look come from the app's own stylesheets (style.css, the compiled
+// theme, bs-theme-overrides) — vendored and loaded by the generated shell. This file only
+// adds what a bundled mobile client needs and the desktop CSS has no reason to: CSS-based
+// screen routing inside #content-dynamic, safe-area insets, the boot/offline/login states.
+// It must NOT re-import Bootstrap — the theme already carries it.
+
+// ── CSS routing ─────────────────────────────────────────────────────────────
+// The router appends <section data-screen> into template.php's #content-dynamic and
+// flips [data-active]; everything else stays hidden. Same pattern as before, now inside
+// the real content area.
+#content-dynamic [data-screen] { display: none; }
+#content-dynamic [data-screen][data-active] { display: block; }
+
+// Wide desktop markup inside a phone: never let the page scroll sideways.
+#content-dynamic {
+    .table-responsive, pre, table { overflow-x: auto; max-width: 100%; }
+    img, video, canvas, svg { max-width: 100%; height: auto; }
+}
+
+// ── Device safe areas ───────────────────────────────────────────────────────
+body {
+    padding-top: env(safe-area-inset-top);
+}
+
+// Frosted status-bar zone (feedback #72). On a notched iPhone the sticky topbar
+// sticks at the very top and page content scrolls up *behind* the status-bar
+// icons, so the raw content colour bleeds under the clock/battery and looks
+// broken. Dock the sticky topbar just below the safe-area inset, then lay a
+// blurred, semi-opaque bar over the inset itself: anything scrolling under the
+// icons is frosted rather than shown at full contrast. Collapses to nothing on
+// devices with no top inset (Android/desktop → env() resolves to 0).
+.navbar.sticky-top {
+    top: env(safe-area-inset-top);
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    z-index: 1056; // above the Bootstrap sticky navbar (1020), below #wn-loading (2050)
+    background: var(--bs-body-bg);
+    background: color-mix(in srgb, var(--bs-body-bg) 70%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    pointer-events: none;
+}
+
+// ── Login: full viewport, no chrome ─────────────────────────────────────────
+// The router adds .wn-chromeless while the login screen is up. Hide ALL the chrome —
+// including the floating feedback tab (a fixed button that isn't inside the sidebar/navbar
+// so it otherwise floats over the login screen).
+body.wn-chromeless {
+    #sidebar, #sidebarBackdrop, .navbar.sticky-top, .app-footer,
+    #feedbackTabTrigger, #feedbackOffcanvas { display: none !important; }
+    #wrapper { display: block; }
+}
+
+// Dark mode: the template's topnav buttons are btn-outline-secondary, whose orange/muted
+// outline is nearly invisible on the dark topbar. Give the mobile topnav icons a legible
+// light outline + icon colour. (Mobile-only — the desktop app keeps its look.)
+[data-bs-theme="dark"] .navbar .btn-outline-secondary {
+    color: rgba(255, 255, 255, .92);
+    border-color: rgba(255, 255, 255, .4);
+
+    &:hover, &:focus, &.show {
+        color: #fff;
+        background-color: rgba(255, 255, 255, .12);
+        border-color: rgba(255, 255, 255, .6);
+    }
+}
+
+// ── Navigation progress bar ─────────────────────────────────────────────────
+// Shown by the router while a fragment is fetching — mirrors the web app's spa-nav bar so
+// a tap gives immediate feedback. Sits above the top bar.
+#wn-loading {
+    position: fixed;
+    top: env(safe-area-inset-top);
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 2050;
+    background: var(--bs-primary);
+    transform-origin: left;
+    animation: wn-loading-pulse 1s ease-in-out infinite;
+}
+@keyframes wn-loading-pulse {
+    0%   { opacity: .3; transform: scaleX(.1); }
+    50%  { opacity: 1;  transform: scaleX(.7); }
+    100% { opacity: .3; transform: scaleX(1); }
+}
+
+// ── Boot + offline states ───────────────────────────────────────────────────
+#wn-boot {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bs-body-bg);
+    z-index: 2000;
+
+    body.wn-ready & { display: none; }
+}
+
+#wn-offline {
+    display: none;
+    position: fixed;
+    top: env(safe-area-inset-top);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    padding: .4rem 1rem;
+    font-size: .8125rem;
+    text-align: center;
+    background: var(--bs-warning-bg-subtle, #fff3cd);
+    color: var(--bs-warning-text-emphasis, #664d03);
+
+    body.wn-offline & { display: block; }
+}
