@@ -309,3 +309,38 @@ function wn_screen_js_hash($file)
 
     return $js === '' ? '' : substr(sha1($js), 0, 12);
 }
+
+/**
+ * wn_mobile_fragment_emit — the request-side endpoint (child-app spec 05).
+ *
+ * A child app's app/index.php calls this when ?mobile=1 is present, AFTER it has rendered
+ * the view into $html at GLOBAL scope (so the view keeps its access to $child_db, session,
+ * app helpers). It returns the MARKUP half only (behavior ships in the binary) plus the
+ * deviation-gauge hashes the device compares against what it was built with, then exits.
+ *
+ * This is deliberately the SAME view file + session/permission context as the desktop
+ * ?page= render — a mobile client can never see anything the web client couldn't.
+ *
+ *   if (($_GET['mobile'] ?? '') === '1' && function_exists('wn_mobile_fragment_emit')) {
+ *       ob_start();
+ *       if (file_exists($current_page_file)) include($current_page_file);
+ *       wn_mobile_fragment_emit(ob_get_clean(), $page, $current_page_file);
+ *   }
+ */
+function wn_mobile_fragment_emit($html, $page, $view_file)
+{
+    if (!headers_sent()) { header('Content-Type: application/json'); }
+    $split = wn_split_view($html);
+    echo json_encode([
+        'markup'    => $split['markup'],
+        'page'      => $page,
+        'js_hash'   => wn_screen_js_hash($view_file),
+        'view_hash' => wn_view_hash($view_file),
+        'toast'     => [
+            'success' => $_SESSION['success'] ?? '', 'error'   => $_SESSION['error']   ?? '',
+            'warning' => $_SESSION['warning'] ?? '', 'info'    => $_SESSION['info']    ?? '',
+        ],
+    ]);
+    $_SESSION['success'] = $_SESSION['error'] = $_SESSION['warning'] = $_SESSION['info'] = null;
+    exit;
+}
