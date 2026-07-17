@@ -323,7 +323,11 @@ function runScreenshots(r) {
         if (!name || !/\.png$/i.test(name)) return;
         out.push({
             name: name,
-            url:  'use_case_screenshot.php?run_id=' + encodeURIComponent(r.run_id) + '&f=' + encodeURIComponent(name)
+            // The Use Cases view renders under /admin/app/index.php, but
+            // use_case_screenshot.php lives at the admin root (/admin/). A bare
+            // relative URL resolves to /admin/app/… and 404s, so the <img
+            // onerror> hides every thumbnail. Step up one dir to the admin root.
+            url:  '../use_case_screenshot.php?run_id=' + encodeURIComponent(r.run_id) + '&f=' + encodeURIComponent(name)
         });
     });
     return out;
