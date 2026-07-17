@@ -96,8 +96,16 @@ def ts_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def emit_spec(use_case: dict, source_app: str, base_url: str) -> str:
-    """Render a self-contained .spec.ts for one use_case."""
+def emit_spec(use_case: dict, source_app: str, base_url: str,
+              list_pages: frozenset = frozenset()) -> str:
+    """Render a self-contained .spec.ts for one use_case.
+
+    list_pages is the set of all page names that appear as view steps across
+    the whole use_case set. A host page X is treated as a *detail* page (needs
+    a concrete ?id=) when its plural `Xs` is also a page — e.g. circle+circles,
+    dinner+dinners. Detail steps resolve a real id from a link at runtime
+    instead of navigating to a bare page= that renders a "not found" state.
+    """
     slug = use_case["slug"]
     name = use_case.get("name") or slug
     desc = use_case.get("description") or ""
@@ -114,17 +122,42 @@ def emit_spec(use_case: dict, source_app: str, base_url: str) -> str:
     app_prefix = "/admin" if source_app == "admin" else f"/{source_app}"
     login_url = f"{base_url}/admin/auth/login.php"
 
+    base = f"{base_url}{app_prefix}/app/index.php"
     step_lines = []
     for i, s in enumerate(nav_steps):
         page_value = ts_escape(s["page"])
-        target = f"{base_url}{app_prefix}/app/index.php?page={page_value}"
-        step_lines.append(
-            f"    await test.step('step {i+1}: page={page_value}', async () => {{\n"
-            f"      const resp = await page.goto('{target}', {{ waitUntil: 'load' }});\n"
-            f"      expect(resp?.status() ?? 0, 'HTTP status').toBeLessThan(500);\n"
-            f"      await page.screenshot({{ path: `screenshots/${{runId}}/{slug}/{i+1:02d}_{page_value}.png`, fullPage: true }});\n"
-            f"    }});"
-        )
+        shot = f"screenshots/${{runId}}/{slug}/{i+1:02d}_{page_value}.png"
+        # Detail page? (its plural list page also exists in the journey set)
+        is_detail = (s["page"].strip() + "s") in list_pages
+        if is_detail:
+            sel = ('a[href*="page=' + page_value + '&id="], '
+                   'a[href*="page=' + page_value + '&amp;id="]')
+            step_lines.append(
+                f"    await test.step('step {i+1}: page={page_value}', async () => {{\n"
+                f"      // detail page — resolve a real ?id= from a link (fall back to the list page,\n"
+                f"      // then to the bare page) so we screenshot a real record, not a 'not found' state.\n"
+                f"      let target = '{base}?page={page_value}';\n"
+                f"      const sel = '{sel}';\n"
+                f"      let href = await page.getAttribute(sel, 'href').catch(() => null);\n"
+                f"      if (!href) {{\n"
+                f"        await page.goto('{base}?page={page_value}s', {{ waitUntil: 'load' }}).catch(() => {{}});\n"
+                f"        href = await page.getAttribute(sel, 'href').catch(() => null);\n"
+                f"      }}\n"
+                f"      if (href) target = new URL(href, page.url()).href;\n"
+                f"      const resp = await page.goto(target, {{ waitUntil: 'load' }});\n"
+                f"      expect(resp?.status() ?? 0, 'HTTP status').toBeLessThan(500);\n"
+                f"      await page.screenshot({{ path: `{shot}`, fullPage: true }});\n"
+                f"    }});"
+            )
+        else:
+            target = f"{base}?page={page_value}"
+            step_lines.append(
+                f"    await test.step('step {i+1}: page={page_value}', async () => {{\n"
+                f"      const resp = await page.goto('{target}', {{ waitUntil: 'load' }});\n"
+                f"      expect(resp?.status() ?? 0, 'HTTP status').toBeLessThan(500);\n"
+                f"      await page.screenshot({{ path: `{shot}`, fullPage: true }});\n"
+                f"    }});"
+            )
 
     if not step_lines:
         step_lines.append(
@@ -275,10 +308,25 @@ def main() -> int:
 
     write_scaffolding(args.output_dir)
 
+    # Set of every page that appears as a view step — used to detect detail
+    # pages (a host page X whose plural `Xs` is also a page needs a real ?id=).
+    list_pages = set()
+    for uc in items:
+        p = uc.get("action_path") or "[]"
+        if isinstance(p, str):
+            try:
+                p = json.loads(p)
+            except json.JSONDecodeError:
+                p = []
+        for st in (p or []):
+            if is_navigation_step(st):
+                list_pages.add((st.get("page") or "").strip())
+    list_pages = frozenset(list_pages)
+
     spec_dir = args.output_dir / "tests" / "use-cases"
     written = 0
     for uc in items:
-        spec = emit_spec(uc, args.source_app, args.base_url.rstrip("/"))
+        spec = emit_spec(uc, args.source_app, args.base_url.rstrip("/"), list_pages)
         out = spec_dir / f"{uc['slug']}.spec.ts"
         out.write_text(spec)
         log.info("  wrote %s", out.relative_to(args.output_dir))
