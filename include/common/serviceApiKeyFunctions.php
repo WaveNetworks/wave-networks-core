@@ -32,6 +32,8 @@ function get_available_scopes() {
         'elevateher_debug:read' => 'Read elevateHER chat_event_log, framework_data, assessment sessions for diagnostics',
         'media:read'      => 'Read media library assets (URLs, metadata) — for builder/agent embedding',
         'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
+        'credentials:read'  => 'Read which app credentials the app declares and which are still missing (never values)',
+        'credentials:write' => 'Paste in / update app credential values (Amazon keys, API tokens, affiliate IDs, etc.)',
     ];
 }
 
