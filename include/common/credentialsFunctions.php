@@ -19,12 +19,18 @@ function credential_manifest_path() {
     if (!empty($credential_manifest_file) && is_file($credential_manifest_file)) {
         return $credential_manifest_file;
     }
+    $webroot = dirname(dirname(dirname(__DIR__))); // public_html/ (admin/ is a child)
     $candidates = [
-        // public_html/credentials.json (sibling of admin/) — the app's deploy places it here.
-        dirname(dirname(dirname(__DIR__))) . '/credentials.json',
-        // Fallback: staged next to the value store, above the webroot.
+        // public_html/credentials.json (sibling of admin/), if placed at the root.
+        $webroot . '/credentials.json',
+        // Staged next to the value store, above the webroot.
         (isset($files_location) ? rtrim($files_location, '/') . '/credentials.manifest.json' : ''),
     ];
+    // The child app deploys to public_html/{slug}/ — pick up its manifest there
+    // (skip admin/, which is core, not an app).
+    foreach (glob($webroot . '/*/credentials.json') ?: [] as $g) {
+        if (basename(dirname($g)) !== 'admin') { $candidates[] = $g; }
+    }
     foreach ($candidates as $c) {
         if ($c !== '' && is_file($c)) { return $c; }
     }
