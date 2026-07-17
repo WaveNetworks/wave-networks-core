@@ -84,6 +84,7 @@ $scopes = [
     'error_log:read', 'error_log:write',
     'monitoring:read', 'monitoring:write',
     'feedback:read', 'feedback:write', 'feedback:admin',
+    'credentials:read', 'credentials:write',
 ];
 $res = create_service_api_key($label, $scopes, $uid);
 if (!$res || empty($res['full_key'])) { _prov_fail(500, 'failed to mint service key'); }
