@@ -78,11 +78,17 @@ def api(action: str, **params) -> dict:
 
 # ── Step → Playwright translation ──────────────────────────────────────
 def is_navigation_step(step: dict) -> bool:
-    """A 'view' step on a non-empty page is a navigation we know how to
-    replay. Other actions (POST forms, JS apiPost calls) need a UI
-    selector map we don't yet have, so we skip them in v1."""
-    return (step.get("action") == "view"
-            and (step.get("page") or "").strip() != "")
+    """A 'view' step on a real page is a navigation we know how to replay
+    (goto + screenshot). Other steps (POST forms, JS apiPost calls) need a
+    UI selector map we don't yet have, so we skip them in v1.
+
+    The static analyzer (build_action_map.py) tags view steps with
+    `kind: "view"`; the older log-derived path used `action: "view"`.
+    Accept either. Skip `login` — the spec already authenticates in
+    beforeEach, so a page=login goto is redundant/misleading."""
+    kind = step.get("kind") or step.get("action")
+    page = (step.get("page") or "").strip()
+    return kind == "view" and page not in ("", "login")
 
 
 def ts_escape(s: str) -> str:
