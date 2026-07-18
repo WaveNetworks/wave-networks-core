@@ -71,6 +71,14 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     // Emitted once per device per experiment on first assignment. IDs/enums only.
     'experiment_assigned' => ['slug', 'variant', '_experiments'],
 
+    // ── primodollar canonical analytics events (Task #1032, spec 11) ──
+    // First-party funnel/rung derivation. Param keys are numeric IDs/positions
+    // only — no PII, no free text. saveFind / shareDrop are name-only (captured
+    // by the auto action logger) so they need no allowlist entry.
+    'viewDrop'           => ['drop_id'],              // aha-funnel entry
+    'findClickThrough'   => ['find_id', 'position'],  // revenue proxy; per-slot CTR
+    'bountyClickThrough' => ['find_id', 'position'],  // Prime bounty module link
+
     // Add more here as actions ship.
 ];
 
