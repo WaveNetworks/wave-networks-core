@@ -34,6 +34,7 @@ function get_available_scopes() {
         'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
         'credentials:read'  => 'Read which app credentials the app declares and which are still missing (never values)',
         'credentials:write' => 'Paste in / update app credential values (Amazon keys, API tokens, affiliate IDs, etc.)',
+        'finds:write'       => 'Ingest candidate product finds into the Curate queue (external deal-finder bridge until PA-API)',
     ];
 }
 
