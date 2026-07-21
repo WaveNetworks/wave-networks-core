@@ -96,6 +96,15 @@ function showAlert(type, message) {
 (function() {
     'use strict';
 
+    // Login-optional pages (e.g. a public drop feed) render for anonymous
+    // visitors who have no session to keep alive. checkSession returns
+    // "Login required" for them, which would false-positive as an expired
+    // session and bounce them to login on a timer / tab-focus. Skip the
+    // heartbeat when the page explicitly declares a logged-out visitor.
+    // Backward-compatible: apps that never set the flag leave it undefined,
+    // so the heartbeat runs unchanged.
+    if (window.__WN_AUTHED__ === false) return;
+
     var SESSION_CHECK_INTERVAL = 120000; // 2 minutes
     var sessionTimer = null;
 
