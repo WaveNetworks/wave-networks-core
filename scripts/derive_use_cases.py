@@ -43,10 +43,14 @@ WN_API_URL = os.environ.get(
     "WN_API_URL",
     "https://nokemo.com/admin/api/index.php",
 )
-WN_API_KEY = os.environ.get(
-    "WN_API_KEY",
-    "wn_sk_fYiOEvHPb8hMX2w3jsSYgkGo9ClO70pK2atiQ9rzqn23OIqgGOmyHuaOyh",
-)
+# Credentials come from the gitignored ~/.openclaw/secrets.env — never
+# hardcoded here. They were, and were committed in plaintext, until 2026-08-03.
+# refresh_use_case_specs.sh already passes WN_API_KEY through `env`; the
+# secrets.env fallback is only so a standalone run still works.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _secrets import require  # noqa: E402
+
+WN_API_KEY = require("WN_API_KEY", "NOKEMO_API_KEY")
 
 log = logging.getLogger("derive_use_cases")
 
