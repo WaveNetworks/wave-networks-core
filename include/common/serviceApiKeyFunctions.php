@@ -35,6 +35,8 @@ function get_available_scopes() {
         'credentials:read'  => 'Read which app credentials the app declares and which are still missing (never values)',
         'credentials:write' => 'Paste in / update app credential values (Amazon keys, API tokens, affiliate IDs, etc.)',
         'finds:write'       => 'Ingest candidate product finds into the Curate queue (external deal-finder bridge until PA-API)',
+        'experiments:read'  => 'Read active A/B experiment summaries (significance, guardrails, staleness) for the heartbeat watchdog',
+        'experiments:write' => 'Conclude experiments and record the winning variant (manual ship-the-winner step)',
     ];
 }
 

@@ -67,9 +67,13 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'acq_registered'     => ['source_app', 'segment', '_experiments'],
     'acq_activated'      => ['source_app', 'segment', '_experiments'],
 
-    // ── A/B experiment assignment audit event (Task #795) ──
-    // Emitted once per device per experiment on first assignment. IDs/enums only.
-    'experiment_assigned' => ['slug', 'variant', '_experiments'],
+    // ── A/B experiment lifecycle audit events (Task #795 / #796) ──
+    // Emitted once per device per experiment on first assignment, and once each
+    // when an experiment is concluded or its winner is baked into the template.
+    // IDs/enums only — no PII, no free text.
+    'experiment_assigned'  => ['slug', 'variant', '_experiments'],
+    'experiment_concluded' => ['slug', 'variant', 'result'],
+    'experiment_baked_in'  => ['slug', 'variant'],
 
     // ── primodollar canonical analytics events (Task #1032, spec 11) ──
     // First-party funnel/rung derivation. Param keys are numeric IDs/positions

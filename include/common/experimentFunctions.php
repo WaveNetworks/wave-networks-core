@@ -507,3 +507,237 @@ function get_experiment_funnel(int $experiment_id): array
     }
     return $out;
 }
+
+/* ───────────────── Watchdog summary + lifecycle (Task #796) ───────────────── */
+
+/**
+ * Per-variant enrolled-device counts + last-assignment timestamp for an experiment.
+ * Enrolled = a persisted row in experiment_assignment, which already excludes test
+ * accounts (get_variant() returns 'control' for test actors WITHOUT recording) and
+ * out-of-ramp/filter devices. Returns ['counts'=>[key=>n], 'last_assigned'=>?string].
+ */
+function get_experiment_assignment_counts(int $experiment_id): array
+{
+    ensure_experiment_tables();
+    $rows = db_fetch_all(db_query_prepared(
+        "SELECT `variant_key`, COUNT(*) AS n, MAX(`assigned_at`) AS last_assigned
+           FROM `experiment_assignment`
+          WHERE `experiment_id` = ?
+          GROUP BY `variant_key`",
+        [$experiment_id]
+    ));
+    $counts = [];
+    $last = null;
+    foreach ($rows as $r) {
+        $counts[$r['variant_key']] = (int)$r['n'];
+        if ($r['last_assigned'] !== null && ($last === null || $r['last_assigned'] > $last)) {
+            $last = $r['last_assigned'];
+        }
+    }
+    return ['counts' => $counts, 'last_assigned' => $last];
+}
+
+/**
+ * Whole-number days between a DATETIME string and now (0 if null/future).
+ */
+function experiment_days_since(?string $dt): int
+{
+    if (!$dt) { return 0; }
+    $ts = strtotime($dt);
+    if ($ts === false) { return 0; }
+    $days = (int)floor((time() - $ts) / 86400);
+    return $days < 0 ? 0 : $days;
+}
+
+/**
+ * Evaluate guardrail_metrics ([{stage, max_drop_pct}]) for a variant vs control.
+ * A breach is a variant whose conversion at the guardrail stage dropped MORE than
+ * the allowed max_drop_pct relative to control. Returns 'clean' or a list of
+ * ['stage','variant','expected_drop_pct','observed_drop_pct'].
+ */
+function evaluate_experiment_guardrails(array $exp, array $funnel, string $control): array
+{
+    $guardrails = experiment_json_decode($exp['guardrail_metrics'] ?? null);
+    if (!$guardrails) { return ['status' => 'clean', 'breaches' => []]; }
+
+    $rate = function (string $variant, string $stage) use ($funnel) {
+        // Guardrail rate = stage devices / that variant's entry (primary sits below;
+        // here we use the raw stage device count normalized by the variant's max stage).
+        $stages = $funnel[$variant] ?? [];
+        if (!$stages) { return null; }
+        $base = 0;
+        foreach ($stages as $s) { $base = max($base, (int)$s['unique_devices']); }
+        if ($base <= 0) { return null; }
+        $hit = (int)($stages[$stage]['unique_devices'] ?? 0);
+        return $hit / $base;
+    };
+
+    $breaches = [];
+    foreach ($guardrails as $g) {
+        $stage = (string)($g['stage'] ?? '');
+        if ($stage === '') { continue; }
+        $max_drop = (float)($g['max_drop_pct'] ?? 0);
+        $ctrl_rate = $rate($control, $stage);
+        if ($ctrl_rate === null || $ctrl_rate <= 0) { continue; }
+        foreach (array_keys($funnel) as $variant) {
+            if ($variant === $control) { continue; }
+            $v_rate = $rate($variant, $stage);
+            if ($v_rate === null) { continue; }
+            $observed_drop = ($ctrl_rate - $v_rate) / $ctrl_rate * 100.0;
+            if ($observed_drop > $max_drop) {
+                $breaches[] = [
+                    'stage'             => $stage,
+                    'variant'           => $variant,
+                    'expected_drop_pct' => round($max_drop, 2),
+                    'observed_drop_pct' => round($observed_drop, 2),
+                ];
+            }
+        }
+    }
+    return ['status' => $breaches ? 'breached' : 'clean', 'breaches' => $breaches];
+}
+
+/**
+ * Build the compact watchdog summary for one experiment row. Small by design
+ * (gpt-4.1-mini reads this hourly) — enrolled counts, conversions at the primary
+ * metric, chi-squared p/effect/CI for the strongest variant, sample-size-to-power,
+ * guardrail status, and staleness. Reuses the Phase-2 stats helpers.
+ */
+function build_experiment_summary(array $exp, bool $include_funnel = false, bool $include_significance = true): array
+{
+    $eid     = (int)$exp['experiment_id'];
+    $variants = experiment_json_decode($exp['variants']);
+    $keys = [];
+    foreach ($variants as $v) { $k = (string)($v['key'] ?? ''); if ($k !== '') { $keys[] = $k; } }
+    $control = in_array('control', $keys, true) ? 'control' : ($keys[0] ?? 'control');
+
+    $assign = get_experiment_assignment_counts($eid);
+    $visits = $assign['counts'];
+    foreach ($keys as $k) { if (!isset($visits[$k])) { $visits[$k] = 0; } }
+
+    $funnel = get_experiment_funnel($eid);
+    $primary = (string)$exp['primary_metric'];
+    $conversions = [];
+    foreach ($keys as $k) {
+        $conversions[$k] = (int)($funnel[$k][$primary]['unique_devices'] ?? 0);
+    }
+
+    $summary = [
+        'slug'                    => $exp['slug'],
+        'source_app'              => $exp['source_app'],
+        'status'                  => $exp['status'],
+        'days_running'            => experiment_days_since($exp['started_at'] ?? null),
+        'traffic_pct'             => (int)$exp['traffic_pct'],
+        'target_filter'           => experiment_json_decode($exp['target_filter'] ?? null),
+        'primary_metric'          => $primary,
+        'control_variant'         => $control,
+        'variants'                => $keys,
+        'visits_per_variant'      => $visits,
+        'conversions_per_variant' => $conversions,
+        'staleness_days'          => $assign['last_assigned'] ? experiment_days_since($assign['last_assigned']) : null,
+    ];
+
+    if ($include_significance) {
+        $n_a = (int)($visits[$control] ?? 0);
+        $c_a = (int)($conversions[$control] ?? 0);
+        $best = null;
+        foreach ($keys as $k) {
+            if ($k === $control) { continue; }
+            $stats = experiment_chi_squared($n_a, $c_a, (int)$visits[$k], (int)$conversions[$k]);
+            $needed = experiment_sample_size($stats['p_a'], $stats['p_b']);
+            $have   = min($n_a, (int)$visits[$k]);
+            $stats['variant'] = $k;
+            $stats['n_to_significance'] = max(0, $needed - $have);
+            $stats['ci_95'] = experiment_wilson_ci((int)$conversions[$k], (int)$visits[$k]);
+            if ($best === null || abs($stats['lift']) > abs($best['lift'])) { $best = $stats; }
+        }
+        if ($best !== null) {
+            $summary['best_variant']      = $best['variant'];
+            $summary['p_value']           = round($best['p'], 5);
+            $summary['effect_pct']        = round($best['lift'] * 100, 2);
+            $summary['ci_95']             = ['lo' => round($best['ci_95']['lo'], 4), 'hi' => round($best['ci_95']['hi'], 4)];
+            $summary['n_to_significance'] = (int)$best['n_to_significance'];
+        } else {
+            $summary['best_variant'] = null;
+            $summary['p_value'] = 1.0;
+            $summary['effect_pct'] = 0.0;
+            $summary['n_to_significance'] = 0;
+        }
+        $summary['guardrail_status'] = evaluate_experiment_guardrails($exp, $funnel, $control);
+    }
+
+    if ($include_funnel) { $summary['funnel'] = $funnel; }
+    return $summary;
+}
+
+/**
+ * List experiment summaries for the watchdog. $status filters ('active' default,
+ * '' or 'all' for every non-draft experiment). Optionally scoped to one app.
+ */
+function list_experiment_summaries(string $status = 'active', ?string $source_app = null, bool $include_funnel = false, bool $include_significance = true): array
+{
+    ensure_experiment_tables();
+    $where = [];
+    $params = [];
+    if ($status === '' || $status === 'all') {
+        $where[] = "`status` <> 'draft'";
+    } else {
+        $where[] = "`status` = ?";
+        $params[] = $status;
+    }
+    if ($source_app !== null && $source_app !== '') {
+        $where[] = "`source_app` = ?";
+        $params[] = $source_app;
+    }
+    $rows = db_fetch_all(db_query_prepared(
+        "SELECT * FROM `experiment` WHERE " . implode(' AND ', $where) . " ORDER BY `started_at` DESC",
+        $params
+    ));
+    $out = [];
+    foreach ($rows as $row) {
+        $out[] = build_experiment_summary($row, $include_funnel, $include_significance);
+    }
+    return $out;
+}
+
+/**
+ * Conclude an experiment via the API (mirrors the admin form action's state change).
+ * Manual-only: the watchdog never calls this. Marks status=concluded, records the
+ * winner + note, and logs an experiment_concluded lifecycle event. Passing
+ * $inconclusive=true records result=inconclusive (winner is the control/original).
+ * Returns ['ok'=>bool, 'error'=>?string, 'experiment_id'=>?int].
+ */
+function conclude_experiment(string $slug, ?string $source_app, string $winning_variant, string $note, bool $inconclusive = false): array
+{
+    ensure_experiment_tables();
+    $exp = load_active_experiment($slug, $source_app);
+    if (!$exp) { return ['ok' => false, 'error' => 'Experiment not found (must be a non-draft experiment).']; }
+    if ($exp['status'] === 'concluded') { return ['ok' => false, 'error' => 'Experiment is already concluded.']; }
+
+    $keys = [];
+    foreach (experiment_json_decode($exp['variants']) as $v) {
+        $k = (string)($v['key'] ?? ''); if ($k !== '') { $keys[] = $k; }
+    }
+    if ($winning_variant === '') { return ['ok' => false, 'error' => 'winning_variant is required.']; }
+    if (!in_array($winning_variant, $keys, true)) {
+        return ['ok' => false, 'error' => 'winning_variant must be one of: ' . implode(', ', $keys)];
+    }
+    if (trim($note) === '') { return ['ok' => false, 'error' => 'conclusion_note is required.']; }
+
+    $ok = db_query_prepared(
+        "UPDATE `experiment`
+            SET `status` = 'concluded', `concluded_at` = NOW(),
+                `winning_variant` = ?, `conclusion_note` = ?
+          WHERE `experiment_id` = ?",
+        [$winning_variant, $note, (int)$exp['experiment_id']]
+    );
+    if ($ok === false) { return ['ok' => false, 'error' => 'Database update failed.']; }
+
+    // Lifecycle audit event on the single write path (params allowlisted).
+    if (function_exists('record_acquisition_event')) {
+        record_acquisition_event('experiment_concluded', [
+            'params' => ['slug' => $slug, 'variant' => $winning_variant, 'result' => $inconclusive ? 'inconclusive' : 'winner'],
+        ]);
+    }
+    return ['ok' => true, 'experiment_id' => (int)$exp['experiment_id']];
+}
