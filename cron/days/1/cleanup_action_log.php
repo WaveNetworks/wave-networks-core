@@ -255,10 +255,12 @@ foreach ($shardConfigs as $shard_name => $cfg) {
     prime_shard($shard_name);
     $shard_count++;
 
-    // TTL delete expired rows
+    // TTL delete expired rows. db_query_shard_prepared() returns false on any
+    // failure (shard unavailable, missing table) — guard before rowCount() so a
+    // single bad shard doesn't fatal the whole daily cron.
     $stmt = db_query_shard_prepared($shard_name,
         "DELETE FROM user_action_log WHERE expires_at IS NOT NULL AND expires_at < NOW()", []);
-    $total_deleted += $stmt->rowCount();
+    if ($stmt) { $total_deleted += $stmt->rowCount(); }
 
     // Roll up yesterday's activity into user_action_summary
     $stmt = db_query_shard_prepared($shard_name,
@@ -277,13 +279,13 @@ foreach ($shardConfigs as $shard_name => $cfg) {
             avg_duration_ms = (avg_duration_ms + VALUES(avg_duration_ms)) / 2,
             terminal_action_count = terminal_action_count + VALUES(terminal_action_count)",
         [$yesterday, date('Y-m-d')]);
-    $total_summarized += $stmt->rowCount();
+    if ($stmt) { $total_summarized += $stmt->rowCount(); }
 }
 
 // ── 2. Main DB device_action_log TTL delete ──
 $stmt = db_query_prepared(
     "DELETE FROM device_action_log WHERE expires_at IS NOT NULL AND expires_at < NOW()", []);
-$device_deleted = $stmt->rowCount();
+$device_deleted = $stmt ? $stmt->rowCount() : 0;
 $total_deleted += $device_deleted;
 
 // ── 3. Cross-shard feature_metric_daily aggregation ──
@@ -304,7 +306,7 @@ foreach ($shardConfigs as $shard_name => $cfg) {
          GROUP BY source_app, page, action",
         [$yesterday]);
 
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+    while ($stmt && ($row = $stmt->fetch(PDO::FETCH_ASSOC))) {
         $key = $row['source_app'] . '|' . ($row['page'] ?? '') . '|' . ($row['action'] ?? '');
         if (!isset($metrics[$key])) {
             $metrics[$key] = [
@@ -344,7 +346,7 @@ $stmt = db_query_prepared(
      GROUP BY source_app, page, action",
     [$yesterday, date('Y-m-d')]);
 
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+while ($stmt && ($row = $stmt->fetch(PDO::FETCH_ASSOC))) {
     $key = $row['source_app'] . '|' . ($row['page'] ?? '') . '|' . ($row['action'] ?? '');
     if (!isset($metrics[$key])) {
         $metrics[$key] = [
