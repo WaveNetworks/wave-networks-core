@@ -14,6 +14,7 @@
 function get_available_scopes() {
     return [
         'error_log:read'  => 'Read error logs',
+        'system:read'     => 'Read host system metrics (database/shard sizes)',
         'error_log:write' => 'Resolve/unresolve error logs',
         'users:read'      => 'Read user list',
         'costs:write'     => 'Record cost entries (COGS, CAC, support)',

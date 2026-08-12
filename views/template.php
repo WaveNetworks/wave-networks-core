@@ -90,6 +90,9 @@
                     <a class="nav-link text-white <?= ($page ?? '') === 'error_log' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=error_log">
                         <span class="sidebar-text">Error Log</span>
                     </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'db_sizes' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=db_sizes">
+                        <span class="sidebar-text">Shard Sizes</span>
+                    </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'api_keys' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=api_keys">
                         <span class="sidebar-text">API Keys</span>
                     </a>

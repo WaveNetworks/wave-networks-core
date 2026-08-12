@@ -41,6 +41,7 @@ $views = [
     'notification_admin'       => __DIR__ . '/../views/notification_admin.php',
     'email'                    => __DIR__ . '/../views/email.php',
     'error_log'                => __DIR__ . '/../views/error_log.php',
+    'db_sizes'                 => __DIR__ . '/../views/db_sizes.php',
     'api_keys'                 => __DIR__ . '/../views/api_keys.php',
     'use_cases'                => __DIR__ . '/../views/use_cases.php',
     'mobile_parity'            => __DIR__ . '/../views/mobile_parity.php',
