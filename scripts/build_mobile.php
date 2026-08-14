@@ -50,6 +50,10 @@ if (!is_dir($appRoot . '/views') || !is_file($appRoot . '/include/mobile/view_ma
 
 $views  = include($appRoot . '/include/mobile/view_map.php');
 $outDir = $appRoot . '/m/js/screens';
+
+// `node --check` parses each generated screen (see the check further down). Resolved once;
+// null means node isn't on PATH and the parse check is skipped rather than failing the build.
+$nodeBin = trim((string) shell_exec('command -v node 2>/dev/null')) ?: null;
 if (!is_dir($outDir) && !mkdir($outDir, 0755, true)) {
     fwrite(STDERR, "cannot create $outDir\n");
     exit(1);
@@ -241,6 +245,25 @@ foreach ($screens as $page => $s) {
               . "});\n";
 
         file_put_contents("$outDir/$page.js", $out);
+
+        // Does the hoisted screen actually PARSE? Everything upstream checks the shape of
+        // the source; nothing until now checked the shape of the output. The splitter finds
+        // script blocks by regex, so any literal `<script` in a comment — HTML or PHP —
+        // opens a block it never meant to open, and the "JS" it hoists then contains prose.
+        // That ships a screen whose markup renders perfectly and whose behavior is a syntax
+        // error: the exact silent failure this build is meant to make impossible.
+        // Skipped rather than failed when node is absent, so the build still runs anywhere.
+        if ($nodeBin !== null) {
+            exec(escapeshellcmd($nodeBin) . ' --check ' . escapeshellarg("$outDir/$page.js") . ' 2>&1', $chk, $rc);
+            if ($rc !== 0) {
+                fwrite(STDERR, "BUILD FAILED — the JS hoisted from views/{$s['meta']['file']} does not parse.\n");
+                fwrite(STDERR, "  A literal `<script` inside a comment is the usual cause: the splitter\n");
+                fwrite(STDERR, "  matches it as a real tag and hoists the surrounding prose as code.\n\n");
+                foreach (array_slice($chk, 0, 6) as $line) fwrite(STDERR, "  $line\n");
+                exit(1);
+            }
+        }
+
         $jsHash = wn_screen_js_hash($s['file']);
         $loadOrder[] = $page;
     }
