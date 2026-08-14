@@ -184,15 +184,23 @@ elif [[ "$PUSH" != "--push" ]]; then
 elif [[ -z "${CAPAWESOME_TOKEN:-}" ]]; then
     echo "   ! CAPAWESOME_TOKEN unset — cannot publish. Source it from ~/.openclaw/secrets.env" >&2
 else
-    # The channel for a brand-new binary version does not exist yet. Creating it is
-    # idempotent-by-failure: a second run just reports it already exists, which is not an error.
+    # The CLI reads CAPAWESOME_TOKEN from the ENVIRONMENT. Only `login` takes --token;
+    # every other command rejects it outright ("Unknown option: --token"). Exporting it
+    # also keeps the secret off every command line, so it cannot leak into a process list
+    # or a CI log.
+    export CAPAWESOME_TOKEN
+    # `--yes` is not optional: without it the upload stops on a confirmation prompt and
+    # hangs forever in CI or any non-interactive shell.
+    #
+    # The channel for a brand-new binary version does not exist yet; --ignore-errors makes
+    # creating it idempotent, so a re-run against an existing channel is a no-op.
     npx --yes @capawesome/cli apps:channels:create \
-        --app-id "$LU_APP_ID" --name "$LU_CHANNEL" --token "$CAPAWESOME_TOKEN" >/dev/null 2>&1 \
-        || true
+        --app-id "$LU_APP_ID" --name "$LU_CHANNEL" --ignore-errors >/dev/null 2>&1 || true
     npx --yes @capawesome/cli apps:liveupdates:upload \
         --app-id "$LU_APP_ID" \
         --path "$SHELL_REPO/www" \
         --channel "$LU_CHANNEL" \
-        --token "$CAPAWESOME_TOKEN"
+        --git-ref "$(git -C "$SHELL_REPO" rev-parse --short HEAD 2>/dev/null || echo "$VERSION")" \
+        --yes
     echo "   ✓ bundle published to $LU_CHANNEL"
 fi
