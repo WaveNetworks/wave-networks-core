@@ -148,6 +148,39 @@ if ($unmapped) {
     exit(1);
 }
 
+// ── Fail loud on an inline handler the splitter does not even look at ────────
+// wn_split_view rewrites onclick/onchange/onsubmit/oninput. Every OTHER inline handler
+// — onmouseover, onfocus, onkeydown, … — passes through into the fragment untouched, and
+// then the shell's CSP (script-src 'self') refuses to run it. The control renders, looks
+// right, and does nothing, with no error anywhere: exactly the silent failure the unmapped
+// check exists to prevent, just entering through a door that check never watched.
+//
+// Caught here rather than in the splitter because the splitter is also the RUNTIME
+// fragment path, where rewriting an unknown event would change live behavior. The build
+// is the right place to refuse it.
+$stray = [];
+foreach ($screens as $page => $s) {
+    $src = file_get_contents($s['file']);
+    if (preg_match_all('/\son([a-z]+)\s*=\s*"([^"]*)"/i', $src, $sm, PREG_SET_ORDER)) {
+        foreach ($sm as $h) {
+            if (in_array(strtolower($h[1]), ['click', 'change', 'submit', 'input'], true)) continue;
+            $stray[] = ['page' => $page, 'what' => 'on' . strtolower($h[1]) . '="' . $h[2] . '"'];
+        }
+    }
+}
+if ($stray) {
+    fwrite(STDERR, "\nBUILD FAILED — " . count($stray) . " inline handler(s) the device CSP will block.\n");
+    fwrite(STDERR, "The splitter only rewrites onclick/onchange/onsubmit/oninput; anything else\n");
+    fwrite(STDERR, "ships as-is and is then refused by script-src 'self' — it renders but never fires.\n");
+    fwrite(STDERR, "  Hover/focus styling belongs in CSS (:hover, :focus-visible).\n");
+    fwrite(STDERR, "  Real behavior belongs in the view's <script>, bound with addEventListener.\n\n");
+    foreach ($stray as $u) {
+        fwrite(STDERR, sprintf("  %-14s %s\n", $u['page'], $u['what']));
+    }
+    fwrite(STDERR, "\n");
+    exit(1);
+}
+
 // ── Fail loud on an AMBIGUOUS handler ────────────────────────────────────────
 // Two screens declaring the same *handler* name is a genuine bug: the dispatcher
 // could not know which one a button meant. (Two screens declaring the same private
