@@ -32,6 +32,16 @@ THEME_SCSS="${THEME_SCSS:-assets/themes/glassmorphism/custom.scss}"
 BRAND_TILE="${BRAND_TILE:-assets/img/${APP_SLUG}-tile.svg}"
 SHELL_REPO="${SHELL_REPO:-$APP_ROOT/../${APP_SLUG}-cordova}"
 ENGINE_JS="$ADMIN_ROOT/assets/mobile/js"
+# Live Update channel. Pinned to the MARKETING version — the `widget @version` this run
+# stamps into config.xml — never to the versionCode, which set-build-number.js only mints
+# at cordova-build time and which this script therefore cannot know.
+#
+# That pin defines the release semantics, so it is worth stating plainly:
+#   • bump <version>  ⇒ new channel ⇒ a new BINARY that must go through the stores;
+#   • re-run with the SAME <version> ⇒ same channel ⇒ a JS-only OTA push to devices
+#     already running that binary.
+# Which matches how the marketing version was already used ("bump on a real release").
+LU_CHANNEL="production-$VERSION"
 cd "$APP_ROOT"
 
 [[ -d "$ENGINE_JS" ]] || { echo "✗ core engine not found at $ENGINE_JS — set ADMIN_ROOT" >&2; exit 1; }
@@ -125,7 +135,14 @@ echo "── 6. sync → shell repo ──────────────�
 mkdir -p "$SHELL_REPO/www"
 rsync -a --delete --exclude 'scss/' --exclude 'index.php' m/ "$SHELL_REPO/www/"
 echo "   m/ → $SHELL_REPO/www/"
-[[ -f "$SHELL_REPO/config.xml" ]] && sed -i -E "s/(<widget[^>]* version=\")[^\"]+(\")/\1$VERSION\2/" "$SHELL_REPO/config.xml"
+if [[ -f "$SHELL_REPO/config.xml" ]]; then
+    sed -i -E "s/(<widget[^>]* version=\")[^\"]+(\")/\1$VERSION\2/" "$SHELL_REPO/config.xml"
+    # Keep the Live Update channel pinned to the binary being built. A channel must never
+    # outlive the native version it was cut for — that is the whole point of the versioned
+    # channel: an OTA bundle can then only ever reach binaries that can actually run it.
+    # Rewriting it here means the pin maintains itself; nobody has to remember.
+    sed -i -E "s|(<variable name=\"DEFAULT_CHANNEL\" value=\")[^\"]+(\")|\1$LU_CHANNEL\2|" "$SHELL_REPO/config.xml"
+fi
 
 echo "── 7. commit + tag ───────────────────────────────────────"
 git -C "$SHELL_REPO" add -A
@@ -133,3 +150,49 @@ if git -C "$SHELL_REPO" diff --cached --quiet; then echo "   nothing changed"; e
 git -C "$SHELL_REPO" commit -q -m "m/ sync $VERSION"
 git -C "$SHELL_REPO" tag -f "v$VERSION"
 if [[ "$PUSH" == "--push" ]]; then git -C "$SHELL_REPO" push origin HEAD && git -C "$SHELL_REPO" push -f origin "v$VERSION"; echo "   pushed v$VERSION"; else echo "   committed + tagged v$VERSION (re-run with --push)"; fi
+
+echo "── 8. live update (Capawesome) ───────────────────────────"
+# Publishes the web layer over the air to devices already running this binary.
+#
+# Uploads $SHELL_REPO/www — NOT m/ — deliberately. www/ is what the cordova build compiles
+# into the binary, so uploading it is the only way to guarantee the OTA bundle is byte-identical
+# to what a store build would have shipped. (m/ additionally carries scss/ and index.php, which
+# step 6 strips on the way in.)
+#
+# Gated on --push for the same reason the git push is: a local dry run must never reach a
+# real device. An app with no plugin block and no token simply skips this step.
+LU_APP_ID=""
+# `|| true` is load-bearing: with `set -euo pipefail`, a grep that simply finds no plugin
+# block fails the pipeline and would abort the whole release. Not finding one is normal.
+if [[ -f "$SHELL_REPO/config.xml" ]]; then
+    LU_APP_ID=$(grep -oE '<variable name="APP_ID" value="[^"]+"' "$SHELL_REPO/config.xml" \
+        | head -1 | sed -E 's/.*value="([^"]+)".*/\1/') || true
+fi
+
+# A Capawesome app id is a UUID. Requiring that shape means an unfilled placeholder
+# (`__SET_ME__`, left in by the scaffold) reads as "not configured yet" rather than as a
+# real id — so a shell repo can carry the plugin block before the cloud app exists, and a
+# typo'd id is caught here instead of as a confusing 404 mid-upload.
+if [[ ! "$LU_APP_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+    if [[ -n "$LU_APP_ID" ]]; then
+        echo "   skipped — APP_ID in $SHELL_REPO/config.xml is not a UUID ('$LU_APP_ID' — placeholder still unfilled?)"
+    else
+        echo "   skipped — no Live Update APP_ID in $SHELL_REPO/config.xml (app not on Capawesome)"
+    fi
+elif [[ "$PUSH" != "--push" ]]; then
+    echo "   skipped — dry run (re-run with --push to publish to $LU_CHANNEL)"
+elif [[ -z "${CAPAWESOME_TOKEN:-}" ]]; then
+    echo "   ! CAPAWESOME_TOKEN unset — cannot publish. Source it from ~/.openclaw/secrets.env" >&2
+else
+    # The channel for a brand-new binary version does not exist yet. Creating it is
+    # idempotent-by-failure: a second run just reports it already exists, which is not an error.
+    npx --yes @capawesome/cli apps:channels:create \
+        --app-id "$LU_APP_ID" --name "$LU_CHANNEL" --token "$CAPAWESOME_TOKEN" >/dev/null 2>&1 \
+        || true
+    npx --yes @capawesome/cli apps:liveupdates:upload \
+        --app-id "$LU_APP_ID" \
+        --path "$SHELL_REPO/www" \
+        --channel "$LU_CHANNEL" \
+        --token "$CAPAWESOME_TOKEN"
+    echo "   ✓ bundle published to $LU_CHANNEL"
+fi

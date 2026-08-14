@@ -234,8 +234,9 @@ if (is_readable($manifestFile)) {
 // color-mode, notifications, modal, toast, page-nav, bg-canvas, celebrate, error-reporter),
 // re-emitted in the order the template had them. Skipped: cordova.js (ghost) and anything
 // already in our boot list, so nothing loads twice.
-$mine = ['js/cordova-boot.js','js/env.js','js/platform.js','js/api.js','js/report.js','js/dispatch.js',
-         'js/store.js','js/screens.js','js/shell-inline.js','js/login.js','js/router.js','js/shell.js'];
+$mine = ['js/cordova-boot.js','js/env.js','js/platform.js','js/api.js','js/report.js','js/live-update.js',
+         'js/dispatch.js','js/store.js','js/screens.js','js/shell-inline.js','js/login.js','js/router.js',
+         'js/shell.js'];
 $chromeTags = '';
 foreach ($shellDeps as $src) {
     if ($src === 'cordova.js' || in_array($src, $mine, true)) continue;
@@ -251,6 +252,7 @@ $boot = <<<HTML
 <script src="js/platform.js"></script>
 <script src="js/api.js"></script>
 <script src="js/report.js"></script>
+<script src="js/live-update.js"></script>
 $chromeTags<script src="js/dispatch.js"></script>
 <script src="js/store.js"></script>
 <script src="js/screens.js"></script>
