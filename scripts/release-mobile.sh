@@ -146,10 +146,17 @@ fi
 
 echo "── 7. commit + tag ───────────────────────────────────────"
 git -C "$SHELL_REPO" add -A
-if git -C "$SHELL_REPO" diff --cached --quiet; then echo "   nothing changed"; exit 0; fi
+# An unchanged shell repo means nothing to COMMIT. It does not mean nothing to PUBLISH:
+# git state and Capawesome state are independent, so an identical bundle can still be
+# unpublished — which is exactly the case the first time an app id is filled in. Skip the
+# commit, fall through to step 8, and let its own guards decide.
+if git -C "$SHELL_REPO" diff --cached --quiet; then
+    echo "   nothing changed"
+else
 git -C "$SHELL_REPO" commit -q -m "m/ sync $VERSION"
 git -C "$SHELL_REPO" tag -f "v$VERSION"
 if [[ "$PUSH" == "--push" ]]; then git -C "$SHELL_REPO" push origin HEAD && git -C "$SHELL_REPO" push -f origin "v$VERSION"; echo "   pushed v$VERSION"; else echo "   committed + tagged v$VERSION (re-run with --push)"; fi
+fi
 
 echo "── 8. live update (Capawesome) ───────────────────────────"
 # Publishes the web layer over the air to devices already running this binary.
@@ -200,7 +207,6 @@ else
         --app-id "$LU_APP_ID" \
         --path "$SHELL_REPO/www" \
         --channel "$LU_CHANNEL" \
-        --git-ref "$(git -C "$SHELL_REPO" rev-parse --short HEAD 2>/dev/null || echo "$VERSION")" \
         --yes
     echo "   ✓ bundle published to $LU_CHANNEL"
 fi
