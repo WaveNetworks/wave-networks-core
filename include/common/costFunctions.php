@@ -530,15 +530,42 @@ function ensure_subscription_recurring($vendor, $monthly_amount, $description, $
     $meta       = isset($opts['metadata']) ? sanitize(json_encode($opts['metadata']), SQL) : null;
     $meta_col   = $meta !== null ? "'$meta'" : 'NULL';
 
+    // The (vendor, frequency) UNIQUE key from migration 4.6 is unreliable on the
+    // deployed MariaDB hosts: the migration runner's DDL implicit-commit can drop
+    // it (same failure class as the vendor/metadata columns repaired above). When
+    // the key is missing, ON DUPLICATE KEY UPDATE never fires, so this function
+    // inserts a fresh row on EVERY request and the vendor's card multiplies on
+    // ?page=costs (reported as "unrealspeech basic plan subscription is repeated a
+    // bunch of times" on dswa.org). So dedupe by hand instead of trusting the key:
+    // keep the oldest row, update it in place, delete any duplicates.
+    $sel = db_query(
+        "SELECT recurring_id FROM cost_recurring
+         WHERE vendor = '$v' AND frequency = '$freq'
+         ORDER BY recurring_id ASC"
+    );
+    $existing = $sel ? db_fetch_all($sel) : [];
+
+    if ($existing) {
+        $keep_id = (int) $existing[0]['recurring_id'];
+        db_query(
+            "UPDATE cost_recurring
+             SET amount = '$amt', description = '$desc', metadata = $meta_col,
+                 cost_type = '$ctype', is_active = 1
+             WHERE recurring_id = '$keep_id'"
+        );
+        if (count($existing) > 1) {
+            $dupe_ids = array_map(
+                function ($row) { return (int) $row['recurring_id']; },
+                array_slice($existing, 1)
+            );
+            db_query("DELETE FROM cost_recurring WHERE recurring_id IN (" . implode(',', $dupe_ids) . ")");
+        }
+        return true;
+    }
+
     return (bool) db_query(
         "INSERT INTO cost_recurring (cost_type, description, amount, frequency, vendor, metadata, is_active, created_by)
-         VALUES ('$ctype', '$desc', '$amt', '$freq', '$v', $meta_col, 1, '$created_by')
-         ON DUPLICATE KEY UPDATE
-            amount      = VALUES(amount),
-            description = VALUES(description),
-            metadata    = VALUES(metadata),
-            cost_type   = VALUES(cost_type),
-            is_active   = 1"
+         VALUES ('$ctype', '$desc', '$amt', '$freq', '$v', $meta_col, 1, '$created_by')"
     );
 }
 
