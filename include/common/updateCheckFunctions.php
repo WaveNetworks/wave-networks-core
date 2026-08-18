@@ -24,8 +24,9 @@ function check_for_updates($force = false) {
     $cacheTTL = 86400; // 24 hours
 
     // Try cache first
-    if (!$force && file_exists($cacheFile)) {
-        $cached = json_decode(file_get_contents($cacheFile), true);
+    if (!$force && is_readable($cacheFile)) {
+        $raw = @file_get_contents($cacheFile);
+        $cached = $raw !== false ? json_decode($raw, true) : null;
         if ($cached && isset($cached['checked_at'])) {
             $cacheAge = time() - strtotime($cached['checked_at']);
             if ($cacheAge < $cacheTTL) {
@@ -40,8 +41,9 @@ function check_for_updates($force = false) {
 
     if (!$result) {
         // Return stale cache if available
-        if (file_exists($cacheFile)) {
-            $cached = json_decode(file_get_contents($cacheFile), true);
+        if (is_readable($cacheFile)) {
+            $raw = @file_get_contents($cacheFile);
+            $cached = $raw !== false ? json_decode($raw, true) : null;
             if ($cached) {
                 $cached['stale'] = true;
                 return $cached;
