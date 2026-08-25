@@ -128,8 +128,15 @@ $html = preg_replace_callback(
 
 // Google Fonts → self-hosted (CSP font-src 'self' + offline). Drop preconnects + the CSS.
 $html = preg_replace('#<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>#i', '', $html);
+// app-fonts.css is only produced when the app ships self-hosted brand fonts:
+// release-mobile.sh copies assets/fonts/app-fonts.css → m/assets/app-fonts.css inside a
+// `compgen -G assets/fonts/*.woff2` guard. Apps without brand fonts (e.g. pwt) never get
+// the file, so referencing it unconditionally is a guaranteed 404 on every shell load.
+// Link it only when the app ships woff2s — the exact condition under which the CSS lands.
+$fontLink = glob($appRoot . '/assets/fonts/*.woff2')
+    ? "\n    <link rel=\"stylesheet\" href=\"assets/app-fonts.css\">" : '';
 $html = str_replace('</title>',
-    "</title>\n    <link rel=\"stylesheet\" href=\"assets/app-fonts.css\">"
+    "</title>$fontLink"
   . "\n    <link rel=\"stylesheet\" href=\"assets/mobile-shell.css\">", $html);
 
 // Mobile-only chrome the desktop template has no reason to carry: the boot cover (shown
