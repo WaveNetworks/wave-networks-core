@@ -73,8 +73,63 @@ foreach ($views as $page => $meta) {
         exit(1);
     }
 
+    $viewSrc = file_get_contents($file);
+
+    // A closing tag inside a ONE-LINE comment. PHP ends a // or # comment at the
+    // newline OR the closing tag, WHICHEVER COMES FIRST — so a comment that quotes
+    // a literal `<?= … ?` . `>` drops the parser out of PHP mid-sentence. Every line
+    // after it, including the block the comment was introducing, is emitted to the
+    // page as text, and whatever that block was meant to assign stays unset. It is
+    // silent: no warning, no error, and a `?` . `?` fallback downstream turns the
+    // missing value into an empty payload the JS then dies on.
+    //
+    // pwt shipped three of these in one commit (oracle, journey, journey-node), each
+    // introducing the view's own JS config block. Users saw raw PHP at the bottom of
+    // the page and the screens' behavior quietly degraded. Caught by tokenising:
+    // a T_COMMENT that starts // or # and is immediately followed by T_CLOSE_TAG.
+    // Two tests, because the naive one condemns correct code. A brace-close trailed
+    // by a note, and a comment-only block, both END with a close tag ON PURPOSE and
+    // are followed by markup. The accidental kind is a comment still mid-sentence,
+    // inside a RUN of comments opening a block, whose remainder — and the code it was
+    // introducing — spills into the page. So: flag only when the comment is preceded
+    // by the open tag or another comment, AND the text after the tag does not begin
+    // with markup. Validated at 3/3 true positives, 0 false across 620 files.
+    $toks = @token_get_all($viewSrc);
+    for ($ti = 0; $toks && $ti < count($toks) - 1; $ti++) {
+        $t = $toks[$ti];
+        if (!is_array($t) || $t[0] !== T_COMMENT) continue;
+        if (substr($t[1], 0, 2) === '/*') continue;          // block comments are safe
+        if ($t[1][0] !== '/' && $t[1][0] !== '#') continue;
+        $next = $toks[$ti + 1];
+        if (!is_array($next) || $next[0] !== T_CLOSE_TAG) continue;
+
+        $prev = null;
+        for ($pj = $ti - 1; $pj >= 0; $pj--) {
+            if (is_array($toks[$pj]) && $toks[$pj][0] === T_WHITESPACE) continue;
+            $prev = $toks[$pj];
+            break;
+        }
+        if (!is_array($prev)) continue;
+        if ($prev[0] !== T_OPEN_TAG && $prev[0] !== T_COMMENT && $prev[0] !== T_DOC_COMMENT) continue;
+
+        $after = '';
+        for ($aj = $ti + 2; $aj < count($toks) && $aj < $ti + 6; $aj++) {
+            $after .= is_array($toks[$aj]) ? $toks[$aj][1] : $toks[$aj];
+        }
+        if (preg_match('/^\s*</', $after)) continue;          // deliberate close, markup follows
+
+        fwrite(STDERR, "BUILD FAILED — views/{$meta['file']}:{$t[2]} closes PHP inside a one-line comment.\n");
+        fwrite(STDERR, "  " . trim($t[1]) . "\n");
+        fwrite(STDERR, "  A // comment ends at the newline OR the closing tag, whichever comes FIRST,\n");
+        fwrite(STDERR, "  so everything below this line renders as page text and never executes —\n");
+        fwrite(STDERR, "  including whatever the comment was introducing. Leaks: "
+                     . trim(preg_replace('/\s+/', ' ', substr($after, 0, 70))) . "…\n");
+        fwrite(STDERR, "  Describe the tag in prose instead of quoting it literally.\n");
+        exit(1);
+    }
+
     // Lenient: the source still carries a PHP echo tag where a value will be.
-    $split = wn_split_view(file_get_contents($file), true);
+    $split = wn_split_view($viewSrc, true);
 
     foreach ($split['unmapped'] as $u) {
         $unmapped[] = ['page' => $page, 'what' => $u];
