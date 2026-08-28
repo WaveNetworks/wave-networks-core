@@ -123,7 +123,7 @@ if (is_readable($mf)) { $m = json_decode(file_get_contents($mf), true);
 }
 '
 cat > m/.htaccess <<'HT'
-<FilesMatch "\.(html|json)$">
+<FilesMatch "\.(html|json|webmanifest)$">
     Header set Cache-Control "no-cache, must-revalidate"
 </FilesMatch>
 <FilesMatch "\.(js|css|woff2?|svg|png)$">

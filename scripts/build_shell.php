@@ -152,6 +152,60 @@ $html = preg_replace('#(["\'])\.\./assets/img/#', '$1assets/img/', $html);
 // Any leftover cross-repo branding path (real logos are hydrated at runtime anyway).
 $html = str_replace('../../admin/branding/', 'assets/img/', $html);
 
+// ── Bundle-local web app manifest ────────────────────────────────────────────
+// The template points at the server's ../../admin/manifest.php. Two problems in a
+// bundle: it is a cross-repo server path that does not exist offline, and its icons
+// are the branding pwa_icon_*.png, which are generated server-side and can be wrong
+// (pwt's were a blank white square — a valid PNG, HTTP 200, one unique colour).
+//
+// That matters more than a favicon: for install and home-screen purposes the MANIFEST
+// icons win over <link rel="icon">, so a good tile in the head is still overridden by a
+// blank icon in the manifest. Emit a manifest built from the tile the shell already
+// declares, so the bundle is self-contained and the two agree.
+if (preg_match('#<link\s+rel="icon"\s+href="([^"]+)"#i', $html, $iconM)) {
+    $iconHref = $iconM[1];
+    $iconFile = $appRoot . '/m/' . preg_replace('/\?.*$/', '', $iconHref);
+    $ext      = strtolower(pathinfo(parse_url($iconHref, PHP_URL_PATH), PATHINFO_EXTENSION));
+    $mime     = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'webp' ? 'image/webp' : 'image/png');
+
+    // Declare the real pixel size when we can read it — a wrong "sizes" is worse than
+    // none, since the installer picks by it.
+    $sizes = 'any';
+    if ($mime !== 'image/svg+xml' && is_readable($iconFile) && ($d = @getimagesize($iconFile))) {
+        $sizes = $d[0] . 'x' . $d[1];
+    }
+
+    $b = function_exists('get_branding') ? get_branding() : [];
+    $appName = $b['site_name'] ?? (defined('CHILD_APP_NAME') ? CHILD_APP_NAME : 'App');
+    $manifest = [
+        'name'             => $appName,
+        'short_name'       => $appName,
+        'start_url'        => './index.html',
+        'scope'            => './',
+        'display'          => 'standalone',
+        'icons'            => [[
+            'src'     => $iconHref,
+            'sizes'   => $sizes,
+            'type'    => $mime,
+            'purpose' => 'any',
+        ]],
+    ];
+    if (!empty($b['theme_color']))      { $manifest['theme_color'] = $b['theme_color']; }
+    if (!empty($b['background_color'])) { $manifest['background_color'] = $b['background_color']; }
+
+    // NOT manifest.json — that name is already the bundle's per-screen manifest.
+    file_put_contents($appRoot . '/m/manifest.webmanifest',
+        json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+    $html = preg_replace('#<link\s+rel="manifest"\s+href="[^"]*"\s*/?>#i',
+        '<link rel="manifest" href="manifest.webmanifest">', $html);
+    fwrite(STDERR, "build_shell: manifest.webmanifest -> $iconHref ($sizes)\n");
+} else {
+    // No icon in the head means the shell would fall back to the site root favicon —
+    // on a domain shared with a marketing site that is the wrong logo entirely.
+    fwrite(STDERR, "build_shell: WARNING no <link rel=\"icon\"> in the shell; "
+                 . "add one to views/template.php (bundle-local, e.g. ../assets/img/<app>-tile.png)\n");
+}
+
 // ── 3. Make the shell CSP-safe with the same splitter the views use ───────────
 // Inline handlers → data-act; inline <script> hoisted out; and every <script src>
 // collected into deps. The chrome now contains no executable INLINE code (CSP), but the
