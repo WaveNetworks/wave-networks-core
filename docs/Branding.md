@@ -166,6 +166,54 @@ locally as the user and does the encoding itself.
 plausible-looking wrong assets, and the validator is what turns that into a fixable error
 instead of a store rejection days later.
 
+## Two consumers this unlocks
+
+Once every app admin has this section, it stops being a build input and becomes a product
+surface. Both consumers change requirements, so they belong in the spec rather than being
+bolted on.
+
+### 1. Customers manage their own branding
+
+`registered_app.user_id` already makes apps customer-owned, so the section is naturally
+self-service. That raises the bar in three ways:
+
+- **Validation must explain and offer to fix, not just refuse.** "Rejected: alpha channel"
+  is useless to a customer. "Apple rejects icons with transparency — flatten onto your
+  background colour?" with a preview is not. Most BLOCK rules have an obvious
+  remediation: strip alpha, resize, pad for the maskable safe zone, flatten onto the brand
+  backdrop. Offer it.
+- **Preview is the real safety net.** Show the asset as it will actually appear — home
+  screen, launcher, store listing, light and dark. A human looking at a preview would have
+  spotted the blank icon in one second; no amount of automated checking replaces seeing it.
+  This is the single highest-value item in the section.
+- **Role gating.** `saveBranding` has no role check today. Branding must be restricted to
+  the app's owner/admin, not any member.
+
+### 2. nokemo.com markets them as a portfolio
+
+The same assets — icon, feature graphic, screenshots, name, description — are exactly what
+a portfolio page needs. nokemo already holds every app in `registered_app` and can already
+reach each one's admin API.
+
+⚠️ **Publishing is opt-in and needs real consent.** These are *customers'* apps. Requirements:
+
+- `registered_app.portfolio_visible` (default **0**) plus marketing fields the table does
+  not have today: `tagline`, `description`, `category`, `live_url`, `store_urls`.
+- **Screenshots frequently contain real user data.** Store screenshots are usually real UI
+  with real content. Republishing a customer's screenshot on a public marketing page can
+  leak their users' data. Per-asset opt-in, an explicit warning at upload, and a review
+  step before anything goes public — not a single blanket toggle.
+- Pre-launch apps must never appear. Gate on `status` as well as the flag.
+
+**Mirror the assets; do not fetch live.** On 2026-08-28 three apps on this host returned
+503 for ~20 minutes. A portfolio that pulls each app's assets at page render breaks
+whenever any app is down, leaks that outage to a marketing page, and is slow even when
+healthy. nokemo should copy assets into its own storage when they change (the API can
+report an asset hash so it only re-pulls on change).
+
+**The portfolio raises the stakes on compliance**: a showcase is only as good as its worst
+icon, and the blank-icon failure mode becomes publicly visible on nokemo's own marketing.
+
 ## Open questions
 
 1. Transport (above).
@@ -175,3 +223,7 @@ instead of a store rejection days later.
    `build_shell` brand-parity gate?
 4. Migration: existing apps have `favicon` / `logo` / `logo_dark` in `admin/branding/`.
    Map them into the new slots, or require a one-time re-declaration per app?
+5. Portfolio consent: one opt-in per app, or per asset? Screenshots carry the data-leak
+   risk, so per-asset is safer — but it is more friction for the customer.
+6. Where do mirrored portfolio assets live on nokemo, and what invalidates the cache —
+   an asset hash returned by `apiGetBranding`, or a push on save?
