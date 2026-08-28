@@ -68,19 +68,29 @@ if (!function_exists('h')) { function h($s){ return htmlspecialchars((string)$s,
 // ../../admin/branding/<file>, the rewrite below turns that prefix into assets/img/, and
 // release-mobile copies assets/img/* into the bundle — so the SAME branch renders in both
 // shells, from one source of markup.
+// Declare WHAT THE APP HAS, not a fixed set. Parity is "the shell resolves what the web
+// app resolves" — an app whose branding has one mark, used in three places, has one mark
+// here too, and the keys it leaves undeclared stay empty in the shell exactly as they are
+// empty in the web app. Requiring all three would force an app to invent art the web app
+// never had, which is divergence in the other direction.
 $wnBrand = ['logo_path' => '', 'logo_dark_path' => '', 'favicon_path' => ''];
+$wnDeclared = [];
 $wnModelFile = $appRoot . '/app-model.json';
 if (is_readable($wnModelFile)) {
     $wnModel = json_decode(file_get_contents($wnModelFile), true);
     foreach (array_keys($wnBrand) as $k) {
-        if (!empty($wnModel['brand'][$k])) $wnBrand[$k] = $wnModel['brand'][$k];
+        if (!empty($wnModel['brand'][$k])) { $wnBrand[$k] = $wnModel['brand'][$k]; $wnDeclared[] = $k; }
     }
 }
 $wnMissing = [];
-foreach ($wnBrand as $k => $v) {
-    if ($v === '') { $wnMissing[] = "brand.$k not declared"; continue; }
-    if (!is_readable($appRoot . '/assets/img/' . $v)) $wnMissing[] = "assets/img/$v missing (brand.$k)";
+foreach ($wnDeclared as $k) {
+    if (!is_readable($appRoot . '/assets/img/' . $wnBrand[$k])) {
+        $wnMissing[] = "assets/img/{$wnBrand[$k]} missing (brand.$k)";
+    }
 }
+// Nothing declared at all is the one case that is always wrong: the shell then has no
+// brand to render anywhere, and every branding-gated branch falls back.
+if (!$wnDeclared) $wnMissing[] = "no brand declared — the shell has no mark to render";
 if ($wnMissing) {
     // Unconditional. There is no useful "partial" outcome here: a bundle that cannot
     // render the web app's brand markup is not a degraded build, it is a wrong one, and
@@ -88,7 +98,7 @@ if ($wnMissing) {
     // the real mark. Fail and say exactly what is missing.
     fwrite(STDERR, "build_shell FAILED — the shell cannot render the same brand markup as the web app.\n");
     foreach ($wnMissing as $m) fwrite(STDERR, "  - $m\n");
-    fwrite(STDERR, "  Declare them in " . basename($wnModelFile) . " at the app root:\n");
+    fwrite(STDERR, "  Declare what the app HAS in " . basename($wnModelFile) . " at the app root\n  (omit a key the web app does not have — do not invent art to fill it):\n");
     fwrite(STDERR, "    \"brand\": { \"logo_path\": \"<file>.png\", \"logo_dark_path\": \"<file>.png\", \"favicon_path\": \"<file>.png\" }\n");
     fwrite(STDERR, "  and put the files in assets/img/. Without them template.php takes its\n");
     fwrite(STDERR, "  fallback branches and the app silently diverges from the web app —\n");
