@@ -99,7 +99,12 @@ fi
 
 echo "── 4. cache-bust (this host's CDN pins bare URLs) ────────"
 php -r '
-$out = preg_replace_callback("/(src|href)=\"((?!https?:|\/\/)[^\"?]+\.(?:js|css))\"/", function ($m) {
+// Images are hashed for the same reason js/css are, and it is not optional: the
+// m/.htaccess written below marks png/svg "immutable, max-age=31536000". At a
+// stable URL that pins the brand icon for a YEAR — change the artwork and no
+// existing visitor ever sees it. Immutable is only safe when the URL moves with
+// the bytes. The portability assert strips ?query, so the hash does not break it.
+$out = preg_replace_callback("/(src|href)=\"((?!https?:|\/\/)[^\"?]+\.(?:js|css|png|svg|webp|jpe?g|ico))\"/", function ($m) {
     if (basename($m[2]) === "cordova.js") return $m[0];
     $p = "m/" . $m[2];
     return is_readable($p) ? $m[1] . "=\"" . $m[2] . "?v=" . substr(md5_file($p),0,10) . "\"" : $m[0];
