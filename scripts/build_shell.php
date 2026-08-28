@@ -82,21 +82,18 @@ foreach ($wnBrand as $k => $v) {
     if (!is_readable($appRoot . '/assets/img/' . $v)) $wnMissing[] = "assets/img/$v missing (brand.$k)";
 }
 if ($wnMissing) {
-    // Hard-fail only for an app that has OPTED IN by shipping app-model.json. Three other
-    // apps build this bundle today with no declaration at all (vivajee, primodollar,
-    // brand-compiler) and failing them here would break their deploys over a contract they
-    // have not adopted yet — so they get a loud warning and the old empty-branding
-    // behaviour. Delete this branch once every mobile app declares its brand.
-    $hard = is_readable($wnModelFile);
-    $lead = $hard ? "build_shell FAILED" : "build_shell: WARNING";
-    fwrite(STDERR, "$lead — the shell cannot render the same brand markup as the web app.\n");
+    // Unconditional. There is no useful "partial" outcome here: a bundle that cannot
+    // render the web app's brand markup is not a degraded build, it is a wrong one, and
+    // shipping it is how the app came to show a generic glyph next to a web app showing
+    // the real mark. Fail and say exactly what is missing.
+    fwrite(STDERR, "build_shell FAILED — the shell cannot render the same brand markup as the web app.\n");
     foreach ($wnMissing as $m) fwrite(STDERR, "  - $m\n");
     fwrite(STDERR, "  Declare them in " . basename($wnModelFile) . " at the app root:\n");
     fwrite(STDERR, "    \"brand\": { \"logo_path\": \"<file>.png\", \"logo_dark_path\": \"<file>.png\", \"favicon_path\": \"<file>.png\" }\n");
     fwrite(STDERR, "  and put the files in assets/img/. Without them template.php takes its\n");
     fwrite(STDERR, "  fallback branches and the app silently diverges from the web app —\n");
     fwrite(STDERR, "  a generic glyph for the brand, and any branding-gated element missing.\n");
-    if ($hard) exit(1);
+    exit(1);
 }
 if (!function_exists('get_branding')) { function get_branding(){ global $wnBrand; $n = defined('CHILD_APP_NAME') ? CHILD_APP_NAME : 'App'; return array_merge(['site_name'=>$n,'theme_color'=>'#666666'], $wnBrand); } }
 if (!function_exists('get_app_theme_css_url')) { function get_app_theme_css_url(){ return '__THEME_CSS__'; } }
