@@ -57,7 +57,48 @@ if (is_file($appRoot . '/include/definition.php')) {
     include_once($appRoot . '/include/definition.php');
 }
 if (!function_exists('h')) { function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES); } }
-if (!function_exists('get_branding')) { function get_branding(){ $n = defined('CHILD_APP_NAME') ? CHILD_APP_NAME : 'App'; return ['site_name'=>$n,'theme_color'=>'#666666','logo_path'=>'','logo_dark_path'=>'','favicon_path'=>'']; } }
+// Branding for the shell. This CANNOT be stubbed empty: template.php gates its brand
+// markup on these values, so empty ones silently take every fallback branch — a generic
+// bi-app-indicator glyph instead of the logo, and no dashboard watermark at all — and the
+// app ships chrome the web app does not have. A shell that does not match the web app is
+// broken, not degraded, so the app declares its bundle art in app-model.json and this
+// build FAILS without it rather than papering over the gap.
+//
+// The filenames resolve against the app's assets/img/. template.php emits
+// ../../admin/branding/<file>, the rewrite below turns that prefix into assets/img/, and
+// release-mobile copies assets/img/* into the bundle — so the SAME branch renders in both
+// shells, from one source of markup.
+$wnBrand = ['logo_path' => '', 'logo_dark_path' => '', 'favicon_path' => ''];
+$wnModelFile = $appRoot . '/app-model.json';
+if (is_readable($wnModelFile)) {
+    $wnModel = json_decode(file_get_contents($wnModelFile), true);
+    foreach (array_keys($wnBrand) as $k) {
+        if (!empty($wnModel['brand'][$k])) $wnBrand[$k] = $wnModel['brand'][$k];
+    }
+}
+$wnMissing = [];
+foreach ($wnBrand as $k => $v) {
+    if ($v === '') { $wnMissing[] = "brand.$k not declared"; continue; }
+    if (!is_readable($appRoot . '/assets/img/' . $v)) $wnMissing[] = "assets/img/$v missing (brand.$k)";
+}
+if ($wnMissing) {
+    // Hard-fail only for an app that has OPTED IN by shipping app-model.json. Three other
+    // apps build this bundle today with no declaration at all (vivajee, primodollar,
+    // brand-compiler) and failing them here would break their deploys over a contract they
+    // have not adopted yet — so they get a loud warning and the old empty-branding
+    // behaviour. Delete this branch once every mobile app declares its brand.
+    $hard = is_readable($wnModelFile);
+    $lead = $hard ? "build_shell FAILED" : "build_shell: WARNING";
+    fwrite(STDERR, "$lead — the shell cannot render the same brand markup as the web app.\n");
+    foreach ($wnMissing as $m) fwrite(STDERR, "  - $m\n");
+    fwrite(STDERR, "  Declare them in " . basename($wnModelFile) . " at the app root:\n");
+    fwrite(STDERR, "    \"brand\": { \"logo_path\": \"<file>.png\", \"logo_dark_path\": \"<file>.png\", \"favicon_path\": \"<file>.png\" }\n");
+    fwrite(STDERR, "  and put the files in assets/img/. Without them template.php takes its\n");
+    fwrite(STDERR, "  fallback branches and the app silently diverges from the web app —\n");
+    fwrite(STDERR, "  a generic glyph for the brand, and any branding-gated element missing.\n");
+    if ($hard) exit(1);
+}
+if (!function_exists('get_branding')) { function get_branding(){ global $wnBrand; $n = defined('CHILD_APP_NAME') ? CHILD_APP_NAME : 'App'; return array_merge(['site_name'=>$n,'theme_color'=>'#666666'], $wnBrand); } }
 if (!function_exists('get_app_theme_css_url')) { function get_app_theme_css_url(){ return '__THEME_CSS__'; } }
 if (!function_exists('has_role')) { function has_role($r){ return false; } }
 if (!function_exists('child_prime_shard')) { function child_prime_shard($s){} }
