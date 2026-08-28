@@ -52,11 +52,22 @@
     margin-left: 0.5rem;
     transition: opacity 0.2s ease;
     overflow: hidden;
+    /* The row is a flex line: icon (flex-shrink:0) + text + badge. Without
+       min-width:0 the label refuses to shrink below its content — .nav-link sets
+       white-space:nowrap — so a long label eats the badge's margin-left:auto,
+       the gap goes to 0, and the badge is squeezed until its content runs into
+       the text. Measured live: 9.4px gap in the web app but 0.2px in the mobile
+       shell, whose extra theme.css renders the same label ~3px wider. Let the
+       label ellipsize instead, and keep a real gap that auto cannot collapse. */
+    min-width: 0;
+    text-overflow: ellipsis;
+    padding-right: 0.5rem;
 }
 
 #sidebar .sidebar-badge {
     transition: opacity 0.2s ease;
     margin-left: auto;
+    flex-shrink: 0;   /* the badge is the count — never squeeze it */
 }
 
 /* Brand area + topnav — locked to same height so borders align */
@@ -114,6 +125,7 @@
     opacity: 0;
     width: 0;
     margin-left: 0;
+    padding-right: 0;   /* the expanded gap must not survive the collapse */
     overflow: hidden;
 }
 
@@ -230,6 +242,7 @@
         opacity: 0;
         width: 0;
         margin-left: 0;
+        padding-right: 0;   /* the expanded gap must not survive the collapse */
         overflow: hidden;
     }
 
@@ -265,6 +278,14 @@
     #sidebar.expanded .sidebar-badge {
         opacity: 1;
         width: auto;
+    }
+
+    /* The badge is hidden with display:none above, and opacity/width cannot
+       resurrect a display:none element — so expanding the sidebar in this range
+       restored every label but never the counts. As a flex item the value is
+       blockified anyway; inline-block is Bootstrap's own for .badge. */
+    #sidebar.expanded .sidebar-badge {
+        display: inline-block;
     }
 
     #sidebar.expanded .nav-link {
