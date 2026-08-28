@@ -83,7 +83,14 @@ if [[ -d node_modules/bootstrap-icons ]]; then
 fi
 # Brand tile → standard bundle name the engine's login screen references.
 [[ -f "$BRAND_TILE" ]] && cp "$BRAND_TILE" m/assets/img/app-tile.svg || echo "   ! BRAND_TILE $BRAND_TILE missing" >&2
+# Raster brand art too, not just svg. An app icon is often a PNG on purpose:
+# pwt's mark is <text> in a custom font (MonogramWorld5Regular), so as an SVG it
+# renders in whatever the device falls back to. Rasterised once, it is identical
+# everywhere. Copying only *.svg meant template.php could reference
+# ../assets/img/<tile>.png, build_shell would rewrite it to assets/img/<tile>.png,
+# and the bundle would 404 on it — an icon element pointing at nothing.
 cp assets/img/*.svg m/assets/img/ 2>/dev/null || true
+cp assets/img/*.png m/assets/img/ 2>/dev/null || true
 # Self-hosted fonts (app-owned brand fonts).
 if compgen -G "assets/fonts/*.woff2" > /dev/null; then
     cp assets/fonts/*.woff2 m/assets/fonts/
