@@ -49,9 +49,17 @@ Assets live in the **app repo** under `assets/brand/`, not in server-side
 - The mobile bundle gets them for free — `release-mobile.sh` already copies
   `assets/img/*`, and the shell must render the same art as the web app (see
   `app-model.json` `brand` and the build_shell parity gate).
-- Cloud agents can add them. Per the infra notes the builder cannot reach the nokemo API
-  from cloud (StackCDN blocks it); git is its only channel. Repo-stored assets work over
-  both channels; upload-only assets work over neither for a cloud agent.
+- They are versioned and reviewable. A brand change arrives as a diff with history,
+  instead of silently replacing a file on one host — which is how a blank icon sat in
+  production unnoticed.
+- Both channels work. An agent can commit the file OR call the API, and they converge on
+  the same source of truth.
+
+Note the last point is deliberately *not* "cloud agents cannot reach the API". Cloud agents
+do reach their app's admin API; the one blocked host is `subtheme.com`, most likely rate
+limited from LLM crawler traffic (it serves `llms.txt`, as does `nokemo.com`;
+`playwithtarot.com` does not). Repo storage is chosen here for durability, parity and
+reviewability — not to work around a reachability limit.
 
 The admin UI writes through the same API, so "upload in admin" and "agent commits a file"
 converge on one source of truth.
