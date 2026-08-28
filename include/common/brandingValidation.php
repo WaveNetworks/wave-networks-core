@@ -24,58 +24,69 @@ if (!defined('BRANDING_WARN'))  define('BRANDING_WARN',  'warn');
  * Slot catalogue. `w`/`h` null = any. `sizes` = list of accepted [w,h] pairs.
  * `alpha`: true = required, false = must NOT have one, null = don't care.
  */
-function branding_slot_specs() {
-    return [
+/**
+ * @param string|null $tier 'pwa' (every app) or 'store' (only apps that ship a mobile
+ *                          binary). Null returns everything.
+ *
+ * NOT every web app ships a mobile app, but EVERY app needs PWA assets — so the store
+ * tier is opt-in per app and must never be presented as missing work for an app that
+ * will never see a store.
+ */
+function branding_slot_specs($tier = null) {
+    $all = [
         // ── Master. Everything else derives from this one file. ──────────────
         'icon_master' => [
             'label' => 'App icon (master)', 'min_w' => 1024, 'min_h' => 1024, 'square' => true,
-            'formats' => ['png', 'svg', 'webp'],
-            'help' => 'One high-resolution square master. Every store icon is derived from it.',
+            'formats' => ['png', 'svg', 'webp'], 'tier' => 'pwa', 'rasterized' => true,
+            'help' => 'One high-resolution square master. Every derived icon comes from it. '
+                    . 'Rasterised server-side, so a font-dependent SVG cannot be used here.',
         ],
 
         // ── In-app chrome ────────────────────────────────────────────────────
-        'logo_light' => ['label' => 'Logo (light backgrounds)', 'formats' => ['png','svg','webp','jpg']],
-        'logo_dark'  => ['label' => 'Logo (dark backgrounds)',  'formats' => ['png','svg','webp','jpg']],
-        'favicon'    => ['label' => 'Favicon', 'square' => true, 'formats' => ['png','svg','ico','webp']],
+        'logo_light' => ['label' => 'Logo (light backgrounds)', 'formats' => ['png','svg','webp','jpg'], 'tier' => 'pwa'],
+        'logo_dark'  => ['label' => 'Logo (dark backgrounds)',  'formats' => ['png','svg','webp','jpg'], 'tier' => 'pwa'],
+        'favicon'    => ['label' => 'Favicon', 'square' => true, 'formats' => ['png','svg','ico','webp'], 'tier' => 'pwa'],
 
         // ── Apple ────────────────────────────────────────────────────────────
-        'apple_icon_1024' => [
+        'apple_icon_1024' => [ 'tier' => 'store',
             'label' => 'App Store icon', 'sizes' => [[1024,1024]], 'alpha' => false,
             'formats' => ['png'], 'derived_from' => 'icon_master',
             'help' => 'Apple rejects an icon with an alpha channel.',
         ],
-        'screenshot_iphone_69' => [
+        'screenshot_iphone_69' => [ 'tier' => 'store',
             'label' => 'iPhone 6.9" screenshots', 'sizes' => [[1290,2796],[1320,2868],[2796,1290],[2868,1320]],
             'formats' => ['png','jpg'], 'multiple' => true, 'max' => 10,
         ],
-        'screenshot_ipad_13' => [
+        'screenshot_ipad_13' => [ 'tier' => 'store',
             'label' => 'iPad 13" screenshots', 'sizes' => [[2064,2752],[2048,2732],[2752,2064],[2732,2048]],
             'formats' => ['png','jpg'], 'multiple' => true, 'max' => 10,
         ],
 
         // ── Google Play ──────────────────────────────────────────────────────
-        'play_icon_512' => [
+        'play_icon_512' => [ 'tier' => 'store',
             'label' => 'Play Store icon', 'sizes' => [[512,512]], 'formats' => ['png'],
             'derived_from' => 'icon_master',
         ],
-        'feature_graphic' => [
+        'feature_graphic' => [ 'tier' => 'store',
             'label' => 'Play feature graphic', 'sizes' => [[1024,500]], 'alpha' => false,
             'formats' => ['png','jpg'], 'help' => 'Google Play will not publish a listing without one.',
         ],
-        'screenshot_phone' => [
+        'screenshot_phone' => [ 'tier' => 'store',
             'label' => 'Play phone screenshots', 'min_w' => 320, 'min_h' => 320, 'max_w' => 3840, 'max_h' => 3840,
             'formats' => ['png','jpg'], 'multiple' => true, 'min_count' => 2, 'max' => 8,
         ],
-        'screenshot_tablet_7'  => ['label' => 'Play 7" tablet screenshots',  'min_w' => 320, 'max_w' => 3840, 'formats' => ['png','jpg'], 'multiple' => true, 'max' => 8],
-        'screenshot_tablet_10' => ['label' => 'Play 10" tablet screenshots', 'min_w' => 320, 'max_w' => 3840, 'formats' => ['png','jpg'], 'multiple' => true, 'max' => 8],
+        'screenshot_tablet_7'  => ['tier' => 'store', 'label' => 'Play 7" tablet screenshots',  'min_w' => 320, 'max_w' => 3840, 'formats' => ['png','jpg'], 'multiple' => true, 'max' => 8],
+        'screenshot_tablet_10' => [ 'tier' => 'store','label' => 'Play 10" tablet screenshots', 'min_w' => 320, 'max_w' => 3840, 'formats' => ['png','jpg'], 'multiple' => true, 'max' => 8],
 
         // ── PWA / Android build ──────────────────────────────────────────────
-        'maskable_512'        => ['label' => 'Maskable icon', 'sizes' => [[512,512]], 'formats' => ['png'], 'derived_from' => 'icon_master', 'maskable' => true],
-        'adaptive_background' => ['label' => 'Adaptive icon background', 'square' => true, 'formats' => ['png','svg']],
-        'pwa_screenshot_mobile' => ['label' => 'PWA screenshot (mobile)', 'formats' => ['png','jpg'], 'form_factor' => 'narrow'],
-        'pwa_screenshot_tablet' => ['label' => 'PWA screenshot (tablet)', 'formats' => ['png','jpg'], 'form_factor' => 'wide'],
-        'pwa_screenshot_wide'   => ['label' => 'PWA screenshot (wide)',   'formats' => ['png','jpg'], 'form_factor' => 'wide'],
+        'maskable_512'        => ['tier' => 'pwa', 'rasterized' => true, 'label' => 'Maskable icon', 'sizes' => [[512,512]], 'formats' => ['png'], 'derived_from' => 'icon_master', 'maskable' => true],
+        'adaptive_background' => [ 'tier' => 'store','label' => 'Adaptive icon background', 'square' => true, 'formats' => ['png','svg']],
+        'pwa_screenshot_mobile' => ['tier' => 'pwa', 'label' => 'PWA screenshot (mobile)', 'formats' => ['png','jpg'], 'form_factor' => 'narrow'],
+        'pwa_screenshot_tablet' => ['tier' => 'pwa', 'label' => 'PWA screenshot (tablet)', 'formats' => ['png','jpg'], 'form_factor' => 'wide'],
+        'pwa_screenshot_wide'   => ['tier' => 'pwa', 'label' => 'PWA screenshot (wide)',   'formats' => ['png','jpg'], 'form_factor' => 'wide'],
     ];
+    if ($tier === null) return $all;
+    return array_filter($all, function ($s) use ($tier) { return ($s['tier'] ?? 'pwa') === $tier; });
 }
 
 /** Basic facts about an image file. Returns null if it isn't a readable image. */
@@ -182,6 +193,19 @@ function branding_svg_has_text($path) {
 }
 
 /**
+ * Does this SVG carry its own font, rather than naming one and hoping? An @font-face
+ * with a data: URI is self-contained and renders identically everywhere; a bare
+ * font-family is a wish.
+ */
+function branding_svg_embeds_font($path) {
+    if (!is_readable($path)) return false;
+    $s = file_get_contents($path);
+    if ($s === false) return false;
+    return (bool) preg_match('/@font-face/i', $s)
+        && (bool) preg_match('/src\s*:\s*url\(\s*[\'"]?data:/i', $s);
+}
+
+/**
  * Fraction of opaque content falling outside the maskable safe zone — the centred circle
  * of diameter 80% of the icon. Android launchers crop everything beyond it.
  */
@@ -238,12 +262,30 @@ function branding_validate_asset($slot, $path, array $ctx = []) {
             "$label: {$info['ext']} is not accepted here (" . implode(', ', $spec['formats']) . ").");
     }
 
-    // ── Vector text: a font dependency the renderer may not satisfy ──────────
-    if ($info['ext'] === 'svg' && branding_svg_has_text($path)) {
-        $add(BRANDING_BLOCK, 'svg_text',
-            "$label: this SVG draws text through a font, so its glyphs depend on a font the "
-          . "renderer may not have — the server, the phone and the build box are all different "
-          . "renderers. Convert the text to paths and re-upload.");
+    // ── Vector text: a font dependency, fatal only where WE rasterise ────────
+    // SVG is a first-class format for web/PWA and must not be discouraged: a browser
+    // renders it at full quality at any size. The failure is narrower than "SVG bad" —
+    // it is text drawn through a font that is not embedded in the file, because the
+    // glyphs then depend on whatever the renderer happens to have installed.
+    //
+    // Where WE rasterise the file server-side (icon_master and anything derived from
+    // it) that is fatal and provable: this codebase already shipped a monogram that
+    // came out as a fallback serif because the build box had no such font, and nothing
+    // downstream could tell. Elsewhere the browser usually does something reasonable,
+    // so it is worth saying but not worth refusing.
+    if ($info['ext'] === 'svg' && branding_svg_has_text($path) && !branding_svg_embeds_font($path)) {
+        if (!empty($spec['rasterized'])) {
+            $add(BRANDING_BLOCK, 'svg_text_rasterized',
+                "$label: this SVG draws text through a font that is not embedded in the file, and "
+              . "this slot is rasterised on the server — where that font does not exist. The mark "
+              . "would silently come out in a substitute typeface. Convert the text to paths, embed "
+              . "the font, or upload a PNG for this slot.");
+        } else {
+            $add(BRANDING_WARN, 'svg_text',
+                "$label: this SVG draws text through a font that is not embedded, so it renders in "
+              . "whatever typeface the viewer happens to have. Converting the text to paths makes it "
+              . "identical everywhere.");
+        }
     }
 
     // ── Dimensions ───────────────────────────────────────────────────────────

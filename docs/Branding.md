@@ -64,6 +64,34 @@ reviewability — not to work around a reachability limit.
 The admin UI writes through the same API, so "upload in admin" and "agent commits a file"
 converge on one source of truth.
 
+## Two tiers, because not every app ships a mobile app
+
+**Every app needs PWA assets. Only some apps ship to a store.** The store tier is opt-in
+per app and must never be shown as missing work for an app that will never see a store.
+
+| Tier | Applies to | Slots |
+|---|---|---|
+| `pwa` | every app | icon master, favicon, logos, maskable, PWA screenshots |
+| `store` | apps that ship a mobile binary | Apple + Play icons, feature graphic, device screenshots, adaptive background |
+
+`branding_slot_specs($tier)` filters, so the UI can render only what an app actually needs.
+
+### SVG is first-class for the web tier
+
+An SVG favicon or logo is *better* than a PNG — a browser renders it at any size. So SVG
+is not discouraged, and the store tier is PNG-only anyway because Apple and Play accept
+nothing else. The narrow failure is **text drawn through a font that is not embedded in
+the file**, because the glyphs then depend on whatever the renderer has installed:
+
+- Where a **browser** renders it (favicon, logos) → **WARN**. It usually looks fine and
+  refusing it would be wrong.
+- Where **we rasterise it server-side** (`icon_master` and anything derived) → **BLOCK**.
+  Not theoretical: this codebase shipped a monogram that came out as a fallback serif
+  because the build box had no such font, and nothing downstream could tell.
+
+An `@font-face` with a `data:` URI is self-contained and passes either way. The remedy is
+always one of: convert the text to paths, embed the font, or upload a PNG for that slot.
+
 ## Slots
 
 Icons derive from ONE master. Six hand-uploaded icons drift, and drift is the failure this
