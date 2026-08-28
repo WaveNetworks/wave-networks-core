@@ -122,6 +122,55 @@ if (($action ?? null) == 'saveBranding') {
         }
     }
 
+    // ── Compliance (docs/Branding.md) ────────────────────────────────────────
+    // The checks above ask "is this a plausible image file?". That is not enough: pwt
+    // shipped a favicon that was a valid PNG of the right size, HTTP 200, and a blank
+    // white square, and it passed every one of them. Validate the actual pixels before
+    // anything is written, while the upload is still a temp file.
+    //
+    // Each asset is judged against the surface it will really sit on, which is what
+    // catches a light mark uploaded as the light-mode logo.
+    $branding_warnings = [];
+    if (function_exists('branding_validate_asset')) {
+        $to_check = [
+            'logo'                  => ['slot' => 'logo_light', 'bg' => $background_color_light],
+            'logo_dark'             => ['slot' => 'logo_dark',  'bg' => $background_color_dark],
+            // The favicon is rasterised into every app icon, and iOS flattens home-screen
+            // icons onto white — so white is the surface that decides whether it survives.
+            'favicon'               => ['slot' => 'favicon',    'bg' => '#ffffff'],
+            'pwa_screenshot_wide'   => ['slot' => 'pwa_screenshot_wide',   'bg' => null],
+            'pwa_screenshot_tablet' => ['slot' => 'pwa_screenshot_tablet', 'bg' => null],
+            'pwa_screenshot_mobile' => ['slot' => 'pwa_screenshot_mobile', 'bg' => null],
+        ];
+        foreach ($to_check as $field => $cfg) {
+            if (empty($_FILES[$field]['name']) || ($_FILES[$field]['error'] ?? 1) !== UPLOAD_ERR_OK) continue;
+            if (isset($errs[$field])) continue;              // already rejected above
+            $tmp = $_FILES[$field]['tmp_name'];
+            if (!is_readable($tmp)) continue;
+
+            // getimagesize() and the PNG header read need the real extension to reason
+            // about format, and a temp upload has none.
+            $ext   = strtolower(pathinfo($_FILES[$field]['name'], PATHINFO_EXTENSION));
+            $probe = $tmp . '.' . $ext;
+            if (!@copy($tmp, $probe)) continue;
+
+            $ctx = [];
+            if (!empty($cfg['bg'])) $ctx['background'] = $cfg['bg'];
+            $res = branding_validate_asset($cfg['slot'], $probe, $ctx);
+            @unlink($probe);
+
+            foreach ($res['violations'] as $v) {
+                if ($v['level'] === BRANDING_BLOCK) {
+                    // First block per field wins — stacking every rule on one upload is
+                    // noise, and the first is the one to fix.
+                    if (!isset($errs[$field])) $errs[$field] = $v['message'];
+                } else {
+                    $branding_warnings[] = $v['message'];
+                }
+            }
+        }
+    }
+
     if (count($errs) <= 0) {
         // Move uploaded files
         if ($logo_updated) {
@@ -221,6 +270,12 @@ if (($action ?? null) == 'saveBranding') {
             $_SESSION['error'] = db_error();
         } else {
             $_SESSION['success'] = 'Branding settings saved.';
+            // Saved, but not silently: a WARN is something that will look wrong on a
+            // device rather than be refused by a store, so it has to be said out loud
+            // or it is indistinguishable from a clean save.
+            if (!empty($branding_warnings)) {
+                $_SESSION['warning'] = implode('<br>', array_unique($branding_warnings));
+            }
         }
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
