@@ -9,9 +9,7 @@
 
     var STORAGE_KEY = 'wn_color_mode';
     var btn = document.getElementById('colorModeToggle');
-    if (!btn) return;
-
-    var iconEl = btn.querySelector('i');
+    var iconEl = btn ? btn.querySelector('i') : null;
 
     function getMode() {
         return document.documentElement.getAttribute('data-bs-theme') || 'light';
@@ -36,9 +34,20 @@
     // which flips the sidebar logo from the dark variant to the light one).
     window.wnUpdateLogos = function () { updateLogos(getMode()); };
 
-    // Sync icon and logos to whatever the head script already set
+    // Sync icon and logos to whatever the head script already set.
+    // MUST run even when there is no toggle button: the guard used to sit above this,
+    // so any page without #colorModeToggle kept the server-rendered src — which is
+    // logo_path, the LIGHT-theme (dark ink) art — no matter what the theme was.
     syncIcon(getMode());
     updateLogos(getMode());
+
+    // Re-sync whatever the SPA/router just injected. updateLogos only ever walked the
+    // images present at load, so a logo arriving with a fragment (e.g. the dashboard
+    // watermark) stayed on its server-rendered variant until the user happened to hit
+    // the toggle — "black regardless of theme, correct once I use the switcher".
+    document.addEventListener('spa:contentLoaded', function () { updateLogos(getMode()); });
+
+    if (!btn) return;
 
     btn.addEventListener('click', function () {
         var current = getMode();
