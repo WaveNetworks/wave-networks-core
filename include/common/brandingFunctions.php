@@ -83,6 +83,14 @@ function generate_pwa_icons($source_path, $uploads_dir) {
         if (extension_loaded('imagick')) {
             try {
                 $im = new Imagick();
+                // MUST precede readImage(). Imagick renders SVG onto an OPAQUE WHITE
+                // canvas by default, which silently destroys any icon drawn in white
+                // or in strokes on transparency — the result is a uniform white square
+                // that still writes a valid PNG and still serves HTTP 200, so nothing
+                // downstream notices. pwt shipped exactly that: a 512x512 icon with
+                // ONE unique colour. Reproduced with `convert in.svg out.png` (blank)
+                // vs `convert -background none in.svg out.png` (256 colours).
+                $im->setBackgroundColor(new ImagickPixel('transparent'));
                 $im->readImage($source_path);
                 $im->setImageFormat('png');
                 $tmp = $uploads_dir . '/pwa_icon_tmp.png';
@@ -128,6 +136,24 @@ function generate_pwa_icons($source_path, $uploads_dir) {
         $filename = "pwa_icon_{$size}.png";
         $out_path = $uploads_dir . '/' . $filename;
         imagepng($dst, $out_path);
+
+        // A blank icon is a valid PNG served with HTTP 200 — the only way to notice it
+        // is to look at the pixels. Sample a grid; if every sample is identical the
+        // rasteriser produced a flat square and the branding upload needs attention.
+        $seen = null; $uniform = true;
+        for ($sy = 0; $sy < $size && $uniform; $sy += max(1, (int)($size / 16))) {
+            for ($sx = 0; $sx < $size; $sx += max(1, (int)($size / 16))) {
+                $px = imagecolorat($dst, $sx, $sy);
+                if ($seen === null) { $seen = $px; continue; }
+                if ($px !== $seen) { $uniform = false; break; }
+            }
+        }
+        if ($uniform) {
+            error_log("generate_pwa_icons: {$filename} is a single flat colour — the source "
+                    . "(" . basename($source_path) . ") did not rasterise. A white-on-transparent "
+                    . "or stroke-only SVG needs an opaque background baked in.");
+        }
+
         imagedestroy($dst);
         $generated[] = $filename;
     }
