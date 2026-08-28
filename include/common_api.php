@@ -103,7 +103,13 @@ foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/mobile/*.php') as $f) { include_once($f); }
 
 // 5. Migrations
-$db_version    = $db_version ?? 4.6;
+// WARNING: must match common.php. These three bootstraps each declare their own default
+// and had drifted to 4.7 / 4.3 / 4.6. run_pending_migrations() stops at
+// `if ($ver > $db_version) break;`, so a stale value here corrupts nothing - it silently
+// DECLINES to apply migrations above it. Whether a schema upgrade lands then depends on
+// which bootstrap the request came through: auth pages and API calls would leave an app
+// un-migrated while an ordinary page request upgraded it.
+$db_version    = $db_version ?? 4.7;
 $shard_version = $shard_version ?? 1.3;
 check_and_migrate_main_db();
 check_and_migrate_all_shards();
