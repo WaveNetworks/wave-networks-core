@@ -148,6 +148,19 @@ window.WnRouter = (function () {
         var page = r.page;
         var params = r.params;
 
+        // Tell the page we are LEAVING before anything of the next one arrives. Desktop
+        // spa-nav.js dispatches this pair — spa:navigate on the way out, spa:contentLoaded
+        // on the way in — and things that own per-screen state hang their teardown on the
+        // first one. GameLoop binds exitLevel() to it, which is what stops a level's
+        // animation, clears its level-scoped timers and removes its particles.
+        //
+        // This router only ever dispatched spa:contentLoaded, so on the device a level was
+        // entered and never exited: the dashboard's reveal cycle kept spawning particles
+        // into the radar for the rest of the session, on every screen, accumulating with
+        // each visit. On the web app the same code stops cleanly, which is the tell that
+        // this is a parity gap rather than a dashboard bug.
+        document.dispatchEvent(new CustomEvent('spa:navigate', { detail: { page: page } }));
+
         // Login is the one screen that is NOT a view: it must work with no session and
         // no network, so it is bundled rather than fetched (see js/login.js).
         if (page === 'login') {
