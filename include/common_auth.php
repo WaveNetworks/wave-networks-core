@@ -95,6 +95,15 @@ $db = new PDO(
 // 4. Glob-include all helpers
 foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
+// Mobile engine (child-app spec 05): the fragment splitter + build-time helpers, so the
+// ?page=&mobile=1 fragment endpoint in every child app can call wn_split_view().
+//
+// This bootstrap was the ONLY one of the three missing it — common.php and common_api.php
+// both load it. The gap is not academic: a screen served through this bootstrap returned
+// an UNSPLIT payload with no js_hash, and the device router reads a missing hash as "this
+// screen needs a newer build" and refuses to render it. That is what took pwt's mobile
+// Home and Gallery dark, and it is silent — a 200 with plausible JSON.
+foreach (glob(__DIR__ . '/mobile/*.php') as $f) { include_once($f); }
 
 // 5. Migrations
 // WARNING: must match common.php. These three bootstraps each declare their own default
