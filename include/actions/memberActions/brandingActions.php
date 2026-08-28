@@ -171,7 +171,40 @@ if (($action ?? null) == 'saveBranding') {
         }
     }
 
+    // Store-tier slots (Apple / Play). File-discovered rather than a column per slot, so
+    // adding a slot to the catalogue needs no migration — see branding_asset_filename().
+    $store_uploads = [];
+    if (function_exists('branding_slot_specs')) {
+        foreach (branding_slot_specs('store') as $slot => $spec) {
+            if (empty($_FILES[$slot]['name']) || ($_FILES[$slot]['error'] ?? 1) !== UPLOAD_ERR_OK) continue;
+            if ($_FILES[$slot]['size'] > $max_file_size * 4) {   // store art is legitimately larger
+                $errs[$slot] = $spec['label'] . ': file is too large.';
+                continue;
+            }
+            $ext   = strtolower(pathinfo($_FILES[$slot]['name'], PATHINFO_EXTENSION));
+            $probe = $_FILES[$slot]['tmp_name'] . '.' . $ext;
+            if (!@copy($_FILES[$slot]['tmp_name'], $probe)) continue;
+            $res = branding_validate_asset($slot, $probe, []);
+            @unlink($probe);
+            foreach ($res['violations'] as $v) {
+                if ($v['level'] === BRANDING_BLOCK) {
+                    if (!isset($errs[$slot])) $errs[$slot] = $v['message'];
+                } else {
+                    $branding_warnings[] = $v['message'];
+                }
+            }
+            if (!isset($errs[$slot])) $store_uploads[$slot] = ['tmp' => $_FILES[$slot]['tmp_name'], 'ext' => $ext];
+        }
+    }
+
     if (count($errs) <= 0) {
+        // Store-tier assets: one file per slot, previous extension cleared first so a
+        // PNG replacing a JPG does not leave both on disk for the glob to find.
+        foreach ($store_uploads as $slot => $u) {
+            foreach (glob($uploads_dir . '/' . branding_asset_filename($slot, '*')) as $old_file) { unlink($old_file); }
+            move_uploaded_file($u['tmp'], $uploads_dir . '/' . branding_asset_filename($slot, $u['ext']));
+        }
+
         // Move uploaded files
         if ($logo_updated) {
             foreach (glob($uploads_dir . '/branding_logo.*') as $old) { unlink($old); }

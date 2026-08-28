@@ -362,3 +362,32 @@ function branding_validate_asset($slot, $path, array $ctx = []) {
     foreach ($v as $x) if ($x['level'] === BRANDING_BLOCK) { $ok = false; break; }
     return ['ok' => $ok, 'violations' => $v];
 }
+
+/**
+ * Where store assets live and how they are named. Deliberately file-discovered rather
+ * than a column per slot: branding persists as columns on auth_settings, so every new
+ * slot would otherwise cost a migration — on a stack where the migration runner is known
+ * to drop DDL. The favicon repair path already globs for its file; this is the same idea
+ * applied consistently.
+ */
+function branding_asset_filename($slot, $ext) {
+    return 'brand_' . preg_replace('/[^a-z0-9_]/', '', $slot) . '.' . strtolower($ext);
+}
+
+/** Current file for a slot, as a bare filename, or null. */
+function branding_find_asset($uploads_dir, $slot) {
+    $hits = glob(rtrim($uploads_dir, '/') . '/' . branding_asset_filename($slot, '*'));
+    return $hits ? basename($hits[0]) : null;
+}
+
+/**
+ * Does this app ship a mobile binary? Only then are the store slots real work.
+ *
+ * Derived, not stored: an app has the mobile engine when it carries the shared view map
+ * that build_mobile.php and app/index.php both read. An explicit on/off belongs on the
+ * mobile page (stage 1) once that exists — this is the honest answer until then, and it
+ * is right for every app today.
+ */
+function branding_app_ships_mobile($app_root) {
+    return is_file(rtrim($app_root, '/') . '/include/mobile/view_map.php');
+}

@@ -225,6 +225,68 @@ $branding = get_branding();
                         </div>
                     </div>
 
+<?php
+                    // ── App Store assets ─────────────────────────────────────
+                    // Rendered from the shared slot catalogue, so adding a slot in
+                    // brandingValidation.php adds it here with no template edit.
+                    //
+                    // Only shown when the app actually ships a mobile binary. EVERY app
+                    // needs the PWA assets above; only some will ever see a store, and
+                    // presenting nine empty store slots to a web-only app reads as nine
+                    // pieces of missing work that will never be done.
+                    $wn_brand_dir   = rtrim($GLOBALS['files_location'] ?? '', '/') . '/branding';
+                    $wn_ships_mobile = function_exists('branding_app_ships_mobile')
+                        && branding_app_ships_mobile(__DIR__ . '/../..');
+                    if ($wn_ships_mobile && function_exists('branding_slot_specs')) {
+                        $wn_store_slots = branding_slot_specs('store');
+                        // One line of plain English per slot, generated from the spec —
+                        // a store rejection is expensive, so the requirement has to be
+                        // visible BEFORE the upload, not discovered after.
+                        $wn_spec_text = function ($spec) {
+                            $bits = [];
+                            if (!empty($spec['sizes'])) {
+                                $bits[] = implode(' or ', array_map(function ($z) { return $z[0] . '×' . $z[1]; }, $spec['sizes'])) . ' px';
+                            } else {
+                                if (!empty($spec['min_w'])) $bits[] = 'min ' . $spec['min_w'] . 'px wide';
+                                if (!empty($spec['max_w'])) $bits[] = 'max ' . $spec['max_w'] . 'px wide';
+                            }
+                            if (isset($spec['alpha']) && $spec['alpha'] === false) $bits[] = 'no transparency';
+                            if (!empty($spec['formats'])) $bits[] = strtoupper(implode('/', $spec['formats']));
+                            if (!empty($spec['min_count'])) $bits[] = 'at least ' . $spec['min_count'];
+                            return implode(' · ', $bits);
+                        };
+                ?>
+                    <hr class="my-3">
+                    <h6 class="mb-1"><i class="bi bi-google-play me-1"></i><i class="bi bi-apple me-2"></i>App Store Assets</h6>
+                    <p class="form-text mt-0 mb-3">
+                        Shown because this app ships a mobile build. Each file is checked against the
+                        store&rsquo;s rules on upload &mdash; wrong dimensions and stray transparency are
+                        rejections, so they are refused here rather than by Apple or Google days later.
+                    </p>
+                    <div class="row">
+                    <?php foreach ($wn_store_slots as $wn_slot => $wn_spec) {
+                        $wn_have = function_exists('branding_find_asset') ? branding_find_asset($wn_brand_dir, $wn_slot) : null; ?>
+                        <div class="col-md-4 mb-3">
+                            <label for="<?= h($wn_slot) ?>" class="form-label"><?= h($wn_spec['label']) ?></label>
+                            <?php if ($wn_have) { ?>
+                            <div class="mb-2">
+                                <img src="../branding/<?= h($wn_have) ?>" alt="" style="max-height:64px;" class="border rounded p-1">
+                            </div>
+                            <?php } ?>
+                            <input type="file" class="form-control form-control-sm" id="<?= h($wn_slot) ?>" name="<?= h($wn_slot) ?>"
+                                   accept="image/png,image/jpeg">
+                            <div class="form-text"><?= h($wn_spec_text($wn_spec)) ?></div>
+                            <?php if (!empty($wn_spec['help'])) { ?>
+                            <div class="form-text text-warning-emphasis"><?= h($wn_spec['help']) ?></div>
+                            <?php } ?>
+                            <?php if (!empty($wn_spec['derived_from'])) { ?>
+                            <div class="form-text fst-italic">Derived from the app icon master if left empty.</div>
+                            <?php } ?>
+                        </div>
+                    <?php } ?>
+                    </div>
+                <?php } ?>
+
                     <button type="submit" class="btn btn-primary">Save Branding</button>
                 </form>
             </div>
