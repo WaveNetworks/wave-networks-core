@@ -123,6 +123,9 @@ if (is_readable($mf)) { $m = json_decode(file_get_contents($mf), true);
 }
 '
 cat > m/.htaccess <<'HT'
+# Servers do not map .webmanifest by default; without this the browser gets an
+# empty Content-Type and may refuse to parse the manifest (and so ignore the icon).
+AddType application/manifest+json .webmanifest
 <FilesMatch "\.(html|json|webmanifest)$">
     Header set Cache-Control "no-cache, must-revalidate"
 </FilesMatch>

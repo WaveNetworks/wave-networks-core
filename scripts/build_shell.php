@@ -164,15 +164,23 @@ $html = str_replace('../../admin/branding/', 'assets/img/', $html);
 // declares, so the bundle is self-contained and the two agree.
 if (preg_match('#<link\s+rel="icon"\s+href="([^"]+)"#i', $html, $iconM)) {
     $iconHref = $iconM[1];
-    $iconFile = $appRoot . '/m/' . preg_replace('/\?.*$/', '', $iconHref);
     $ext      = strtolower(pathinfo(parse_url($iconHref, PHP_URL_PATH), PATHINFO_EXTENSION));
     $mime     = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'webp' ? 'image/webp' : 'image/png');
 
     // Declare the real pixel size when we can read it — a wrong "sizes" is worse than
-    // none, since the installer picks by it.
-    $sizes = 'any';
-    if ($mime !== 'image/svg+xml' && is_readable($iconFile) && ($d = @getimagesize($iconFile))) {
-        $sizes = $d[0] . 'x' . $d[1];
+    // none, since the installer picks by it, and "any" on a raster icon tells it
+    // nothing. NOTE this script runs BEFORE release-mobile copies art into m/, so the
+    // bundle copy usually does not exist yet; fall back to the source the copy comes
+    // from ($appRoot/assets/img/...), which is the same bytes.
+    $relPath  = preg_replace('/\?.*$/', '', $iconHref);
+    $sizes    = 'any';
+    if ($mime !== 'image/svg+xml') {
+        foreach ([$appRoot . '/m/' . $relPath, $appRoot . '/' . $relPath] as $cand) {
+            if (is_readable($cand) && ($d = @getimagesize($cand))) { $sizes = $d[0] . 'x' . $d[1]; break; }
+        }
+        if ($sizes === 'any') {
+            fwrite(STDERR, "build_shell: WARNING could not size $relPath — manifest will say \"any\"\n");
+        }
     }
 
     $b = function_exists('get_branding') ? get_branding() : [];
