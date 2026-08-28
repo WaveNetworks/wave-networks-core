@@ -123,13 +123,42 @@ function generate_pwa_icons($source_path, $uploads_dir) {
     $src_w = imagesx($src);
     $src_h = imagesy($src);
 
+    // A PWA icon must be OPAQUE. iOS flattens home-screen icons onto white, and
+    // Android draws them on whatever the launcher uses — so a transparent icon is
+    // at the mercy of the surface. A brand mark drawn in white then disappears
+    // completely, which is what pwt shipped: its favicon is the DARK-MODE logo
+    // (fill:#fff), so the icon was white-on-white. Measured on the real assets:
+    //
+    //     branding_logo.svg      (fill #231f20) on light -> 245 colours
+    //     branding_logo_dark.svg (fill #fff)    on dark  -> 254 colours
+    //     branding_logo_dark.svg (fill #fff)    on light ->   1 colour  (invisible)
+    //
+    // So pick the backdrop from the artwork itself rather than from branding's
+    // colour fields, which are frequently left at their #ffffff default and would
+    // reintroduce exactly this failure. Mean luminance over the OPAQUE pixels
+    // separates the two cleanly (0.016 vs 0.125 on the assets above).
+    $lumSum = 0.0; $lumN = 0;
+    $stepX = max(1, (int) ($src_w / 64));
+    $stepY = max(1, (int) ($src_h / 64));
+    for ($y = 0; $y < $src_h; $y += $stepY) {
+        for ($x = 0; $x < $src_w; $x += $stepX) {
+            $c = imagecolorat($src, $x, $y);
+            if ((($c >> 24) & 0x7F) > 100) continue;         // effectively transparent
+            $lumSum += (0.299 * (($c >> 16) & 0xFF) + 0.587 * (($c >> 8) & 0xFF) + 0.114 * ($c & 0xFF)) / 255;
+            $lumN++;
+        }
+    }
+    $artworkIsLight = $lumN > 0 && ($lumSum / $lumN) > 0.5;
+    $bg = $artworkIsLight ? [10, 10, 26] : [255, 255, 255];  // #0a0a1a matches the native app icons
+
     foreach ($sizes as $size) {
         $dst = imagecreatetruecolor($size, $size);
-        // Preserve transparency
-        imagealphablending($dst, false);
-        imagesavealpha($dst, true);
-        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
-        imagefill($dst, 0, 0, $transparent);
+        // Opaque backdrop, then composite the artwork ONTO it — so alphablending
+        // must be on for the copy (the old code copied source alpha verbatim).
+        $bgColor = imagecolorallocate($dst, $bg[0], $bg[1], $bg[2]);
+        imagefilledrectangle($dst, 0, 0, $size, $size, $bgColor);
+        imagealphablending($dst, true);
+        imagesavealpha($dst, false);
 
         imagecopyresampled($dst, $src, 0, 0, 0, 0, $size, $size, $src_w, $src_h);
 

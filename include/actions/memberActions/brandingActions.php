@@ -137,9 +137,20 @@ if (($action ?? null) == 'saveBranding') {
         if ($favicon_updated) {
             foreach (glob($uploads_dir . '/branding_favicon.*') as $old) { unlink($old); }
             move_uploaded_file($_FILES['favicon']['tmp_name'], $uploads_dir . '/' . $favicon_path);
-            // Auto-generate PWA icon PNGs from favicon
-            if (function_exists('generate_pwa_icons')) {
-                generate_pwa_icons($uploads_dir . '/' . $favicon_path, $uploads_dir);
+        }
+
+        // Regenerate the PWA icons on EVERY save that has a favicon, not only when a
+        // new one is uploaded. Gating on the upload meant a bad set of icons could
+        // never be repaired from the UI: pwt's were a blank white square (Imagick
+        // renders SVG on opaque white — see generate_pwa_icons) and the only way to
+        // refresh them was to re-upload an identical favicon. Rasterising is cheap
+        // and idempotent, so "Save" is now the repair path.
+        if (function_exists('generate_pwa_icons')) {
+            $favicon_on_disk = $favicon_updated && $favicon_path
+                ? $uploads_dir . '/' . $favicon_path
+                : (glob($uploads_dir . '/branding_favicon.*')[0] ?? null);
+            if ($favicon_on_disk && is_readable($favicon_on_disk)) {
+                generate_pwa_icons($favicon_on_disk, $uploads_dir);
             }
         }
         if ($screenshot_wide_updated) {
