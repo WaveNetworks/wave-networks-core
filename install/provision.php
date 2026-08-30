@@ -80,11 +80,20 @@ if ($row) {
 // feedback→change-request→task pipeline on every provisioned app (found on
 // vivajee 2026-07-10: "Missing required scope: error_log:write", zero feedback
 // tasks). Keep this in sync with get_available_scopes().
+//
+// tests:write + actions:read added 2026-08-30 — the SAME omission one pipeline
+// over. Provisioning already creates this admin user and mints this key, so a
+// new app should be testable the moment it exists; without these two scopes the
+// Playwright use-case suite cannot derive use_cases from the action log or post
+// a single result, and onboarding each app meant an owner running the admin
+// password-reset flow by hand. A capability the pipeline already had, gated
+// behind a manual step for want of two strings.
 $scopes = [
     'error_log:read', 'error_log:write',
     'monitoring:read', 'monitoring:write',
     'feedback:read', 'feedback:write', 'feedback:admin',
     'credentials:read', 'credentials:write',
+    'actions:read', 'tests:write',
 ];
 $res = create_service_api_key($label, $scopes, $uid);
 if (!$res || empty($res['full_key'])) { _prov_fail(500, 'failed to mint service key'); }
