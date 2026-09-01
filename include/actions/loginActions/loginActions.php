@@ -99,7 +99,7 @@ if (($action ?? null) == 'login') {
         }
 
         $_SESSION['success'] = 'Welcome back!';
-        header('Location: ../app/');
+        header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
         exit;
     } else {
         // Record failed login attempt
@@ -460,7 +460,7 @@ if (($action ?? null) == 'verify2FA') {
             }
         }
         $_SESSION['success'] = 'Welcome back!';
-        header('Location: ../app/');
+        header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
         exit;
     } else {
         $_SESSION['error'] = implode('<br>', $errs);

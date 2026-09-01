@@ -3,7 +3,7 @@ include(__DIR__ . '/../include/common_auth.php');
 
 // If already logged in, redirect to app
 if (!empty($_SESSION['user_id'])) {
-    header('Location: ../app/');
+    header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
     exit;
 }
 

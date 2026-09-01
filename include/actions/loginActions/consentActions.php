@@ -18,7 +18,7 @@ if (($action ?? null) == 'acceptReconsent') {
 
         unset($_SESSION['reconsent_needed']);
         $_SESSION['success'] = 'Thank you for accepting the updated policies.';
-        header('Location: ../app/');
+        header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
         exit;
     } else {
         if (empty($errs)) { $errs['general'] = 'No policies to accept.'; }
