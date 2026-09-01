@@ -38,7 +38,13 @@ ob_start();
 
     <div class="mb-3">
         <label for="email" class="form-label">Email Address</label>
-        <input type="email" class="form-control" id="email" name="email" value="<?= h($_POST['email'] ?? '') ?>" required>
+        <?php /* ?email= prefills the field so an app can hand a known address straight
+                 into registration. A supporter who has already given a child app their
+                 email should not be asked to type it a second time — that retype is a
+                 real drop-off point in any signup funnel. It is only a form default:
+                 it is escaped, nothing is trusted from it, and the normal validation
+                 and confirmation flow still runs on whatever is submitted. */ ?>
+        <input type="email" class="form-control" id="email" name="email" value="<?= h($_POST['email'] ?? $_GET['email'] ?? '') ?>" required>
     </div>
 
     <div class="mb-3">
