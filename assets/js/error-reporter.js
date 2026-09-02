@@ -54,15 +54,36 @@
         }
     }
 
+    // Cross-origin masking: when a script loaded from another origin throws without
+    // CORS headers, the browser hides the message/file/line and hands us a bare
+    // "Script error." with an empty filename. Nothing actionable survives — so instead
+    // of logging an opaque row, enrich telemetry with the cross-origin scripts on the
+    // page (the culprit is one of them) and tag those still marked [masked] as the ones
+    // needing crossorigin="anonymous" + an Access-Control-Allow-Origin header to unmask.
+    function crossOriginScriptTelemetry() {
+        var origin = window.location.origin;
+        var suspects = [];
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+            var src = scripts[i].src;
+            if (src && src.indexOf(origin) !== 0) {
+                suspects.push((scripts[i].crossOrigin ? '[cors] ' : '[masked] ') + src);
+            }
+        }
+        return 'Cross-origin script error — details hidden by browser CORS policy.\n' +
+               'Cross-origin scripts on page:\n' + (suspects.join('\n') || '(none found)');
+    }
+
     // 1. Uncaught runtime errors
     window.addEventListener('error', function(event) {
+        var isMasked = (event.message === 'Script error.' || event.message === 'Script error') && !event.filename;
         reportError({
             message:    event.message,
             file:       event.filename,
             line:       event.lineno,
             column:     event.colno,
-            stack:      event.error ? event.error.stack : '',
-            error_type: 'uncaught'
+            stack:      isMasked ? crossOriginScriptTelemetry() : (event.error ? event.error.stack : ''),
+            error_type: isMasked ? 'cross_origin_masked' : 'uncaught'
         });
     });
 
