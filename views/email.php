@@ -430,7 +430,7 @@ $trigger_events   = function_exists('list_email_trigger_events')   ? list_email_
                         <tr><td colspan="4" class="text-muted text-center py-3">No campaigns yet.</td></tr>
                         <?php } ?>
                         <?php foreach ($drip_campaigns as $c) { ?>
-                        <tr style="cursor:pointer" onclick='loadCampaign(<?= (int)$c['campaign_id'] ?>, <?= json_encode($c) ?>)'>
+                        <tr style="cursor:pointer" onclick='loadCampaign(<?= (int)$c['campaign_id'] ?>, <?= json_encode($c, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)'>
                             <td>
                                 <?= h($c['name']) ?>
                                 <div class="small text-muted"><?= (int)$c['active_enrollments'] ?> active</div>
@@ -566,7 +566,7 @@ var totalItems = 0;
 var perPage = 50;
 
 // ── Templates UI ──
-var templateRows = <?= json_encode(array_column($email_templates, null, 'template_id')) ?>;
+var templateRows = <?= json_encode(array_column($email_templates, null, 'template_id'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
 function newTemplate() {
     document.getElementById('tpl_id').value = '0';
