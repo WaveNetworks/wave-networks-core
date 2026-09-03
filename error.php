@@ -44,12 +44,16 @@ try {
     // Probes for VCS metadata and secret dotfiles (.git/config, .env, .svn, .hg,
     // .DS_Store, etc.) are vulnerability-scanner noise — we never expose these, so
     // the resulting 404 is expected probe traffic, not a real bug.
+    // Probes for an HTTP MCP endpoint (/admin/mcp.php, /admin/mcp/, /admin/api/mcp/)
+    // are scanner noise — our MCP server (admin/mcp/server.php) is stdio JSON-RPC
+    // only and deliberately exposes no HTTP route, so these 404s are expected.
     $is_noise = ($status === 404 && (
         preg_match('#\.(css|js)\.map($|\?)#', $uri)
         || preg_match('#/admin/(media|branding|tour_media)/#', $uri)
         || preg_match('#/opcache_(flush|reset)\.php($|\?)#', $uri)
         || preg_match('#/admin/(vendor|db_migrations|cron|tests|include|config|views|snippets)/#', $uri)
         || preg_match('#/\.(git|svn|hg|env|aws|DS_Store|htpasswd)#i', $uri)
+        || preg_match('#/admin/(api/)?mcp(\.php|/|$|\?)#', $uri)
     ));
     if (function_exists('log_error_to_db') && !$is_noise) {
         $msg = "HTTP $status: $method $uri";
