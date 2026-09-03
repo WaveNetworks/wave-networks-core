@@ -120,8 +120,14 @@ if ($defs) {
                 $sParams = array_merge($sParams, $test_user_ids);
             }
             $sSql .= " GROUP BY source_app, action, segment, user_id, device_id";
-            foreach (db_query_shard_prepared($shard_name, $sSql, $sParams)->fetchAll(PDO::FETCH_ASSOC) as $r) {
-                $bump($r['source_app'], $r['action'], $r['segment'], $r['device_id'], $r['user_id'], $r['cnt']);
+            // db_query_shard_prepared() returns false on any failure (shard
+            // unavailable, missing table) — guard before fetchAll() so a single
+            // bad shard doesn't fatal the whole daily cron.
+            $sStmt = db_query_shard_prepared($shard_name, $sSql, $sParams);
+            if ($sStmt) {
+                foreach ($sStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $bump($r['source_app'], $r['action'], $r['segment'], $r['device_id'], $r['user_id'], $r['cnt']);
+                }
             }
         }
 
@@ -228,8 +234,12 @@ if ($active_experiments) {
                     $sParams = array_merge($sParams, $x_test_user_ids);
                 }
                 $sSql .= " GROUP BY action, variant, user_id, device_id";
-                foreach (db_query_shard_prepared($shard_name, $sSql, $sParams)->fetchAll(PDO::FETCH_ASSOC) as $r) {
-                    $bump($r['variant'], $r['action'], $r['device_id'], $r['user_id'], $r['cnt']);
+                // Guard against a false return from an unavailable shard.
+                $sStmt = db_query_shard_prepared($shard_name, $sSql, $sParams);
+                if ($sStmt) {
+                    foreach ($sStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                        $bump($r['variant'], $r['action'], $r['device_id'], $r['user_id'], $r['cnt']);
+                    }
                 }
             }
 
