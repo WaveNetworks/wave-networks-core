@@ -203,14 +203,34 @@ function check_and_migrate_main_db() {
 }
 
 /**
+ * Flag scope for one shard. The scope is interpolated straight into a temp-file
+ * path, so it must not contain a separator.
+ */
+function _wn_shard_flag_scope($shard_id) {
+    return 'shard_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', (string)$shard_id);
+}
+
+/**
  * Check and migrate all shard databases.
  *
- * Gated by a per-target-version flag so steady-state requests skip the
- * shard prime entirely. Pre-flag behavior was to prime every shard on
- * every request just to read its version row — significant connection
- * pressure under load (max_connections incident 2026-05-08).
+ * Gated per shard, and bounded per request.
+ *
+ * The original design used ONE flag for the whole set, so a $shard_version bump
+ * meant the next request primed every configured shard just to read its version
+ * row — significant connection pressure under load (max_connections incident
+ * 2026-05-08). With two shards that was survivable; at the shard counts a
+ * 1GB-per-database ceiling forces, a single unlucky request would open hundreds
+ * of connections.
+ *
+ * So: each shard carries its own flag (a shard already at target costs nothing
+ * on later requests — no connection, no version read), and each request touches
+ * at most $budget un-flagged shards. The backlog drains across subsequent
+ * requests, and cron/minutes/5/migrate_shards.php drains it promptly with an
+ * unlimited budget so a newly provisioned shard never waits on user traffic.
+ *
+ * @param int|null $budget max shards to touch (0 = unlimited; null = default)
  */
-function check_and_migrate_all_shards() {
+function check_and_migrate_all_shards($budget = null) {
     global $shardConfigs, $shard_version;
 
     if (empty($shardConfigs)) return;
@@ -225,13 +245,31 @@ function check_and_migrate_all_shards() {
         return;
     }
 
+    $budget = ($budget === null)
+        ? (defined('WN_SHARD_MIGRATE_BUDGET') ? (int)WN_SHARD_MIGRATE_BUDGET : 3)
+        : (int)$budget;
+
+    $spent         = 0;
     $all_at_target = true;
+
     foreach ($shardConfigs as $shard_id => $cfg) {
+        $scope = _wn_shard_flag_scope($shard_id);
+        if (_wn_migration_flag_exists($scope, $shard_version)) continue;
+
+        // Budget is spent on CONNECTIONS, not just on migrations actually run —
+        // reading a shard's version row is itself a connection, and that is the
+        // cost this bound exists to cap.
+        if ($budget > 0 && $spent >= $budget) { $all_at_target = false; break; }
+        $spent++;
+
         $conn = prime_shard($shard_id);
         if (!$conn) { $all_at_target = false; continue; }
 
         $current = get_current_db_version($conn);
-        if ($current >= $shard_version) continue;
+        if ($current >= $shard_version) {
+            _wn_migration_flag_set($scope, $shard_version);
+            continue;
+        }
 
         foreach ($available as $ver) {
             if ($ver <= $current) continue;
@@ -243,7 +281,11 @@ function check_and_migrate_all_shards() {
             run_migration($conn, $file, "shard/$shard_id", $ver);
         }
 
-        if (get_current_db_version($conn) < $shard_version) $all_at_target = false;
+        if (get_current_db_version($conn) >= $shard_version) {
+            _wn_migration_flag_set($scope, $shard_version);
+        } else {
+            $all_at_target = false;
+        }
     }
 
     if ($all_at_target) _wn_migration_flag_set('shards', $shard_version);

@@ -118,8 +118,19 @@ foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/mobile/*.php') as $f) { include_once($f); }
 
 // 5. Migrations
-$db_version    = $db_version ?? 4.7;
+$db_version    = $db_version ?? 4.8;
 $shard_version = $shard_version ?? 1.3;
 check_and_migrate_main_db();
+
+// 5b. Shard registry. Shards live in the shard_config table, not in a literal
+// array hand-edited into config.php on every host — see shardConfigFunctions.php.
+// config.php stays the SEED; rows add to it and override it by shard_id, so an
+// absent or empty table means the platform behaves exactly as it did before.
+//
+// Ordering matters: after check_and_migrate_main_db() so shard_config exists on
+// the very first request after migration 4.8 lands, and before
+// check_and_migrate_all_shards() so newly registered shards are migrated too.
+$shardConfigs = shard_config_merge($shardConfigs ?? [], 'admin', '');
+
 check_and_migrate_all_shards();
 

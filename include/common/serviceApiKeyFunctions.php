@@ -38,6 +38,7 @@ function get_available_scopes() {
         'finds:write'       => 'Ingest candidate product finds into the Curate queue (external deal-finder bridge until PA-API)',
         'experiments:read'  => 'Read active A/B experiment summaries (significance, guardrails, staleness) for the heartbeat watchdog',
         'experiments:write' => 'Conclude experiments and record the winning variant (manual ship-the-winner step)',
+        'shards:admin'      => 'List, register, test, migrate and retire shard databases (shard registry)',
     ];
 }
 

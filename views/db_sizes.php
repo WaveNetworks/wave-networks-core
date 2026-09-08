@@ -143,9 +143,13 @@ function db_size_bar_class($status) {
 </div>
 
 <div class="mt-3 text-muted small">
-    <strong>Provisioning a new shard (manual):</strong> add a new entry to
-    <code>$shardConfigs</code> in <code>admin/config/config.php</code> pointing at
-    the new database, create the shard DB on the host, then run the admin
-    migrations against it (they run automatically on the next request). New
-    registrations are assigned to the least-loaded shard automatically.
+    <strong>Provisioning a new shard:</strong> create the database on the host, then
+    register it from the shard console (nokemo &rarr; Shards), which stores it in
+    <code>shard_config</code>, migrates it, and activates it. Editing
+    <code>$shardConfigs</code> in <code>admin/config/config.php</code> by hand is no
+    longer required &mdash; that array is only the seed. New registrations go to the
+    emptiest shard that is <em>active</em> and still below the
+    <?= DB_SIZE_CRITICAL_MB ?>MB high-water mark; a shard crossing that mark is set to
+    <em>draining</em> automatically so it keeps serving its existing users but stops
+    taking new ones.
 </div>

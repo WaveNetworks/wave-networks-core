@@ -56,6 +56,11 @@ $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 foreach (glob(__DIR__ . '/common/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 
+// 4b. Shard registry — same merge as bootstrap.php. No migration is run from
+// this read-only bootstrap, so an absent shard_config simply yields config.php's
+// shards unchanged. See shardConfigFunctions.php.
+$shardConfigs = shard_config_merge($shardConfigs ?? [], 'admin', '');
+
 // 5. Session
 init_session_storage();
 session_start();
