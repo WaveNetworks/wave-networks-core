@@ -77,7 +77,7 @@ function db_size_read_child_config($file) {
     $found = [];
     $user  = $child_db_user ?? '';
     $pass  = $child_db_pass ?? '';
-    $host  = $child_db_host ?: 'localhost';
+    $host  = ($child_db_host ?? '') ?: 'localhost';
 
     if (!empty($child_db_name)) {
         $found[$child_db_name] = ['host' => $host, 'name' => $child_db_name,
