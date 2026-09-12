@@ -19,8 +19,17 @@
     } catch (e) {}
     var registeredSlugs = registeredThemes.map(function(t) { return t.slug; });
 
-    // Load saved theme
-    var savedTheme = localStorage.getItem(STORAGE_KEY) || 'sandstone';
+    // Load saved theme.
+    //
+    // localStorage and the cookie are two stores of the SAME choice, and either
+    // can be the one that survived: localStorage is empty in a private window,
+    // after clearing site data, or on a device that has only ever been sent the
+    // cookie. Whichever exists is the user's choice; 'sandstone' is a last
+    // resort, never a value to write back over a real preference.
+    var storedTheme = localStorage.getItem(STORAGE_KEY);
+    var cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + STORAGE_KEY + '=([^;]*)'));
+    var cookieTheme = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
+    var savedTheme  = storedTheme || cookieTheme || 'sandstone';
 
     // Validate saved theme exists in Bootswatch or registered list
     // (Bootswatch validation happens after API fetch; for now trust it)
@@ -30,11 +39,17 @@
         document.cookie = STORAGE_KEY + '=' + encodeURIComponent(name) + ';path=/;max-age=31536000;SameSite=Lax';
     }
 
-    // Sync cookie if localStorage has a theme but cookie doesn't match
-    var cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + STORAGE_KEY + '=([^;]*)'));
-    var cookieTheme = cookieMatch ? decodeURIComponent(cookieMatch[1]) : null;
-    if (cookieTheme !== savedTheme) {
-        saveTheme(savedTheme);
+    // Bring both stores in line with that choice.
+    //
+    // This previously read savedTheme as (localStorage || 'sandstone') and then
+    // wrote it over any disagreeing cookie — so an empty localStorage silently
+    // RESET a year-long cookie to sandstone, and admin changed theme with
+    // nobody touching the selector. Only write when there is something real to
+    // write, and never let the absent store overwrite the present one.
+    if (savedTheme !== 'sandstone' || storedTheme || cookieTheme) {
+        if (storedTheme !== savedTheme || cookieTheme !== savedTheme) {
+            saveTheme(savedTheme);
+        }
     }
 
     // Fetch themes from Bootswatch API

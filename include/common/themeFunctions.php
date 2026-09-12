@@ -73,6 +73,41 @@ function get_deployment_app_theme() {
     return $cached = false;
 }
 
+function get_deployment_registered_theme() {
+    /**
+     * The theme this deployment's child app registered for itself.
+     *
+     * Deployments are one-admin-per-app, so at most one sibling app registers a
+     * theme here — the same assumption get_deployment_app_theme() and
+     * admin/cron/cron.php already make. Prefer a row whose created_by_app names
+     * a real sibling; fall back to the single active row when only one exists.
+     *
+     * Returns the theme row, or false. A false here means the deployment has no
+     * declared identity at all, which is worth SAYING rather than silently
+     * dressing admin in a stock theme — that is how vivajee, pwt and elevateher
+     * drifted for months without anyone being told.
+     */
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    if (!function_exists('get_registered_themes')) { return $cached = false; }
+    $themes = get_registered_themes();
+    if (!$themes) {
+        error_log('theme: this deployment has no registered app theme — admin will '
+                . 'fall back to a stock build. The child app should call register_theme().');
+        return $cached = false;
+    }
+
+    $webroot = dirname(__DIR__, 3);
+    foreach ($themes as $t) {
+        $owner = $t['created_by_app'] ?? '';
+        if ($owner !== '' && $owner !== 'admin' && is_dir($webroot . '/' . $owner)) {
+            return $cached = $t;
+        }
+    }
+    return $cached = (count($themes) === 1 ? $themes[0] : false);
+}
+
 function get_theme_css_url($prefix = '../', $webroot_prefix = '../../') {
     $theme = get_active_theme();
 
@@ -84,10 +119,26 @@ function get_theme_css_url($prefix = '../', $webroot_prefix = '../../') {
         }
     }
 
-    // The deployment's own app theme is the DEFAULT, ahead of any Bootswatch build.
-    // Only an explicitly chosen theme (a registered one above, or a non-default
-    // wn_theme cookie handled by the child app) overrides it. Cache-busted on mtime
-    // so a rebuilt theme is picked up immediately rather than after a CDN TTL.
+    // The theme the sibling app REGISTERED is the default, ahead of anything on
+    // disk or any Bootswatch build.
+    //
+    // This used to jump straight to the file scan below, which looks for
+    // assets/css/custom.css — and that file is a 253KB STOCK BOOTSTRAP build
+    // committed once by the child-app scaffold, not the app's theme. So admin
+    // wore generic Bootstrap on apps that had it, and Bootswatch sandstone on
+    // the older apps that never got it. Neither is the app's own theme, which
+    // is the whole point of ONE THEME PER APP.
+    //
+    // register_theme() is authoritative: the child app declares its compiled
+    // theme's real path on every request, so it is right even for an app that
+    // ships several themes, and it cannot go stale against a rebuild.
+    $registered_default = get_deployment_registered_theme();
+    if ($registered_default) {
+        return $webroot_prefix . $registered_default['css_path'];
+    }
+
+    // Fallback: a compiled theme sitting next to us on disk. Cache-busted on
+    // mtime so a rebuild is picked up immediately rather than after a CDN TTL.
     $app = get_deployment_app_theme();
     if ($app) {
         $v = @filemtime($app['file']);
