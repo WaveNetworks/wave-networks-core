@@ -52,6 +52,60 @@ function ensure_db_size_cache_table() {
  *
  * @return array list of ['schema_name'=>..,'size_mb'=>float,'table_count'=>int]
  */
+function db_size_read_child_config($file) {
+    /**
+     * Harvest the database credentials out of one child app's config/config.php
+     * WITHOUT letting its assignments touch admin's globals — the include runs
+     * in this function's scope, so everything it sets is local and discarded.
+     *
+     * Returns [db_name => ['host','name','user','pass'], ...] covering the
+     * child main DB and whatever shards that config declares. Shard shape
+     * varies by vintage: older apps build $childShardConfigs, newer ones may
+     * name shard databases individually, so both are read.
+     */
+    if (!is_readable($file)) { return []; }
+    try {
+        ob_start();
+        include $file;
+        ob_end_clean();
+    } catch (Throwable $e) {
+        if (ob_get_level() > 0) { ob_end_clean(); }
+        error_log("db_size_read_child_config($file): " . $e->getMessage());
+        return [];
+    }
+
+    $found = [];
+    $user  = $child_db_user ?? '';
+    $pass  = $child_db_pass ?? '';
+    $host  = $child_db_host ?: 'localhost';
+
+    if (!empty($child_db_name)) {
+        $found[$child_db_name] = ['host' => $host, 'name' => $child_db_name,
+                                  'user' => $user, 'pass' => $pass];
+    }
+
+    // Shards declared as a config array.
+    foreach ((array) ($childShardConfigs ?? []) as $sc) {
+        if (empty($sc['name'])) { continue; }
+        $found[$sc['name']] = [
+            'host' => $sc['host'] ?: $host,
+            'name' => $sc['name'],
+            'user' => $sc['user'] ?? $user,
+            'pass' => $sc['pass'] ?? $pass,
+        ];
+    }
+
+    // Shards declared as individual variables ($child_db_name_shard1, etc).
+    // They inherit the child credentials unless the config overrides them.
+    foreach (get_defined_vars() as $k => $v) {
+        if (!is_string($v) || $v === '') { continue; }
+        if (preg_match('/^child_db_name_?shard\\d*$/i', $k) && !isset($found[$v])) {
+            $found[$v] = ['host' => $host, 'name' => $v, 'user' => $user, 'pass' => $pass];
+        }
+    }
+    return $found;
+}
+
 function db_size_known_databases() {
     /**
      * Every database this deployment owns, with the credentials to reach it.
@@ -82,9 +136,24 @@ function db_size_known_databases() {
         }
     }
 
-    // Every registry row, ALL layers and apps — this is the part that brings in
-    // child app shards. Disabled shards are skipped; pending ones are included
-    // deliberately, because a shard filling up before it is activated is still
+    // Sibling child apps. Admin and every child app live side by side under
+    // public_html on the SAME filesystem, and each child's gitignored
+    // config/config.php holds its own DB credentials — so admin can measure a
+    // child's databases directly, with no registry entry required.
+    //
+    // The config is included inside a function so its assignments stay local:
+    // these files are plain variable assignments, and nothing of theirs should
+    // reach admin's globals.
+    foreach (glob(dirname(__DIR__, 3) . '/*/config/config.php') ?: [] as $cfgFile) {
+        foreach (db_size_read_child_config($cfgFile) as $dbname => $conn) {
+            if ($dbname !== '' && !isset($out[$dbname])) { $out[$dbname] = $conn; }
+        }
+    }
+
+    // Every registry row, ALL layers and apps — this catches shards registered
+    // through the shard console, including ones on a different host than the
+    // app that owns them. Disabled shards are skipped; pending ones are kept
+    // deliberately, because a shard filling before activation is still
     // something you want to see.
     global $db;
     if ($db instanceof PDO && function_exists('wn_secret_decrypt')) {
