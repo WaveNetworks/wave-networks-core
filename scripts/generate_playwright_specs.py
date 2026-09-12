@@ -209,7 +209,11 @@ def emit_spec(use_case: dict, source_app: str, base_url: str,
           await page.fill('input[name="email"]',    TEST_EMAIL);
           await page.fill('input[name="password"]', TEST_PASSWORD);
           await Promise.all([
-            page.waitForNavigation({{ waitUntil: 'load' }}),
+            // 'domcontentloaded' (not 'load'): login success only needs the
+            // post-POST redirect to land, not every dashboard asset/chart —
+            // waiting on 'load' pushed this hook past the test timeout under
+            // parallel load.
+            page.waitForNavigation({{ waitUntil: 'domcontentloaded' }}),
             page.click('button[type="submit"]'),
           ]);
         }});
@@ -229,7 +233,10 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'use-cases',
-  timeout: 60_000,
+  // beforeEach form-login against live prod can run ~70s under parallel
+  // worker load (dashboard 'load' waits on all assets); 120s keeps specs
+  // off the timeout boundary.
+  timeout: 120_000,
   retries: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
