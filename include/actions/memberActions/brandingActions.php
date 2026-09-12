@@ -248,6 +248,12 @@ if (($action ?? null) == 'saveBranding') {
             move_uploaded_file($_FILES['pwa_screenshot_mobile']['tmp_name'], $uploads_dir . '/' . $screenshot_mobile_path);
         }
 
+        // The tablet slot post-dates migration 1.8 and is missing on any host
+        // whose runner dropped the DDL — make sure it exists before the SET.
+        if (function_exists('ensure_auth_settings_pwa_columns')) {
+            ensure_auth_settings_pwa_columns();
+        }
+
         // Build UPDATE query
         $safe_name        = sanitize($site_name, SQL);
         $safe_short       = sanitize($site_short_name, SQL);

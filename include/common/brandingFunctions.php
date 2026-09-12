@@ -212,3 +212,31 @@ function get_image_mime($path) {
     ];
     return $map[$ext] ?? (file_exists($cleanPath) ? (mime_content_type($cleanPath) ?: 'image/png') : 'image/png');
 }
+
+if (!function_exists('ensure_auth_settings_pwa_columns')) {
+    /**
+     * Autocommit backstop for migration 4.9.
+     *
+     * Migration 1.8 created two of the three PWA screenshot slots; the branding
+     * form has been writing a third, pwa_screenshot_tablet, that no migration
+     * ever added — so saving branding failed with "Unknown column
+     * 'pwa_screenshot_tablet' in 'SET'" and lost the WHOLE save, not just the
+     * tablet image.
+     *
+     * This runs the ALTER outside a transaction because the migration runner
+     * drops in-transaction DDL on MariaDB, which is exactly how a column goes
+     * missing on a host whose migrations all reported success.
+     */
+    function ensure_auth_settings_pwa_columns(): void
+    {
+        static $done = false;
+        if ($done) { return; }
+        $done = true;
+        try {
+            db_query("ALTER TABLE `auth_settings`
+                ADD COLUMN IF NOT EXISTS `pwa_screenshot_tablet` varchar(255) DEFAULT NULL");
+        } catch (Throwable $e) {
+            error_log('ensure_auth_settings_pwa_columns: ' . $e->getMessage());
+        }
+    }
+}
