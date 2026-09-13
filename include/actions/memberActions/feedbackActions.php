@@ -71,6 +71,8 @@ if (($action ?? null) == 'getFeedbackData') {
         if (!empty($_POST['page']))          $filters['page']          = $_POST['page'];
         if (!empty($_POST['per_page']))      $filters['per_page']      = $_POST['per_page'];
         if (!empty($_POST['change_request_id'])) $filters['change_request_id'] = $_POST['change_request_id'];
+        if (!empty($_POST['date_from'])) $filters['date_from'] = $_POST['date_from'];
+        if (!empty($_POST['date_to']))   $filters['date_to']   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date_to']) ? $_POST['date_to'] . ' 23:59:59' : $_POST['date_to'];
 
         $result = get_feedback_entries($filters);
         $data['items']       = $result['items'];

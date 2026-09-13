@@ -302,6 +302,14 @@ function get_error_logs_grouped($group_by = 'ip', $filters = []) {
             $where .= ' AND resolved_at IS NULL';
         }
     }
+    if (!empty($filters['date_from'])) {
+        $where .= ' AND created >= :date_from';
+        $params[':date_from'] = $filters['date_from'];
+    }
+    if (!empty($filters['date_to'])) {
+        $where .= ' AND created <= :date_to';
+        $params[':date_to'] = $filters['date_to'];
+    }
 
     // Determine GROUP BY column and select expression
     switch ($group_by) {
@@ -431,6 +439,14 @@ function get_error_logs_for_group($group_by, $group_key, $filters = []) {
         } elseif ($filters['status'] === 'open') {
             $where .= ' AND resolved_at IS NULL';
         }
+    }
+    if (!empty($filters['date_from'])) {
+        $where .= ' AND created >= :date_from';
+        $params[':date_from'] = $filters['date_from'];
+    }
+    if (!empty($filters['date_to'])) {
+        $where .= ' AND created <= :date_to';
+        $params[':date_to'] = $filters['date_to'];
     }
     if (isset($filters['device_id'])) {
         $where .= " AND JSON_EXTRACT(context_json, '$.device_id') = :device_id";

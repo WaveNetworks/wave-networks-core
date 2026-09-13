@@ -51,6 +51,9 @@ $sources = get_error_log_sources();
 
                 <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search messages..." style="width: 180px;" onkeyup="debounceSearch()">
 
+                <input type="date" class="form-control form-control-sm" id="dateFrom" title="From date" style="width: auto;" onchange="currentPage=1; loadErrors()">
+                <input type="date" class="form-control form-control-sm" id="dateTo" title="To date" style="width: auto;" onchange="currentPage=1; loadErrors()">
+
                 <select class="form-select form-select-sm" id="groupByFilter" onchange="currentPage=1; loadErrors()" style="width: auto;">
                     <option value="">No Grouping</option>
                     <option value="ip">Group by IP</option>
@@ -62,6 +65,17 @@ $sources = get_error_log_sources();
                     <i class="bi bi-trash me-1"></i>Clear 30+ days
                 </button>
             </div>
+        </div>
+    </div>
+    <div class="card-body py-2 border-bottom">
+        <span class="text-muted small me-2"><i class="bi bi-lightning-charge me-1"></i>Quick jump:</span>
+        <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-dark" onclick="errorQuickJump('fatals_today')">Fatals today</button>
+            <button class="btn btn-outline-danger" onclick="errorQuickJump('open')">All open</button>
+            <button class="btn btn-outline-secondary" onclick="errorQuickJump('today')">Today</button>
+            <button class="btn btn-outline-secondary" onclick="errorQuickJump('week')">Last 7 days</button>
+            <button class="btn btn-outline-success" onclick="errorQuickJump('resolved')">Resolved</button>
+            <button class="btn btn-outline-primary" onclick="errorQuickJump('clear')">Clear filters</button>
         </div>
     </div>
     <div class="table-responsive">
@@ -112,8 +126,43 @@ function getFilters() {
         level: document.getElementById('levelFilter').value,
         source_app: document.getElementById('sourceFilter').value,
         search: document.getElementById('searchInput').value,
-        status: document.getElementById('statusFilter').value
+        status: document.getElementById('statusFilter').value,
+        date_from: document.getElementById('dateFrom').value,
+        date_to: document.getElementById('dateTo').value
     };
+}
+
+// Quick-jump presets for common error queries.
+function errorQuickJump(preset) {
+    var lvl = document.getElementById('levelFilter');
+    var st  = document.getElementById('statusFilter');
+    var df  = document.getElementById('dateFrom');
+    var dt  = document.getElementById('dateTo');
+    var src = document.getElementById('sourceFilter');
+    var q   = document.getElementById('searchInput');
+    var grp = document.getElementById('groupByFilter');
+
+    function isoDaysAgo(n) {
+        var d = new Date();
+        d.setDate(d.getDate() - n);
+        return d.toISOString().slice(0, 10);
+    }
+    var today = isoDaysAgo(0);
+
+    // Reset the fields the presets drive; leave source/search/grouping untouched
+    // unless the preset is a full clear.
+    lvl.value = ''; st.value = ''; df.value = ''; dt.value = '';
+
+    switch (preset) {
+        case 'fatals_today': lvl.value = 'FATAL'; st.value = 'open'; df.value = today; dt.value = today; break;
+        case 'open':         st.value = 'open'; break;
+        case 'today':        df.value = today; dt.value = today; break;
+        case 'week':         df.value = isoDaysAgo(7); dt.value = today; break;
+        case 'resolved':     st.value = 'resolved'; break;
+        case 'clear':        src.value = ''; q.value = ''; grp.value = ''; break;
+    }
+    currentPage = 1;
+    loadErrors();
 }
 
 function loadErrors() {

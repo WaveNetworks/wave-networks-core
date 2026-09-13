@@ -79,6 +79,22 @@ $stats = get_feedback_stats();
         </div>
     </div>
 
+    <!-- Date range + quick jump -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <label class="text-muted small mb-0">From</label>
+        <input type="date" class="form-control form-control-sm" id="fbDateFrom" style="width:auto" onchange="loadFeedback(1)">
+        <label class="text-muted small mb-0">To</label>
+        <input type="date" class="form-control form-control-sm" id="fbDateTo" style="width:auto" onchange="loadFeedback(1)">
+        <span class="text-muted small ms-2"><i class="bi bi-lightning-charge me-1"></i>Quick jump:</span>
+        <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-info" onclick="fbQuickJump('new')">New</button>
+            <button class="btn btn-outline-danger" onclick="fbQuickJump('bugs')">Open bugs</button>
+            <button class="btn btn-outline-secondary" onclick="fbQuickJump('today')">Today</button>
+            <button class="btn btn-outline-secondary" onclick="fbQuickJump('week')">Last 7 days</button>
+            <button class="btn btn-outline-primary" onclick="fbQuickJump('clear')">Clear filters</button>
+        </div>
+    </div>
+
     <!-- Table -->
     <div class="table-responsive">
         <table class="table table-sm table-hover align-middle">
@@ -308,6 +324,8 @@ $stats = get_feedback_stats();
         if (document.getElementById('fbFilterSource').value) fd.append('source_app',    document.getElementById('fbFilterSource').value);
         if (document.getElementById('fbFilterStatus').value) fd.append('status',        document.getElementById('fbFilterStatus').value);
         if (document.getElementById('fbFilterSearch').value) fd.append('search',        document.getElementById('fbFilterSearch').value);
+        if (document.getElementById('fbDateFrom').value)     fd.append('date_from',     document.getElementById('fbDateFrom').value);
+        if (document.getElementById('fbDateTo').value)       fd.append('date_to',       document.getElementById('fbDateTo').value);
 
         fetch('../api/index.php', { method: 'POST', body: fd })
             .then(function (r) { return r.json(); })
@@ -405,6 +423,35 @@ $stats = get_feedback_stats();
                     pEl.appendChild(li);
                 }
             });
+    };
+
+    // Quick-jump presets for common feedback queries.
+    window.fbQuickJump = function (preset) {
+        var type = document.getElementById('fbFilterType');
+        var src  = document.getElementById('fbFilterSource');
+        var st   = document.getElementById('fbFilterStatus');
+        var q    = document.getElementById('fbFilterSearch');
+        var df   = document.getElementById('fbDateFrom');
+        var dt   = document.getElementById('fbDateTo');
+
+        function isoDaysAgo(n) {
+            var d = new Date();
+            d.setDate(d.getDate() - n);
+            return d.toISOString().slice(0, 10);
+        }
+        var today = isoDaysAgo(0);
+
+        // Reset preset-driven fields; leave source untouched unless full clear.
+        type.value = ''; st.value = ''; df.value = ''; dt.value = '';
+
+        switch (preset) {
+            case 'new':   st.value = 'new'; break;
+            case 'bugs':  type.value = 'bug'; st.value = 'new'; break;
+            case 'today': df.value = today; dt.value = today; break;
+            case 'week':  df.value = isoDaysAgo(7); dt.value = today; break;
+            case 'clear': src.value = ''; q.value = ''; break;
+        }
+        loadFeedback(1);
     };
 
     // ── Feedback actions ────────────────────────────────────

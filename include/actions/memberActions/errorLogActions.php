@@ -18,6 +18,8 @@ if (($_POST['action'] ?? '') == 'getErrorLogs') {
         if (!empty($_POST['source_app'])) { $filters['source_app'] = $_POST['source_app']; }
         if (!empty($_POST['search']))     { $filters['search'] = $_POST['search']; }
         if (isset($_POST['status']) && $_POST['status'] !== '') { $filters['status'] = $_POST['status']; }
+        if (!empty($_POST['date_from'])) { $filters['date_from'] = $_POST['date_from']; }
+        if (!empty($_POST['date_to']))   { $filters['date_to']   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date_to']) ? $_POST['date_to'] . ' 23:59:59' : $_POST['date_to']; }
 
         $result = get_error_logs_paginated($page, $per_page, $filters);
         $data['items']   = $result['items'];
@@ -86,6 +88,8 @@ if (($_POST['action'] ?? '') == 'getErrorLogsGrouped') {
         if (!empty($_POST['source_app'])) { $filters['source_app'] = $_POST['source_app']; }
         if (!empty($_POST['search']))     { $filters['search'] = $_POST['search']; }
         if (isset($_POST['status']) && $_POST['status'] !== '') { $filters['status'] = $_POST['status']; }
+        if (!empty($_POST['date_from'])) { $filters['date_from'] = $_POST['date_from']; }
+        if (!empty($_POST['date_to']))   { $filters['date_to']   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date_to']) ? $_POST['date_to'] . ' 23:59:59' : $_POST['date_to']; }
 
         $result = get_error_logs_grouped($group_by, $filters);
         $data['groups']   = $result['groups'];
@@ -111,6 +115,8 @@ if (($_POST['action'] ?? '') == 'getErrorLogsForGroup') {
         if (!empty($_POST['source_app'])) { $filters['source_app'] = $_POST['source_app']; }
         if (!empty($_POST['search']))     { $filters['search'] = $_POST['search']; }
         if (isset($_POST['status']) && $_POST['status'] !== '') { $filters['status'] = $_POST['status']; }
+        if (!empty($_POST['date_from'])) { $filters['date_from'] = $_POST['date_from']; }
+        if (!empty($_POST['date_to']))   { $filters['date_to']   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_POST['date_to']) ? $_POST['date_to'] . ' 23:59:59' : $_POST['date_to']; }
 
         $result = get_error_logs_for_group($group_by, $group_key, $filters);
         $data['items'] = $result['items'];

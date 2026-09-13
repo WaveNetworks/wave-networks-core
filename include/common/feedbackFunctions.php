@@ -247,6 +247,14 @@ function get_feedback_entries($filters = []) {
         $s = sanitize($filters['search'], SQL);
         $where[] = "(f.message LIKE '%$s%' OR f.page_url LIKE '%$s%')";
     }
+    if (!empty($filters['date_from'])) {
+        $s = sanitize($filters['date_from'], SQL);
+        $where[] = "f.created >= '$s'";
+    }
+    if (!empty($filters['date_to'])) {
+        $s = sanitize($filters['date_to'], SQL);
+        $where[] = "f.created <= '$s'";
+    }
 
     $whereSQL = count($where) > 0 ? 'WHERE ' . implode(' AND ', $where) : '';
 
