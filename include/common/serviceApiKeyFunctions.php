@@ -6,12 +6,50 @@
  */
 
 /**
- * Master list of available scopes.
- * Child apps extend this by registering their own scopes.
+ * Master list of available scopes: core's own, plus any the child app declares.
+ *
+ * Core lists only scopes that make sense for EVERY app. A scope that serves one
+ * app (its debug endpoints, its own data) is declared by that app in
+ * `api-scopes.json` at its repo root — see child_declared_scopes().
  *
  * @return array [scope_string => description]
  */
 function get_available_scopes() {
+    // Core wins on a name collision: an app cannot redescribe a core scope.
+    return core_available_scopes() + child_declared_scopes();
+}
+
+/**
+ * Scopes the child app declares in public_html/{slug}/api-scopes.json:
+ *   {"scopes": {"myapp_debug:read": "Read myapp diagnostics"}}
+ * Discovered like credentials.json. Missing or malformed file → no scopes.
+ *
+ * @return array [scope_string => description]
+ */
+function child_declared_scopes() {
+    static $cache = null;
+    if ($cache !== null) { return $cache; }
+    $cache   = [];
+    $webroot = dirname(dirname(dirname(__DIR__))); // public_html/ (admin/ is a child)
+    foreach (glob($webroot . '/*/api-scopes.json') ?: [] as $f) {
+        if (basename(dirname($f)) === 'admin') { continue; }
+        $j = json_decode((string)@file_get_contents($f), true);
+        if (!is_array($j) || !isset($j['scopes']) || !is_array($j['scopes'])) { continue; }
+        foreach ($j['scopes'] as $scope => $desc) {
+            if (is_string($scope) && preg_match('/^[a-z0-9_]+:[a-z0-9_]+$/', $scope)) {
+                $cache[$scope] = (string)$desc;
+            }
+        }
+    }
+    return $cache;
+}
+
+/**
+ * Scopes core itself provides. Add here only what every app can use.
+ *
+ * @return array [scope_string => description]
+ */
+function core_available_scopes() {
     return [
         'error_log:read'  => 'Read error logs',
         'system:read'     => 'Read host system metrics (database/shard sizes)',
@@ -30,7 +68,6 @@ function get_available_scopes() {
         'monitoring:write'=> 'Trigger checks, create tasks, send reports, manage CRs',
         'actions:read'    => 'Read user/device action logs and use_case derivations',
         'tests:write'     => 'Write use_case rows and use_case_test_run results',
-        'elevateher_debug:read' => 'Read elevateHER chat_event_log, framework_data, assessment sessions for diagnostics',
         'media:read'      => 'Read media library assets (URLs, metadata) — for builder/agent embedding',
         'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
         'credentials:read'  => 'Read which app credentials the app declares and which are still missing (never values)',

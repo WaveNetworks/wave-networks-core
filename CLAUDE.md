@@ -5,6 +5,14 @@ Standalone auth and user admin for Wave Networks. Knows nothing about
 plans, billing, or business domain. Child apps are separate repos deployed
 as siblings in the same webroot, reaching this repo via ../admin/include/common.php
 
+**Core is shared by every app — only put here what helps ALL of them.** Before
+adding code to core, ask: would every app benefit? If only one app needs it (its
+debug endpoints, its API scope, its analytics events, its tables), it belongs in
+that app's repo, using a core extension point (e.g. `api-scopes.json`,
+`credentials.json`, the child cron glob). If no extension point exists, add a
+generic one to core rather than the app-specific thing itself. App names in
+comments and examples are fine; app-specific behaviour is not.
+
 ## Folder layout (critical)
 The repo root is admin/ — deployed into public_html/admin/.
 public_html/ is the webroot but is not a repo.
@@ -364,10 +372,11 @@ The full key is returned once at creation and never shown again.
 Validation: prefix lookup (first 12 chars) narrows candidates, then bcrypt verify.
 last_used_at updated on each successful validation.
 
-Scopes: JSON array of scope strings. Available scopes defined in get_available_scopes():
-  error_log:read, error_log:write, users:read, costs:write, costs:read,
-  feedback:read, feedback:write, feedback:admin.
-  Child apps can extend by adding scopes to this function.
+Scopes: JSON array of scope strings. get_available_scopes() = core_available_scopes()
+  (scopes every app can use) + child_declared_scopes(). Do NOT add an app-specific
+  scope to core_available_scopes(): the app declares it in `api-scopes.json` at its
+  repo root, e.g. {"scopes": {"elevateher_debug:read": "Read elevateHER diagnostics"}}.
+  Core scopes win on a name collision; names must match `word:word`.
   require_api_scope($scope) checks the current key's scopes and sets $_SESSION['error']
   if missing. API action files call this before processing.
 
