@@ -1,0 +1,30 @@
+name: Composer security audit
+
+# Core is shared by every app and reaches them on each app's next deploy, so a
+# vulnerable dependency here is a vulnerability everywhere. This fails (and
+# GitHub emails the repo owner) as soon as an advisory lands against the locked
+# versions — weekly, and on any change to the dependency set.
+#
+# To fix: composer update <pkg> --with-dependencies, check for major-version
+# jumps (pin the minimal fixed version in composer.json if one appears), smoke
+# test, commit composer.json + composer.lock.
+
+on:
+  schedule:
+    - cron: '17 13 * * 1'   # Mondays 13:17 UTC
+  push:
+    branches: [main]
+    paths: ['composer.json', 'composer.lock']
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+      - name: composer audit (locked versions)
+        run: composer audit --locked --no-interaction
