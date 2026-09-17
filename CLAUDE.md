@@ -377,6 +377,12 @@ Scopes: JSON array of scope strings. get_available_scopes() = core_available_sco
   scope to core_available_scopes(): the app declares it in `api-scopes.json` at its
   repo root, e.g. {"scopes": {"elevateher_debug:read": "Read elevateHER diagnostics"}}.
   Core scopes win on a name collision; names must match `word:word`.
+  nokemo's monitoring key (the one holding monitoring:write) is kept at
+  monitor_key_scopes() automatically on each validation — add a pipeline scope
+  THERE, never by hand-editing keys per deployment.
+  media:write → apiUploadMedia (base64; type sniffed from bytes). The admin media
+  library is for site-wide admin assets (brand art, archived citations), NOT
+  user-generated content, which stays in the app's per-user storage.
   require_api_scope($scope) checks the current key's scopes and sets $_SESSION['error']
   if missing. API action files call this before processing.
 

@@ -88,13 +88,7 @@ if ($row) {
 // a single result, and onboarding each app meant an owner running the admin
 // password-reset flow by hand. A capability the pipeline already had, gated
 // behind a manual step for want of two strings.
-$scopes = [
-    'error_log:read', 'error_log:write',
-    'monitoring:read', 'monitoring:write',
-    'feedback:read', 'feedback:write', 'feedback:admin',
-    'credentials:read', 'credentials:write',
-    'actions:read', 'tests:write',
-];
+$scopes = monitor_key_scopes();   // single source of truth; media:read/write added 2026-09-16
 $res = create_service_api_key($label, $scopes, $uid);
 if (!$res || empty($res['full_key'])) { _prov_fail(500, 'failed to mint service key'); }
 

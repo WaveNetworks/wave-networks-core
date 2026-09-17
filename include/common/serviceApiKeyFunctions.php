@@ -69,6 +69,7 @@ function core_available_scopes() {
         'actions:read'    => 'Read user/device action logs and use_case derivations',
         'tests:write'     => 'Write use_case rows and use_case_test_run results',
         'media:read'      => 'Read media library assets (URLs, metadata) — for builder/agent embedding',
+        'media:write'     => 'Upload media assets (e.g. archived source documents) — for builder/agent use',
         'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
         'credentials:read'  => 'Read which app credentials the app declares and which are still missing (never values)',
         'credentials:write' => 'Paste in / update app credential values (Amazon keys, API tokens, affiliate IDs, etc.)',
@@ -76,6 +77,28 @@ function core_available_scopes() {
         'experiments:read'  => 'Read active A/B experiment summaries (significance, guardrails, staleness) for the heartbeat watchdog',
         'experiments:write' => 'Conclude experiments and record the winning variant (manual ship-the-winner step)',
         'shards:admin'      => 'List, register, test, migrate and retire shard databases (shard registry)',
+    ];
+}
+
+/**
+ * The scopes nokemo's monitoring key needs on every app.
+ *
+ * install/provision.php mints the key with this set, and validate_service_api_key()
+ * tops up an existing monitoring key (identified by holding monitoring:write) when
+ * this list grows. Every pipeline that gained a scope used to mean hand-editing the
+ * key on every deployment — error_log:write, then tests:write/actions:read, then
+ * media:read/write — and until someone did, that pipeline silently failed.
+ *
+ * @return string[]
+ */
+function monitor_key_scopes() {
+    return [
+        'error_log:read', 'error_log:write',
+        'monitoring:read', 'monitoring:write',
+        'feedback:read', 'feedback:write', 'feedback:admin',
+        'credentials:read', 'credentials:write',
+        'actions:read', 'tests:write',
+        'media:read', 'media:write',
     ];
 }
 
@@ -143,6 +166,19 @@ function validate_service_api_key($key_string) {
             // Update last_used_at
             $id = (int)$row['service_key_id'];
             db_query("UPDATE service_api_key SET last_used_at = NOW() WHERE service_key_id = '$id'");
+
+            // Keep the monitoring key's scopes current (see monitor_key_scopes()).
+            $scopes = json_decode($row['scopes'] ?? '[]', true) ?: [];
+            if (in_array('monitoring:write', $scopes, true)) {
+                $missing = array_values(array_diff(monitor_key_scopes(), $scopes));
+                if ($missing) {
+                    $merged = json_encode(array_values(array_merge($scopes, $missing)));
+                    db_query("UPDATE service_api_key SET scopes = '" . sanitize($merged, SQL)
+                        . "' WHERE service_key_id = '$id'");
+                    $row['scopes'] = $merged;
+                    error_log('service key ' . $id . ': monitoring key granted ' . implode(', ', $missing));
+                }
+            }
             return $row;
         }
     }
