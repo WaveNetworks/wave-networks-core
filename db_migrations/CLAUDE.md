@@ -56,6 +56,14 @@ SET time_zone = "+00:00";
 ALTER TABLE tablename ADD COLUMN col datatype;
 
 ## MySQL DDL and transactions
+⚠️ run_migration() SKIPS any statement whose text contains the substrings
+COMMIT, ROLLBACK or START TRANSACTION — anywhere, comments included, and without
+an error, while db_version is still bumped. Never write "autocommit", "commit",
+"committed", "commitment" or a column like `committed_count` inside a migration
+statement or in the comment lines directly above it (the comments before a
+statement belong to the same split fragment). apiSchemaAudit lists such
+statements as runner_skipped.
+
 Do NOT wrap migrations in START TRANSACTION / COMMIT. The migration runner
 manages transactions automatically via PDO beginTransaction()/commit().
 

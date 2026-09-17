@@ -67,6 +67,20 @@ Step 2: UPDATE VERSION IN admin/include/common.php
 THIS STEP IS FREQUENTLY FORGOTTEN — DO NOT SKIP IT.
 See: db_migrations/CLAUDE.md for full migration rules.
 
+### Schema audit — the ledger is not proof (apiSchemaAudit, scope monitoring:read)
+db_version records that a file RAN, not that its statements took. apiSchemaAudit
+(include/common/schemaAuditFunctions.php) replays each migration set up to the
+DB's ledger version through a conservative parser and diffs it against
+information_schema, for core main + shards and every sibling child app
+(public_html/<dir>/db_migrations + config/config.php) main + shards. READ-ONLY.
+Per DB: drift (missing tables/columns/indexes, narrower types, ENUM values
+missing), info (extra tables/columns, wider types), uncertain (tables touched by
+an unparsed statement), and per migration set: unparsed + runner_skipped.
+  runner_skipped = statements run_migration() silently skips because their text,
+  COMMENTS INCLUDED, contains COMMIT / ROLLBACK / START TRANSACTION (e.g. the words
+  "autocommit", "committed", or a column `committed_count`). The ledger is still
+  bumped. This is what dropped ContactSwipe cs_import_batch and cs_reminder.origin.
+
 ## Shard routing architecture
 Main DB (wncore_main): auth only. user table holds user_id, email,
   password, shard_id, role flags. Never holds profile or app data.
