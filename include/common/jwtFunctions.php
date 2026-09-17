@@ -9,6 +9,30 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
 /**
+ * The HMAC key access tokens are signed with.
+ *
+ * firebase/php-jwt 7 refuses an HS256 key shorter than 256 bits (32 bytes). The
+ * installer has always generated 64 hex chars, but a hand-written or older
+ * config can be shorter, and upgrading the library must not lock that app's
+ * users out. A short secret is stretched with SHA-256 (32 bytes); a secret that
+ * is already long enough is used unchanged, so its existing tokens stay valid.
+ * On a stretched deployment, access tokens issued before the upgrade stop
+ * verifying and clients renew them with their refresh token (random, stored
+ * hashed — not a JWT, so unaffected).
+ *
+ * @return string|null  null when no secret is configured at all
+ */
+function jwt_signing_key() {
+    global $app_secret;
+    $secret = (string)($app_secret ?? '');
+    if ($secret === '') {
+        error_log('JWT: $app_secret is not configured');
+        return null;
+    }
+    return strlen($secret) >= 32 ? $secret : hash('sha256', 'wn-jwt:' . $secret, true);
+}
+
+/**
  * Issue a JWT access token for a user.
  *
  * @param int         $user_id
@@ -17,7 +41,10 @@ use Firebase\JWT\Key;
  * @return string                Encoded JWT
  */
 function jwt_issue($user_id, $ttl = 3600, $shard_id = null) {
-    global $app_secret;
+    $key = jwt_signing_key();
+    if ($key === null) {
+        return '';
+    }
 
     $now = time();
     $payload = [
@@ -31,7 +58,7 @@ function jwt_issue($user_id, $ttl = 3600, $shard_id = null) {
         $payload['shard_id'] = $shard_id;
     }
 
-    return JWT::encode($payload, $app_secret, 'HS256');
+    return JWT::encode($payload, $key, 'HS256');
 }
 
 /**
@@ -41,10 +68,13 @@ function jwt_issue($user_id, $ttl = 3600, $shard_id = null) {
  * @return object|false  Decoded payload or false on failure
  */
 function jwt_verify($token) {
-    global $app_secret;
+    $key = jwt_signing_key();
+    if ($key === null) {
+        return false;
+    }
 
     try {
-        return JWT::decode($token, new Key($app_secret, 'HS256'));
+        return JWT::decode($token, new Key($key, 'HS256'));
     } catch (\Exception $e) {
         error_log('JWT verify failed: ' . $e->getMessage());
         return false;
