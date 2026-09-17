@@ -453,7 +453,17 @@
    type computes at least 16px; desktop keeps the compact sizing. The fix is
    the font size, never maximum-scale=1 / user-scalable=no (pinch-zoom is an
    accessibility feature). !important because app themes load after this file. */
+/* Either gate: a touch-only screen, or iOS/iPadOS WebKit (-webkit-touch-callout
+   exists only there), so an iPad with a trackpad is covered too. */
 @media (hover: none) and (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+    select,
+    textarea,
+    [contenteditable="true"] {
+        font-size: max(16px, 1em) !important;
+    }
+}
+@supports (-webkit-touch-callout: none) {
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
     select,
     textarea,
