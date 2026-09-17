@@ -69,7 +69,7 @@ $page_title = 'Reports Overview';
 
 <!-- D3.js + reports.js -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-<script src="../assets/js/reports.js"></script>
+<script src="<?= h(core_asset_url('assets/js/reports.js')) ?>"></script>
 <script>
 (function () {
     var R = window.WNReports;

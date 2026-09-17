@@ -84,7 +84,9 @@
                 var notifId = this.getAttribute('data-notification-id');
                 var destination = url || ('index.php?page=notifications#notif-' + notifId);
 
-                safeApiPost('markAllNotificationsRead', {}, function() {
+                // Mark ONLY the clicked notification read — "Mark all read" is the
+                // separate #markAllReadBtn control.
+                safeApiPost('markNotificationRead', { notification_id: notifId }, function() {
                     window.location.href = destination;
                 });
             });

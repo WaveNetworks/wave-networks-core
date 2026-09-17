@@ -24,8 +24,8 @@
     <?php } ?>
     <link rel="manifest" href="../manifest.php">
     <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>" id="themeStylesheet">
-    <link rel="stylesheet" href="../assets/css/style.css?v=20260316">
-    <link rel="stylesheet" href="../assets/css/bs-theme-overrides.css?v=2">
+    <link rel="stylesheet" href="<?= h(core_asset_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= h(core_asset_url('assets/css/bs-theme-overrides.css')) ?>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
@@ -319,12 +319,12 @@
 
 <!-- REGION: footer-scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="../assets/js/bs-init.js"></script>
-<script src="../assets/js/error-reporter.js"></script>
-<script src="../assets/js/sidebar.js"></script>
-<script src="../assets/js/color-mode.js"></script>
-<script src="../assets/js/theme.js"></script>
-<script src="../assets/js/notifications.js"></script>
+<script src="<?= h(core_asset_url('assets/js/bs-init.js')) ?>"></script>
+<script src="<?= h(core_asset_url('assets/js/error-reporter.js')) ?>"></script>
+<script src="<?= h(core_asset_url('assets/js/sidebar.js')) ?>"></script>
+<script src="<?= h(core_asset_url('assets/js/color-mode.js')) ?>"></script>
+<script src="<?= h(core_asset_url('assets/js/theme.js')) ?>"></script>
+<script src="<?= h(core_asset_url('assets/js/notifications.js')) ?>"></script>
 <?php
 // REGION: onboarding tour bootstrap
 if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id'])) {
@@ -374,7 +374,7 @@ if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id']))
             $__payload,
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES
         ) . ";</script>\n";
-        echo '<script src="../assets/js/onboarding.js?v=20260522"></script>' . "\n";
+        echo '<script src="' . h(core_asset_url('assets/js/onboarding.js')) . '"></script>' . "\n";
     }
 }
 ?>

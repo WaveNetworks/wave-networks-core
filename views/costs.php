@@ -398,7 +398,7 @@ $recurring = get_recurring_costs();
 
 <!-- D3.js + reports.js (reuse existing chart library) -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-<script src="../assets/js/reports.js"></script>
+<script src="<?= h(core_asset_url('assets/js/reports.js')) ?>"></script>
 <script>
 (function () {
     'use strict';

@@ -307,7 +307,7 @@ window.WnRouter = (function () {
      * We beat core to it with a CAPTURE-phase listener: it runs before the item's
      * own (bubble-phase) handler, so stopping propagation here keeps core's
      * hard-navigation from ever firing. We then do the two things it would have —
-     * mark all read, and open the target — but as a hash route the router owns,
+     * mark that notification read, and open the target — but as a hash route the router owns,
      * which works identically on-device and on the web.
      */
     function interceptNotifications() {
@@ -323,8 +323,9 @@ window.WnRouter = (function () {
             e.preventDefault();
             e.stopImmediatePropagation(); // keep core's window.location.href handler from running
 
-            // Mirror core: clear the unread state so the badge settles on next poll.
-            if (window.apiPost) apiPost('markAllNotificationsRead', {}, function () {});
+            // Mirror core: mark only the clicked notification read.
+            var notifId = item.getAttribute('data-notification-id');
+            if (window.apiPost && notifId) apiPost('markNotificationRead', { notification_id: notifId }, function () {});
 
             // Close the open dropdown so it isn't left hanging over the new screen.
             var menu = item.closest('.dropdown-menu');

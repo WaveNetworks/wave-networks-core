@@ -24,8 +24,8 @@
     <?php } ?>
     <link rel="manifest" href="../manifest.php">
     <link rel="stylesheet" href="<?= h(get_theme_css_url()) ?>" id="themeStylesheet">
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/bs-theme-overrides.css">
+    <link rel="stylesheet" href="<?= h(core_asset_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= h(core_asset_url('assets/css/bs-theme-overrides.css')) ?>">
     <style>
         body { background-color: var(--bs-tertiary-bg); }
         .auth-wrapper { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
