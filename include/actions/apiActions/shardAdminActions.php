@@ -184,7 +184,7 @@ if (($action ?? null) == 'shardMigrate') {
                     if ($ver > $shard_version)  break;
                     $file = rtrim($base_dir, '/') . '/shard/' . number_format($ver, 1, '.', '') . '.sql';
                     if (!file_exists($file))    continue;
-                    run_migration($conn, $file, "shard/{$row['shard_id']}", $ver);
+                    if (!run_migration($conn, $file, "shard/{$row['shard_id']}", $ver)) break;  // never skip past a failure
                     $ran[] = $ver;
                 }
 

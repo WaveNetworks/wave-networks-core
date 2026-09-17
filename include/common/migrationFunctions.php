@@ -274,7 +274,9 @@ function check_and_migrate_main_db() {
         $file = rtrim($base_dir, '/') . '/main/' . number_format($ver, 1, '.', '') . '.sql';
         if (!file_exists($file)) continue;
 
-        run_migration($db, $file, 'main', $ver);
+        // Stop at the first failure: a later file would otherwise bump db_version
+        // past the failed one, and the ledger never re-runs it.
+        if (!run_migration($db, $file, 'main', $ver)) break;
     }
 
     if (get_current_db_version($db) >= $db_version) {
@@ -358,7 +360,7 @@ function check_and_migrate_all_shards($budget = null) {
             $file = rtrim($base_dir, '/') . '/shard/' . number_format($ver, 1, '.', '') . '.sql';
             if (!file_exists($file)) continue;
 
-            run_migration($conn, $file, "shard/$shard_id", $ver);
+            if (!run_migration($conn, $file, "shard/$shard_id", $ver)) break;  // never skip past a failure
         }
 
         if (get_current_db_version($conn) >= $shard_version) {

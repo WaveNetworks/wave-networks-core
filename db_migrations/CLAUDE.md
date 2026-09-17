@@ -28,10 +28,12 @@ get_available_migrations($db_type)  — scans db_migrations/main/ or shard/
 run_migration($conn, $file, $type, $version)
   — reads SQL file
   — splits on /;[\r\n]+/
-  — skips START TRANSACTION, COMMIT, ROLLBACK (system manages transaction)
+  — skips a statement only if it is exactly START TRANSACTION / BEGIN / COMMIT /
+    ROLLBACK once comments are stripped (system manages transaction); logs it
   — executes each statement in a PDO transaction
   — on success: UPDATE db_version SET version = ? WHERE version_id = 1
-  — on failure: rollback + $_SESSION['error'] (does not block login)
+  — on failure: rollback + $_SESSION['error'] (does not block login); the core
+    main/shard loops stop at the failed file so a later one can't bump past it
 
 Migrations run on EVERY page load (not cached per session).
 Each migration runs only when current_db_version < target_version.
