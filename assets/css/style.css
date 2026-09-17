@@ -442,3 +442,22 @@
         pointer-events: auto;
     }
 }
+
+/* =============================================
+   Touch screens — no field zooms the page on tap
+   =============================================
+   iOS Safari zooms the page in when a focused field computes under 16px and
+   leaves it zoomed, so the chrome is lost until the person pinches back out.
+   Bootstrap's .form-control-sm / .form-select-sm (.875rem) trip it, and core's
+   own views and every child app use them. On a touch screen every place you
+   type computes at least 16px; desktop keeps the compact sizing. The fix is
+   the font size, never maximum-scale=1 / user-scalable=no (pinch-zoom is an
+   accessibility feature). !important because app themes load after this file. */
+@media (hover: none) and (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+    select,
+    textarea,
+    [contenteditable="true"] {
+        font-size: max(16px, 1em) !important;
+    }
+}
