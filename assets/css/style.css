@@ -70,6 +70,31 @@
     flex-shrink: 0;   /* the badge is the count — never squeeze it */
 }
 
+/* The main column is a flex item, so its default min-width:auto is its content's
+   min-content width. One unshrinkable descendant (a nowrap tab strip, a long
+   btn-group) then widened the whole column past the viewport on a phone, pushing
+   the top-bar controls off-screen and the page into horizontal scroll. */
+#wrapper > .flex-grow-1 {
+    min-width: 0;
+}
+
+/* Notification bell dropdown. Long unbroken text (file paths in error digests)
+   ran out of the 360px panel, and on a phone the panel itself hung off the left
+   edge. Below 576px it is pinned to the viewport under the top bar instead. */
+#notifDropdown .dropdown-item {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+@media (max-width: 575.98px) {
+    #notifDropdown.show {
+        position: fixed !important;
+        inset: 52px 8px auto 8px !important;
+        transform: none !important;
+        width: auto !important;
+        max-height: calc(100vh - 68px) !important;
+    }
+}
+
 /* Brand area + topnav — locked to same height so borders align */
 #wrapper > .flex-grow-1 > .navbar,
 #sidebar .sidebar-brand {
