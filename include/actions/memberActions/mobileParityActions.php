@@ -49,7 +49,8 @@ if (($action ?? null) == 'memberListMobileParity') {
         }
         $data['items'] = $items;
         $data['count'] = count($items);
-        $_SESSION['success'] = 'OK';
+        // No success flash: a read that the view re-runs on every filter change
+        // would stack an "OK" alert each time.
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }

@@ -56,12 +56,12 @@ $page_title = 'Mobile Parity';
         <table class="table table-sm align-middle mb-0">
             <thead class="table-light">
                 <tr>
-                    <th style="width:90px">Category</th>
+                    <th style="min-width:90px">Category</th>
                     <th>Feature</th>
                     <th>Desktop source</th>
                     <th>Mobile source</th>
-                    <th style="width:90px">Priority</th>
-                    <th style="width:120px">Status</th>
+                    <th style="min-width:90px">Priority</th>
+                    <th style="min-width:8rem">Status</th>
                     <th style="min-width:18rem">Notes</th>
                 </tr>
             </thead>
@@ -180,7 +180,7 @@ $page_title = 'Mobile Parity';
                         + '<td class="small"><code>' + esc(r.desktop_source||'') + '</code></td>'
                         + '<td class="small"><code>' + esc(r.mobile_source||'') + '</code></td>'
                         + '<td><span class="badge bg-secondary">' + esc(r.priority||'medium') + '</span></td>'
-                        + '<td><select class="form-select form-select-sm parity-status-select" data-parity-id="' + r.parity_id + '" onchange="setParityStatus(this)">'
+                        + '<td><select class="form-select form-select-sm parity-status-select" style="min-width:7.5rem" data-parity-id="' + r.parity_id + '" onchange="setParityStatus(this)">'
                         +   ['missing','partial','wired','n_a'].map(function(s){
                                 return '<option value="'+s+'"' + (s===r.mobile_status?' selected':'') + '>'+s+'</option>';
                             }).join('')
