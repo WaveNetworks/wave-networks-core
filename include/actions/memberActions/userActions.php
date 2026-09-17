@@ -120,6 +120,31 @@ if (($action ?? null) == 'editUser') {
     }
 }
 
+// ─── USER DELETION EVENTS (admin read) ───────────────────────────────────────
+// Which erased users each child app has purged (gdprFunctions: user_deletion_event).
+// Ids and statuses only — the users are gone. Admin session.
+
+if (($action ?? null) == 'listUserDeletionEvents') {
+    $errs = array();
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))    { $errs['auth'] = 'Admin access required.'; }
+    if (count($errs) <= 0) {
+        $limit = min(200, max(1, (int) ($_POST['limit'] ?? 50)));
+        $r = db_query("SELECT event_id, user_id, source, created FROM user_deletion_event ORDER BY event_id DESC LIMIT $limit");
+        $items = [];
+        while ($r && ($row = db_fetch($r))) { $row['apps'] = []; $items[(int) $row['event_id']] = $row; }
+        if ($items) {
+            $ids = implode(',', array_keys($items));
+            $a = db_query("SELECT event_id, app_slug, status, attempts, last_error, updated FROM user_deletion_event_app WHERE event_id IN ($ids)");
+            while ($a && ($row = db_fetch($a))) { $items[(int) $row['event_id']]['apps'][] = $row; }
+        }
+        $data['items'] = array_values($items);
+        $_SESSION['success'] = 'OK';
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
 // ─── DELETE USER ─────────────────────────────────────────────────────────────
 
 if (($action ?? null) == 'deleteUser') {
