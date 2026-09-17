@@ -56,11 +56,6 @@ function create_web_push_instance() {
  * @return int              Number of successful deliveries
  */
 function send_push_to_user($user_id, $shard_id, $title, $body, $payload = []) {
-    $webPush = create_web_push_instance();
-    if (!$webPush) {
-        return 0;
-    }
-
     $user_id = (int)$user_id;
     prime_shard($shard_id);
 
@@ -73,13 +68,49 @@ function send_push_to_user($user_id, $shard_id, $title, $body, $payload = []) {
         return 0;
     }
 
+    // Native app tokens ("native:<fcm token>") go through FCM; browser
+    // subscriptions through Web Push. Either transport may be unconfigured.
+    $native = [];
+    $web    = [];
+    foreach ($subscriptions as $sub) {
+        if (function_exists('is_native_push_endpoint') && is_native_push_endpoint($sub['endpoint'])) {
+            $native[] = $sub;
+        } else {
+            $web[] = $sub;
+        }
+    }
+
+    $success_count = 0;
+
+    foreach ($native as $sub) {
+        $sub_id = (int)$sub['subscription_id'];
+        $token  = substr($sub['endpoint'], strlen(FCM_NATIVE_PREFIX));
+        $result = fcm_send_to_token($token, $title, $body, $payload);
+        if ($result === 'unconfigured') {
+            break; // no service account for this app — nothing native can be sent
+        }
+        if ($result === 'ok') {
+            $success_count++;
+            db_query_shard($shard_id,
+                "UPDATE push_subscription SET last_used = NOW() WHERE subscription_id = '$sub_id'");
+        } elseif ($result === 'gone') {
+            db_query_shard($shard_id,
+                "DELETE FROM push_subscription WHERE subscription_id = '$sub_id'");
+        }
+    }
+
+    $webPush = $web ? create_web_push_instance() : null;
+    if (!$webPush) {
+        return $success_count;
+    }
+
     $payload_json = json_encode(array_merge([
         'title' => $title,
         'body'  => $body,
     ], $payload));
 
     // Queue all subscriptions
-    foreach ($subscriptions as $sub) {
+    foreach ($web as $sub) {
         $subscription = Subscription::create([
             'endpoint'        => $sub['endpoint'],
             'publicKey'       => $sub['p256dh_key'],
@@ -91,11 +122,10 @@ function send_push_to_user($user_id, $shard_id, $title, $body, $payload = []) {
     }
 
     // Flush and process results
-    $success_count = 0;
     $sub_index = 0;
 
     foreach ($webPush->flush() as $report) {
-        $sub = $subscriptions[$sub_index] ?? null;
+        $sub = $web[$sub_index] ?? null;
         $sub_id = $sub ? (int)$sub['subscription_id'] : 0;
 
         if ($report->isSuccess()) {

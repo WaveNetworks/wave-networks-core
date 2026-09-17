@@ -162,8 +162,14 @@ if (($_POST['action'] ?? '') == 'registerPushSubscription') {
     $auth     = trim($_POST['auth'] ?? '');
 
     if (!$endpoint) { $errs['endpoint'] = 'Push endpoint is required.'; }
-    if (!$p256dh)   { $errs['p256dh'] = 'Public key is required.'; }
-    if (!$auth)     { $errs['auth_key'] = 'Auth key is required.'; }
+    // A native app registers its FCM token as "native:<token>"; there is no Web
+    // Push encryption key pair for it, so only browser subscriptions need them.
+    $is_native = function_exists('is_native_push_endpoint') && is_native_push_endpoint($endpoint);
+    if ($is_native && strlen($endpoint) < strlen(FCM_NATIVE_PREFIX) + 20) {
+        $errs['endpoint'] = 'Native push token is missing or malformed.';
+    }
+    if (!$is_native && !$p256dh) { $errs['p256dh'] = 'Public key is required.'; }
+    if (!$is_native && !$auth)   { $errs['auth_key'] = 'Auth key is required.'; }
 
     if (count($errs) <= 0) {
         $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';

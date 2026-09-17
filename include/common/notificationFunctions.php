@@ -63,6 +63,8 @@ function send_notification($user_id, $shard_id, $category_slug, $title, $body, $
             'body'       => $body,
             'action_url' => $action_url ?: '',
             'tag'        => 'wn-' . $category_slug,
+            // Native apps route a tapped notification by category.
+            'category'   => $category_slug,
         ];
         send_push_to_user($user_id, $shard_id, $title, $body, $payload);
 
