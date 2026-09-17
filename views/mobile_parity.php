@@ -2,7 +2,8 @@
 /**
  * views/mobile_parity.php
  * Admin-only browser for the mobile_parity inventory.
- * Run audit_mobile_parity.py (nightly via cron, or manual) to populate.
+ * Populated by audit_mobile_parity.py (nightly via cron, or manual), or by a child
+ * app that registers its own catalog with mobile_parity_sync() (mobileParityFunctions.php).
  */
 if (!has_role('admin')) {
     $_SESSION['error'] = 'Admin access required.';
@@ -61,7 +62,7 @@ $page_title = 'Mobile Parity';
                     <th>Mobile source</th>
                     <th style="width:90px">Priority</th>
                     <th style="width:120px">Status</th>
-                    <th style="width:60px"></th>
+                    <th>Notes</th>
                 </tr>
             </thead>
             <tbody id="parityTbody">
@@ -126,7 +127,8 @@ $page_title = 'Mobile Parity';
             if (items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-body-secondary p-3">'
                     + 'No rows. Run <code>admin/scripts/audit_mobile_parity.py</code> + '
-                    + '<code>admin/scripts/diff_view_contract.py</code> to populate.</td></tr>';
+                    + '<code>admin/scripts/diff_view_contract.py</code> to populate, or have the app call '
+                    + '<code>mobile_parity_sync()</code> from its cron.</td></tr>';
                 return;
             }
 
@@ -143,7 +145,10 @@ $page_title = 'Mobile Parity';
                 // Sort by total then by missing count desc — heaviest gaps first
                 var ma = groups[a].filter(function(r){return r.mobile_status==='missing';}).length;
                 var mb = groups[b].filter(function(r){return r.mobile_status==='missing';}).length;
-                return mb - ma;
+                if (mb !== ma) return mb - ma;
+                var pa = groups[a].filter(function(r){return r.mobile_status==='partial';}).length;
+                var pb = groups[b].filter(function(r){return r.mobile_status==='partial';}).length;
+                return (pb - pa) || (a < b ? -1 : a > b ? 1 : 0);
             });
 
             tbody.innerHTML = viewNames.map(function(view){
@@ -166,7 +171,10 @@ $page_title = 'Mobile Parity';
                     + '</td></tr>';
 
                 var detail = rows.map(function(r){
-                    return '<tr class="parity-row" data-view="' + esc(view) + '" style="display:none">'
+                    // A missing row is a gap: paint it red so it reads at a glance.
+                    var rowCls = r.mobile_status === 'missing' ? ' table-danger'
+                               : (r.mobile_status === 'partial' ? ' table-warning' : '');
+                    return '<tr class="parity-row' + rowCls + '" data-view="' + esc(view) + '" style="display:none">'
                         + '<td><span class="badge bg-info text-dark">' + esc(r.category) + '</span></td>'
                         + '<td><div class="small"><code>' + esc((r.feature_key||'').split('/').slice(1).join('/')||r.feature_key) + '</code></div></td>'
                         + '<td class="small"><code>' + esc(r.desktop_source||'') + '</code></td>'
