@@ -52,7 +52,7 @@ $page_title = 'Mobile Parity';
             </div>
         </div>
     </div>
-    <div class="card-body p-0">
+    <div class="card-body p-0 table-responsive">
         <table class="table table-sm align-middle mb-0">
             <thead class="table-light">
                 <tr>
@@ -62,7 +62,7 @@ $page_title = 'Mobile Parity';
                     <th>Mobile source</th>
                     <th style="width:90px">Priority</th>
                     <th style="width:120px">Status</th>
-                    <th>Notes</th>
+                    <th style="min-width:18rem">Notes</th>
                 </tr>
             </thead>
             <tbody id="parityTbody">
