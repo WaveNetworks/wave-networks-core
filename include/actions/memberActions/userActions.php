@@ -146,7 +146,7 @@ if (($action ?? null) == 'deleteUser') {
         // Single source of truth for what "delete" means — admin main + admin
         // shard + registered child-app hooks + on-disk homedir/exports.
         // See gdprFunctions.php::delete_user_data and its register_delete_user_data_hook.
-        delete_user_data($user_id);
+        delete_user_data($user_id, 'admin_delete');
 
         $_SESSION['success'] = 'User deleted successfully.';
 

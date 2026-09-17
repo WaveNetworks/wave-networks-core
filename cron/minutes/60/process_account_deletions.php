@@ -1,6 +1,6 @@
 <?php
 /**
- * cron/days/1/process_account_deletions.php
+ * cron/minutes/60/process_account_deletions.php
  *
  * GDPR Article 17 — right to erasure.
  * Finds pending account_deletion_request rows whose 30-day cooling-off
@@ -53,7 +53,7 @@ while ($row = db_fetch($r)) {
         // (see companion task #377). Falls back to the minimal admin-only
         // wipe otherwise — mirrors what userActions.php deleteUser does today.
         if (function_exists('delete_user_data')) {
-            delete_user_data($user_id);
+            delete_user_data($user_id, 'account_deletion');
         } else {
             $user = get_user($user_id);
             if ($user) {

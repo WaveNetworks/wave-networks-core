@@ -247,21 +247,157 @@ function register_delete_user_data_hook(callable $hook) {
     $GLOBALS['_delete_user_data_hooks'][] = $hook;
 }
 
+// ── User-deletion events: child apps purge from their own cron ───────────────
+//
+// delete_user_data() only reaches the child-app hooks registered in THIS request, and
+// the requests that delete users (admin's deleteUser, admin's cron) never load a child
+// app. So every deletion is also recorded as a user_deletion_event row, and each child
+// app registers a purge and drains the events from its own cron:
+//
+//   // child include/common.php (or any helper it loads)
+//   register_user_deletion_purge('myapp', 'myapp_purge_user');
+//   // child cron (every few minutes)
+//   process_user_deletion_events('myapp', 'myapp_purge_user');
+//
+// The purge must be idempotent: it runs in-request when the app happens to be loaded,
+// and again is harmless. Per-app results live in user_deletion_event_app, so an app
+// deployed later catches up, and a failure is retried on the next run.
+
+if (!function_exists('record_user_deletion_event')) {
+    /** Record that a user is being erased. Idempotent per user_id. Returns the event_id (0 on failure). */
+    function record_user_deletion_event($user_id, $shard_id = null, $source = 'delete_user_data') {
+        $uid = (int) $user_id;
+        if ($uid <= 0) return 0;
+        try {
+            db_query_prepared(
+                "INSERT IGNORE INTO user_deletion_event (user_id, shard_id, source) VALUES (?, ?, ?)",
+                [$uid, $shard_id !== null && $shard_id !== '' ? (string) $shard_id : null, substr((string) $source, 0, 32)]
+            );
+            $r = db_query_prepared("SELECT event_id FROM user_deletion_event WHERE user_id = ?", [$uid]);
+            $row = $r ? db_fetch($r) : null;
+            return $row ? (int) $row['event_id'] : 0;
+        } catch (Throwable $e) {
+            error_log("record_user_deletion_event user_id=$uid: " . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
+if (!function_exists('record_missing_user_deletions')) {
+    /**
+     * Reconcile: a child app that finds rows owned by user ids that no longer exist in
+     * `user` (deleted before events existed, or by a path that bypassed them) records an
+     * event for each, so its normal purge picks them up. Ids still present are ignored.
+     * Returns how many events were recorded.
+     */
+    function record_missing_user_deletions(array $user_ids, $source = 'reconcile') {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $user_ids), function ($v) { return $v > 0; })));
+        if (!$ids) return 0;
+        $n = 0;
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $in = implode(',', array_fill(0, count($chunk), '?'));
+            $r = db_query_prepared("SELECT user_id FROM user WHERE user_id IN ($in)", $chunk);
+            $live = [];
+            while ($r && ($row = db_fetch($r))) $live[(int) $row['user_id']] = true;
+            foreach ($chunk as $uid) {
+                if (!isset($live[$uid]) && record_user_deletion_event($uid, null, $source) > 0) $n++;
+            }
+        }
+        return $n;
+    }
+}
+
+if (!function_exists('register_user_deletion_purge')) {
+    /** A child app's purge for erased users: function(int $user_id, ?string $shard_id): void. */
+    function register_user_deletion_purge($app_slug, callable $purge) {
+        $GLOBALS['_user_deletion_purges'][(string) $app_slug] = $purge;
+    }
+}
+
+if (!function_exists('mark_user_deletion_purge')) {
+    function mark_user_deletion_purge($event_id, $app_slug, $ok, $error = null) {
+        db_query_prepared(
+            "INSERT INTO user_deletion_event_app (event_id, app_slug, status, attempts, last_error)
+             VALUES (?, ?, ?, 1, ?)
+             ON DUPLICATE KEY UPDATE status = VALUES(status), attempts = attempts + 1, last_error = VALUES(last_error)",
+            [(int) $event_id, (string) $app_slug, $ok ? 'done' : 'failed', $error !== null ? substr((string) $error, 0, 1000) : null]
+        );
+    }
+}
+
+if (!function_exists('run_user_deletion_purge')) {
+    /** Run one app's purge for one event and record the result. Returns true on success. */
+    function run_user_deletion_purge($event, $app_slug, callable $purge) {
+        try {
+            $purge((int) $event['user_id'], $event['shard_id'] ?? null);
+            mark_user_deletion_purge($event['event_id'], $app_slug, true);
+            return true;
+        } catch (Throwable $e) {
+            mark_user_deletion_purge($event['event_id'], $app_slug, false, $e->getMessage());
+            if (function_exists('log_error_to_db')) {
+                log_error_to_db('ERROR', "user deletion purge ($app_slug): " . $e->getMessage(),
+                    $e->getFile(), $e->getLine(), $e->getTraceAsString(), ['user_id' => (int) $event['user_id']]);
+            } else {
+                error_log("user deletion purge ($app_slug) user_id={$event['user_id']}: " . $e->getMessage());
+            }
+            return false;
+        }
+    }
+}
+
+if (!function_exists('process_user_deletion_events')) {
+    /**
+     * Drain the events this app has not purged yet (never tried, or failed fewer than
+     * $max_attempts times). Call from the child app's cron. Returns ['done'=>n, 'failed'=>n].
+     */
+    function process_user_deletion_events($app_slug, callable $purge = null, $limit = 100, $max_attempts = 20) {
+        $app_slug = (string) $app_slug;
+        $purge = $purge ?: ($GLOBALS['_user_deletion_purges'][$app_slug] ?? null);
+        $out = ['done' => 0, 'failed' => 0];
+        if (!$purge || !is_callable($purge)) return $out;
+        $r = db_query_prepared(
+            "SELECT e.event_id, e.user_id, e.shard_id
+               FROM user_deletion_event e
+               LEFT JOIN user_deletion_event_app a ON a.event_id = e.event_id AND a.app_slug = ?
+              WHERE a.event_id IS NULL OR (a.status = 'failed' AND a.attempts < ?)
+              ORDER BY e.event_id ASC
+              LIMIT " . max(1, (int) $limit),
+            [$app_slug, (int) $max_attempts]
+        );
+        $events = [];
+        while ($r && ($row = db_fetch($r))) $events[] = $row;
+        foreach ($events as $ev) {
+            if (run_user_deletion_purge($ev, $app_slug, $purge)) $out['done']++; else $out['failed']++;
+        }
+        return $out;
+    }
+}
+
 /**
  * Remove every byte of a user's data — admin main, admin shard, registered
- * child-app hooks, and on-disk files (homedir, completed exports). Used by:
- *   • cron/days/1/process_account_deletions.php  (GDPR Article 17)
+ * child-app hooks, and on-disk files (homedir, completed exports). Records a
+ * user_deletion_event first so child apps not loaded here purge from their cron. Used by:
+ *   • cron/minutes/60/process_account_deletions.php  (GDPR Article 17)
  *   • admin deleteUser action (immediate admin-initiated removal)
  *
  * Idempotent: if the user is already gone, hooks still run + any orphaned
  * shard rows are cleaned up.
  */
-function delete_user_data($user_id) {
+function delete_user_data($user_id, $source = 'delete_user_data') {
     $uid = (int) $user_id;
     if ($uid <= 0) return;
 
     $user     = function_exists('get_user') ? get_user($uid) : null;
     $shard_id = $user['shard_id'] ?? null;
+
+    // 0. Record the deletion FIRST, so every child app purges it from its own cron even
+    //    when it is not loaded in this request (see process_user_deletion_events).
+    $event_id = record_user_deletion_event($uid, $shard_id, $source);
+    if ($event_id && !empty($GLOBALS['_user_deletion_purges'])) {
+        foreach ($GLOBALS['_user_deletion_purges'] as $slug => $purge) {
+            run_user_deletion_purge(['event_id' => $event_id, 'user_id' => $uid, 'shard_id' => $shard_id], $slug, $purge);
+        }
+    }
 
     // 1. Run child-app hooks first — they may need shard_id and the admin
     //    user row before we wipe them. Hooks failing must not block the rest.

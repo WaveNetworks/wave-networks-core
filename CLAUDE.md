@@ -654,6 +654,21 @@ Child apps build their own Privacy & Data UI (views/privacy.php) calling
 the shared helper functions. Child apps add app-specific data to exports
 (items, preferences, history) on top of admin's build_export_data() base.
 
+**Erasing a user's child-app data (every child app with per-user rows must do this).**
+Users are deleted from admin (deleteUser), from admin's hourly cron (30-day self-delete,
+cron/minutes/60/process_account_deletions.php) and similar paths that never load a child
+app, so an in-request `register_delete_user_data_hook()` alone misses them. Every
+`delete_user_data()` records a `user_deletion_event` row (main 5.1); each child app:
+```php
+register_user_deletion_purge('myapp', 'myapp_purge_user');     // include/common/*.php
+process_user_deletion_events('myapp', 'myapp_purge_user');     // cron, every few minutes
+```
+The purge is `function(int $user_id, ?string $shard_id)`, must be idempotent (it also runs
+in-request when the app is loaded), and its result is kept per app in
+`user_deletion_event_app` (failed ones retry up to 20 times). An app deployed later still
+catches up. For rows owned by ids deleted before events existed, call
+`record_missing_user_deletions($ids)`, which records events only for ids no longer in `user`.
+
 ### Admin compliance actions
 Action file: include/actions/memberActions/userComplianceActions.php
   adminResetPassword     — reset user password with optional email notification
