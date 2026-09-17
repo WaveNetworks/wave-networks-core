@@ -20,10 +20,13 @@
  *              types, missing ENUM values) vs info (extra tables/columns, wider
  *              types). Findings on uncertain tables go to 'uncertain'.
  *
- * The statement splitter mirrors run_migration() exactly, including its
- * substring skip: a statement whose text (comments included) contains
- * COMMIT / ROLLBACK / START TRANSACTION is silently skipped by the runner while
- * the ledger is still bumped. Those are reported as 'runner_skipped'.
+ * The statement splitter mirrors run_migration() exactly. Before core 5.0 the
+ * runner used a substring skip: a statement whose text (comments included)
+ * contained COMMIT / ROLLBACK / START TRANSACTION was silently skipped while the
+ * ledger was still bumped. Those are reported as 'legacy_runner_skipped' (and a
+ * drift row they explain carries legacy_runner_skipped: true). 'runner_skipped'
+ * is what the CURRENT runner would skip beyond transaction control — always
+ * expected to be empty.
  *
  * Scope: core main + core shards + every sibling child app (public_html/<dir>/
  * with db_migrations/) main + shards. Credentials are read from config the same
@@ -311,7 +314,7 @@ function schema_audit_compare_types($expected_raw, $live_raw) {
 // ─── EXPECTED MODEL ─────────────────────────────────────────────────────────
 
 function schema_audit_new_model() {
-    return ['tables' => [], 'dropped_tables' => [], 'unparsed' => [], 'runner_skipped' => []];
+    return ['tables' => [], 'dropped_tables' => [], 'unparsed' => [], 'runner_skipped' => [], 'legacy_runner_skipped' => []];
 }
 
 function &schema_audit_table(&$model, $name, $partial_if_new = true) {
@@ -739,18 +742,28 @@ function schema_audit_apply_statement(&$model, $stmt, $src) {
 
 /**
  * The runner's own statement split + skip rule (run_migration()). Returns a list
- * of ['raw' => fragment, 'sql' => comment-stripped, 'runner_skips' => bool].
+ * of ['raw' => fragment, 'sql' => comment-stripped,
+ *     'runner_skips' => bool   (the CURRENT runner skips it — only exact
+ *                               transaction control / comment-only fragments),
+ *     'legacy_skips' => bool   (the pre-5.0 runner skipped it: raw text,
+ *                               comments included, contained COMMIT / ROLLBACK /
+ *                               START TRANSACTION)].
+ * Databases migrated before core 5.0 may be missing what legacy_skips dropped.
  */
 function schema_audit_split_like_runner($sql) {
+    if (!function_exists('wn_migration_skip_reason')) {
+        require_once __DIR__ . '/migrationFunctions.php';
+    }
     $out = [];
     foreach (preg_split('/;\s*[\r\n]+/', (string)$sql) as $frag) {
         $raw = trim($frag);
         if ($raw === '') continue;
         $upper = strtoupper($raw);
-        $skips = strpos($upper, 'START TRANSACTION') !== false
-              || strpos($upper, 'COMMIT') !== false
-              || strpos($upper, 'ROLLBACK') !== false;
-        $out[] = ['raw' => $raw, 'sql' => trim(schema_audit_strip_comments($raw)), 'runner_skips' => $skips];
+        $legacy = strpos($upper, 'START TRANSACTION') !== false
+               || strpos($upper, 'COMMIT') !== false
+               || strpos($upper, 'ROLLBACK') !== false;
+        $out[] = ['raw' => $raw, 'sql' => trim(schema_audit_strip_comments($raw)),
+                  'runner_skips' => wn_migration_skip_reason($raw) !== null, 'legacy_skips' => $legacy];
     }
     return $out;
 }
@@ -775,9 +788,17 @@ function schema_audit_build_expected($files, $through, $label_prefix) {
             $plain = rtrim($st['sql'], "; \t\r\n");
             $is_txn = (bool)preg_match('/^(START\s+TRANSACTION|BEGIN|COMMIT|ROLLBACK)\s*(WORK)?$/i', $plain);
             $is_session = (bool)preg_match('/^SET\s+(SQL_MODE|TIME_ZONE|NAMES|FOREIGN_KEY_CHECKS|UNIQUE_CHECKS|CHARACTER_SET\w*|COLLATION\w*|@@|SESSION\b|AUTOCOMMIT)/i', $plain);
-            if ($st['runner_skips'] && !$is_txn && !$is_session) {
-                preg_match('/(START TRANSACTION|COMMIT|ROLLBACK)/', strtoupper($st['raw']), $km);
+            if ($st['runner_skips'] && !$is_txn) {
+                // Current runner skips only exact transaction control; anything
+                // else here would be a runner bug.
                 $model['runner_skipped'][] = [
+                    'migration' => $src,
+                    'statement' => schema_audit_snippet($plain),
+                ];
+            }
+            if ($st['legacy_skips'] && !$is_txn && !$is_session) {
+                preg_match('/(START TRANSACTION|COMMIT|ROLLBACK)/', strtoupper($st['raw']), $km);
+                $model['legacy_runner_skipped'][] = [
                     'migration' => $src,
                     'matched'   => $km[1] ?? '',
                     'statement' => schema_audit_snippet($plain),
@@ -786,7 +807,7 @@ function schema_audit_build_expected($files, $through, $label_prefix) {
             // Expected = what the migration INTENDS, runner skip or not.
             $prev = $model['tables'];
             schema_audit_apply_statement($model, $st['sql'], $src);
-            if ($st['runner_skips'] && !$is_txn) {
+            if ($st['legacy_skips'] && !$is_txn) {
                 schema_audit_mark_skipped($model, $prev);
             }
         }
@@ -872,7 +893,7 @@ function schema_audit_diff($model, $live, $include_info = true) {
         };
         if (!isset($live['tables'][$tk])) {
             $row = ['table' => $t['name'], 'created_in' => $t['created_in']];
-            if (!empty($t['created_skipped'])) $row['runner_skipped'] = true;
+            if (!empty($t['created_skipped'])) $row['legacy_runner_skipped'] = true;
             $push('missing_tables', $row);
             continue;
         }
@@ -880,7 +901,7 @@ function schema_audit_diff($model, $live, $include_info = true) {
         foreach ($t['columns'] as $ck => $c) {
             if (!isset($lt['columns'][$ck])) {
                 $row = ['table' => $t['name'], 'column' => $c['name'], 'expected_type' => $c['type'], 'defined_in' => $c['set_in']];
-                if (!empty($c['skipped'])) $row['runner_skipped'] = true;
+                if (!empty($c['skipped'])) $row['legacy_runner_skipped'] = true;
                 $push('missing_columns', $row);
                 continue;
             }
@@ -889,7 +910,7 @@ function schema_audit_diff($model, $live, $include_info = true) {
             $row = ['table' => $t['name'], 'column' => $c['name'], 'expected' => $c['type'],
                     'actual' => $lt['columns'][$ck]['type'], 'defined_in' => $c['set_in']] + $cmp;
             unset($row['severity']);
-            if (!empty($c['skipped'])) $row['runner_skipped'] = true;
+            if (!empty($c['skipped'])) $row['legacy_runner_skipped'] = true;
             if ($cmp['severity'] === 'drift') {
                 $push('type_mismatches', $row);
             } elseif ($include_info) {
@@ -907,7 +928,7 @@ function schema_audit_diff($model, $live, $include_info = true) {
             if (!$cols_live) continue;
             $row = ['table' => $t['name'], 'index' => $ix['name'], 'columns' => $ix['cols'],
                     'kind' => $ix['kind'], 'defined_in' => $ix['set_in']];
-            if (!empty($ix['skipped'])) $row['runner_skipped'] = true;
+            if (!empty($ix['skipped'])) $row['legacy_runner_skipped'] = true;
             $push('missing_indexes', $row);
         }
         if ($include_info && !$t['partial']) {
@@ -1128,7 +1149,8 @@ function schema_audit_run($only = '', $include_info = true) {
         $row['migration_set'] = $set_key;
         if (!isset($sets[$set_key])) {
             $sets[$set_key] = ['files' => count($files), 'unparsed' => $model['unparsed'],
-                               'runner_skipped' => $model['runner_skipped']];
+                               'runner_skipped' => $model['runner_skipped'],
+                               'legacy_runner_skipped' => $model['legacy_runner_skipped']];
         }
 
         $d = schema_audit_diff($model, $live, $include_info);

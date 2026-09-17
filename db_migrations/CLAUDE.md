@@ -56,13 +56,18 @@ SET time_zone = "+00:00";
 ALTER TABLE tablename ADD COLUMN col datatype;
 
 ## MySQL DDL and transactions
-⚠️ run_migration() SKIPS any statement whose text contains the substrings
-COMMIT, ROLLBACK or START TRANSACTION — anywhere, comments included, and without
-an error, while db_version is still bumped. Never write "autocommit", "commit",
-"committed", "commitment" or a column like `committed_count` inside a migration
-statement or in the comment lines directly above it (the comments before a
-statement belong to the same split fragment). apiSchemaAudit lists such
-statements as runner_skipped.
+run_migration() skips a split fragment ONLY when, with comments stripped, it is
+exactly START TRANSACTION / BEGIN / COMMIT / ROLLBACK (or comment-only), and
+error_logs each skip. Before core 5.0 it skipped any fragment whose raw text,
+comments included, merely CONTAINED COMMIT / ROLLBACK / START TRANSACTION
+("autocommit", "implicit commit", a column `committed_count`) — silently, while
+db_version still advanced. That, not MariaDB dropping DDL inside a transaction,
+is why columns went missing after "successful" migrations. Databases migrated
+before 5.0 may still lack those statements: apiSchemaAudit reports them as
+legacy_runner_skipped, and repair them with a NEW idempotent migration
+(ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS). Core's repair is main/5.0.
+Keep those words out of migration comments anyway — older cores are still deployed
+until each app redeploys.
 
 Do NOT wrap migrations in START TRANSACTION / COMMIT. The migration runner
 manages transactions automatically via PDO beginTransaction()/commit().

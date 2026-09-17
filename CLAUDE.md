@@ -75,11 +75,17 @@ information_schema, for core main + shards and every sibling child app
 (public_html/<dir>/db_migrations + config/config.php) main + shards. READ-ONLY.
 Per DB: drift (missing tables/columns/indexes, narrower types, ENUM values
 missing), info (extra tables/columns, wider types), uncertain (tables touched by
-an unparsed statement), and per migration set: unparsed + runner_skipped.
-  runner_skipped = statements run_migration() silently skips because their text,
-  COMMENTS INCLUDED, contains COMMIT / ROLLBACK / START TRANSACTION (e.g. the words
-  "autocommit", "committed", or a column `committed_count`). The ledger is still
-  bumped. This is what dropped ContactSwipe cs_import_batch and cs_reminder.origin.
+an unparsed statement), and per migration set: unparsed + runner_skipped +
+legacy_runner_skipped.
+  legacy_runner_skipped = statements the PRE-5.0 run_migration() silently skipped
+  because their text, COMMENTS INCLUDED, contained COMMIT / ROLLBACK / START
+  TRANSACTION (e.g. "autocommit", "committed", a column `committed_count`) while
+  the ledger still bumped. This is what dropped ContactSwipe cs_import_batch and
+  cs_reminder.origin. Drift rows they explain carry legacy_runner_skipped: true.
+  Fixed in core 5.0 (runner skips only exact transaction control, logged);
+  repair already-migrated DBs with a new idempotent migration (core: main/5.0).
+  runner_skipped = what the CURRENT runner skips beyond transaction control;
+  always expected empty.
 
 ## Shard routing architecture
 Main DB (wncore_main): auth only. user table holds user_id, email,

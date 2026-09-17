@@ -35,6 +35,83 @@ function get_available_migrations($db_type, $base_dir = null) {
 }
 
 /**
+ * Strip SQL comments (dash-dash, hash, slash-star block) outside quoted strings/identifiers.
+ * Used only to DECIDE whether a fragment is skipped; the original fragment
+ * (comments included) is what gets executed.
+ */
+function wn_migration_strip_comments($sql) {
+    $out = '';
+    $n = strlen($sql);
+    $q = null;
+    for ($i = 0; $i < $n; $i++) {
+        $c = $sql[$i];
+        if ($q !== null) {
+            $out .= $c;
+            if ($c === '\\' && $q !== '`' && $i + 1 < $n) { $out .= $sql[++$i]; continue; }
+            if ($c === $q) {
+                if ($i + 1 < $n && $sql[$i + 1] === $q) { $out .= $sql[++$i]; continue; }
+                $q = null;
+            }
+            continue;
+        }
+        if ($c === "'" || $c === '"' || $c === '`') { $q = $c; $out .= $c; continue; }
+        if ($c === '-' && $i + 1 < $n && $sql[$i + 1] === '-'
+            && ($i + 2 >= $n || ctype_space($sql[$i + 2]))) {
+            while ($i < $n && $sql[$i] !== "\n") $i++;
+            $out .= "\n";
+            continue;
+        }
+        if ($c === '#') {
+            while ($i < $n && $sql[$i] !== "\n") $i++;
+            $out .= "\n";
+            continue;
+        }
+        if ($c === '/' && $i + 1 < $n && $sql[$i + 1] === '*') {
+            $end = strpos($sql, '*/', $i + 2);
+            $i = ($end === false) ? $n : $end + 1;
+            $out .= ' ';
+            continue;
+        }
+        $out .= $c;
+    }
+    return $out;
+}
+
+/**
+ * Why run_migration() skips a split fragment, or null to execute it.
+ *
+ * Only a fragment that is, once comments are stripped, EXACTLY a transaction
+ * control statement (START TRANSACTION / BEGIN / COMMIT / ROLLBACK, optional
+ * WORK and semicolon, any whitespace/case) is skipped — the runner manages the
+ * transaction itself. Comment-only fragments are skipped too (MySQL rejects an
+ * empty query).
+ *
+ * Before core 5.0 this was a substring test on the RAW fragment, so any
+ * statement whose comments or identifiers merely contained those words
+ * (a column `committed_count`, a comment about implicit commits) was silently
+ * dropped while db_version still advanced. core main/5.0 and the child-app
+ * repair migrations re-apply what that dropped.
+ *
+ * @param string $stmt
+ * @return string|null
+ */
+function wn_migration_skip_reason($stmt) {
+    $plain = trim(wn_migration_strip_comments((string)$stmt));
+    $plain = trim(rtrim($plain, ';'));
+    if ($plain === '') return 'comment-only';
+    if (preg_match('/^(START\s+TRANSACTION|BEGIN(\s+WORK)?|COMMIT(\s+WORK)?|ROLLBACK(\s+WORK)?)$/i', $plain, $m)) {
+        return 'transaction control: ' . strtoupper(preg_replace('/\s+/', ' ', $m[1]));
+    }
+    return null;
+}
+
+/** One-line, length-capped statement text for logs. */
+function wn_migration_snippet($stmt, $len = 120) {
+    $s = preg_replace('/\s+/', ' ', trim(wn_migration_strip_comments((string)$stmt)));
+    return strlen($s) > $len ? substr($s, 0, $len) . '...' : $s;
+}
+
+/**
  * Run a single migration file on a PDO connection.
  *
  * @param PDO    $conn
@@ -69,10 +146,13 @@ function run_migration($conn, $file, $type, $version) {
             $stmt = trim($stmt);
             if (!$stmt) continue;
 
-            $upper = strtoupper($stmt);
-            if (strpos($upper, 'START TRANSACTION') !== false) continue;
-            if (strpos($upper, 'COMMIT') !== false) continue;
-            if (strpos($upper, 'ROLLBACK') !== false) continue;
+            $skip = wn_migration_skip_reason($stmt);
+            if ($skip !== null) {
+                if ($skip !== 'comment-only') {
+                    error_log("Migration $type/$version: skipping statement ($skip): " . wn_migration_snippet($stmt));
+                }
+                continue;
+            }
 
             try {
                 $conn->exec($stmt);
