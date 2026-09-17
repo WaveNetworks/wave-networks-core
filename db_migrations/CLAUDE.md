@@ -35,6 +35,12 @@ run_migration($conn, $file, $type, $version)
   — on failure: rollback + $_SESSION['error'] (does not block login); the core
     main/shard loops stop at the failed file so a later one can't bump past it
 
+wn_migrate_pending() is the one loop (core main, core shards, and every child app
+via wn_child_migrate() / wn_child_migrate_shards()): ordered versions, STOP at the
+first failure, record it (wn_migration_failure($scope); apiSchemaAudit shows it as
+migration_failure) and clear it once the database reaches its target. A declared
+target with no file reaching it is recorded as a failure too (code no_file).
+
 Migrations run on EVERY page load (not cached per session).
 Each migration runs only when current_db_version < target_version.
 Concurrent logins are safe — transaction isolation prevents double-apply.

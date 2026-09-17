@@ -86,6 +86,10 @@ legacy_runner_skipped.
   repair already-migrated DBs with a new idempotent migration (core: main/5.0).
   runner_skipped = what the CURRENT runner skips beyond transaction control;
   always expected empty.
+  migration_failure = the loop (wn_migrate_pending) stopped at this failed file;
+  the ledger stays at the last success. Child apps call it through
+  wn_child_migrate()/wn_child_migrate_shards() and declare targets once in
+  include/migration_versions.php (the audit reads that file first).
 
 ## Shard routing architecture
 Main DB (wncore_main): auth only. user table holds user_id, email,

@@ -11,6 +11,10 @@
  *   only         — substring filter on the database label, e.g. "contactsweep/shard"
  *   include_info — 0 to omit informational findings (extra tables/columns, wider types)
  *
+ * A database whose migration loop stopped at a failed file carries
+ * migration_failure {migration, version, file, code, error, at} (cleared once it
+ * reaches its target); summary.migration_failures counts them.
+ *
  * Never returns hosts, users or passwords; a connection failure reports only its code.
  */
 
@@ -21,6 +25,7 @@ if (($action ?? null) == 'apiSchemaAudit') {
         $data['audit'] = schema_audit_run($only, $include_info);
         $s = $data['audit']['summary'];
         $_SESSION['success'] = "Audited {$s['databases']} database(s): {$s['drift']} with drift, "
-            . "{$s['uncertain_only']} uncertain, {$s['errors']} unreadable.";
+            . "{$s['uncertain_only']} uncertain, {$s['errors']} unreadable, "
+            . ($s['migration_failures'] ?? 0) . " with a failed migration.";
     }
 }

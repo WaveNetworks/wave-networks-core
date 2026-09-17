@@ -259,6 +259,7 @@ function check_and_migrate_main_db() {
 
     $current = get_current_db_version($db);
     if ($current >= $db_version) {
+        wn_migration_clear_failure('main');
         _wn_migration_flag_set('main', $db_version);
         return;
     }
@@ -266,20 +267,11 @@ function check_and_migrate_main_db() {
     // Determine migration directory
     $base_dir = defined('APP_MIGRATION_DIR') ? APP_MIGRATION_DIR : (__DIR__ . '/../../db_migrations/');
 
-    $available = get_available_migrations('main', $base_dir);
-    foreach ($available as $ver) {
-        if ($ver <= $current) continue;
-        if ($ver > $db_version) break;
+    // Stops at the first failure (a later file would otherwise bump db_version
+    // past the failed one, and the ledger never re-runs it) and records it.
+    $r = wn_migrate_pending($db, 'main', $current, $db_version, $base_dir, 'main', 'main');
 
-        $file = rtrim($base_dir, '/') . '/main/' . number_format($ver, 1, '.', '') . '.sql';
-        if (!file_exists($file)) continue;
-
-        // Stop at the first failure: a later file would otherwise bump db_version
-        // past the failed one, and the ledger never re-runs it.
-        if (!run_migration($db, $file, 'main', $ver)) break;
-    }
-
-    if (get_current_db_version($db) >= $db_version) {
+    if ($r['reached']) {
         _wn_migration_flag_set('main', $db_version);
     }
 }
@@ -349,21 +341,15 @@ function check_and_migrate_all_shards($budget = null) {
 
         $current = get_current_db_version($conn);
         if ($current >= $shard_version) {
+            wn_migration_clear_failure($scope);
             _wn_migration_flag_set($scope, $shard_version);
             continue;
         }
 
-        foreach ($available as $ver) {
-            if ($ver <= $current) continue;
-            if ($ver > $shard_version) break;
+        // Never skips past a failure; the failure is recorded under the shard's scope.
+        $r = wn_migrate_pending($conn, 'shard', $current, $shard_version, $base_dir, "shard/$shard_id", $scope);
 
-            $file = rtrim($base_dir, '/') . '/shard/' . number_format($ver, 1, '.', '') . '.sql';
-            if (!file_exists($file)) continue;
-
-            if (!run_migration($conn, $file, "shard/$shard_id", $ver)) break;  // never skip past a failure
-        }
-
-        if (get_current_db_version($conn) >= $shard_version) {
+        if ($r['reached']) {
             _wn_migration_flag_set($scope, $shard_version);
         } else {
             $all_at_target = false;
@@ -371,4 +357,223 @@ function check_and_migrate_all_shards($budget = null) {
     }
 
     if ($all_at_target) _wn_migration_flag_set('shards', $shard_version);
+}
+
+
+// ─── SHARED LOOP + FAILURE RECORD ───────────────────────────────────────────
+
+/**
+ * Where the last failed migration for a scope is recorded. A small JSON file
+ * beside the "migrated" flags (same temp dir, same $dbInstance namespace) so the
+ * schema audit — which runs in the admin API on the same host — can report it
+ * without a table of its own. Cleared once that scope reaches its target.
+ */
+function _wn_migration_fail_path($scope) {
+    global $dbInstance;
+    $instance = preg_replace('/[^a-zA-Z0-9_-]/', '_', (string)($dbInstance ?? 'default'));
+    $scope    = preg_replace('/[^a-zA-Z0-9_-]/', '_', (string)$scope);
+    return rtrim(sys_get_temp_dir(), '/') . "/wncore_migfail_{$instance}_{$scope}.json";
+}
+
+/** Record a failure: version, file, MySQL code, message (credentials stripped), time. */
+function wn_migration_record_failure($scope, $label, $version, $file, $error, $code = '') {
+    $error = preg_replace("/'[^']*'@'[^']*'/", "'***'@'***'", (string)$error);
+    $rec = ['scope' => (string)$scope, 'migration' => $label . '/' . number_format((float)$version, 1, '.', ''),
+            'version' => number_format((float)$version, 1, '.', ''), 'file' => basename((string)$file),
+            'code' => (string)$code, 'error' => substr($error, 0, 500), 'at' => gmdate('c')];
+    @file_put_contents(_wn_migration_fail_path($scope), json_encode($rec));
+    return $rec;
+}
+
+function wn_migration_clear_failure($scope) {
+    $p = _wn_migration_fail_path($scope);
+    if (is_file($p)) @unlink($p);
+}
+
+/** The recorded failure for a scope, or null. */
+function wn_migration_failure($scope) {
+    $p = _wn_migration_fail_path($scope);
+    if (!is_file($p)) return null;
+    $j = json_decode((string)@file_get_contents($p), true);
+    return is_array($j) ? $j : null;
+}
+
+/**
+ * Optional pre-step sidecar: <version>.pre.sql beside <version>.sql, executed in
+ * autocommit immediately before that file, only when that file is about to run.
+ * For a migration that assumes an object which, historically, only PHP setup code
+ * created (e.g. Primo Dollar main/1.7 alters primodollar_email_subscribers), so a
+ * FRESH database can replay the set without rewriting an already-applied file.
+ * Must be idempotent (CREATE TABLE IF NOT EXISTS …). Not a ledger entry: the
+ * name does not match /^\d+\.\d+\.sql$/, so the older loops and the audit ignore it.
+ *
+ * @return true|array  true, or [error message, mysql code]
+ */
+function wn_migration_run_prestep($conn, $pre_file, $label, $version) {
+    if (!is_file($pre_file)) return true;
+    $sql = file_get_contents($pre_file);
+    if ($sql === false) return ["Migration $label/$version pre-step: cannot read file", ''];
+    foreach (preg_split('/;\s*[\r\n]+/', $sql) as $stmt) {
+        $stmt = trim($stmt);
+        if ($stmt === '' || wn_migration_skip_reason($stmt) !== null) continue;
+        try {
+            $conn->exec($stmt);
+        } catch (PDOException $e) {
+            $code = isset($e->errorInfo[1]) ? (string)$e->errorInfo[1] : '';
+            if (in_array($code, ['1050', '1060', '1061', '1091'], true)) continue;
+            $msg = "Migration $label/$version pre-step failed: " . $e->getMessage();
+            $_SESSION['error'] = $msg;
+            error_log($msg);
+            return [$msg, $code];
+        }
+    }
+    return true;
+}
+
+/**
+ * Run every migration file in ($current, $target] in version order, STOPPING at
+ * the first failure. The ledger (db_version) is bumped per file by
+ * run_migration(), so after a failure it stays at the last success and the
+ * failed file re-runs on the next request (all files are idempotent-on-rerun via
+ * run_migration's 1050/1060/1061/1091 handling). Also records a failure when the
+ * files run out below $target (a version constant declared ahead of its file).
+ *
+ * @return array ['from','to','applied'=>[versions],'failed'=>record|null,'reached'=>bool]
+ */
+function wn_migrate_pending($conn, $db_type, $current, $target_version, $base_dir, $label, $scope) {
+    $out = ['from' => (float)$current, 'to' => (float)$current, 'applied' => [], 'failed' => null, 'reached' => false];
+    foreach (get_available_migrations($db_type, $base_dir) as $ver) {
+        if ($ver <= $current) continue;
+        if ($ver > $target_version) break;
+
+        $file = rtrim($base_dir, '/') . '/' . $db_type . '/' . number_format($ver, 1, '.', '') . '.sql';
+        if (!file_exists($file)) continue;
+
+        $pre = wn_migration_run_prestep($conn, substr($file, 0, -4) . '.pre.sql', $label, $ver);
+        if ($pre !== true) {
+            $out['failed'] = wn_migration_record_failure($scope, $label, $ver, substr($file, 0, -4) . '.pre.sql', $pre[0], $pre[1]);
+            error_log("Migration loop $label: pre-step for " . number_format($ver, 1, '.', '') . " failed — stopped");
+            return $out;
+        }
+        if (!run_migration($conn, $file, $label, $ver)) {
+            $err  = $_SESSION['error'] ?? "Migration $label/$ver failed";
+            $code = preg_match('/SQLSTATE\[\w+\]: [^:]*: (\d+)/', (string)$err, $m) ? $m[1] : '';
+            $out['failed'] = wn_migration_record_failure($scope, $label, $ver, $file, $err, $code);
+            error_log("Migration loop $label: stopped at " . number_format($ver, 1, '.', '')
+                . " — later migrations wait until it succeeds (ledger stays at " . number_format($out['to'], 1, '.', '') . ")");
+            return $out;
+        }
+        $out['applied'][] = $ver;
+        $out['to'] = $ver;
+    }
+    $now = get_current_db_version($conn);
+    $out['to'] = $now;
+    if ($now >= $target_version) {
+        $out['reached'] = true;
+        wn_migration_clear_failure($scope);
+    } else {
+        $out['failed'] = wn_migration_record_failure($scope, $label, $target_version, '',
+            "Declared target " . number_format((float)$target_version, 1, '.', '') . " but no $db_type migration file reaches it (ledger "
+            . number_format($now, 1, '.', '') . ")", 'no_file');
+    }
+    return $out;
+}
+
+// ─── CHILD-APP API ──────────────────────────────────────────────────────────
+//
+// The ONE child-app migration loop. Every child app's appMigrationFunctions.php
+// wraps these (function_exists) and keeps a stop-on-failure fallback for an
+// older core. Apps declare their targets once, in include/migration_versions.php
+// ($child_db_version / $child_shard_version), which every bootstrap includes.
+
+/**
+ * Flag/failure scope for one child database. Keyed on the app's migrations
+ * directory (realpath), not its slug: the schema audit discovers apps by
+ * webroot directory and must derive the same key, and the slug and the
+ * webroot can differ (ContactSwipe = contactswipe served from contactsweep/).
+ */
+function wn_child_migration_scope($base_dir, $db_type, $shard_id = null) {
+    $real = realpath($base_dir);
+    $key  = rtrim($real !== false ? $real : (string)$base_dir, '/');
+    $s = 'child_' . substr(md5($key), 0, 12) . '_' . $db_type;
+    if ($shard_id !== null) $s .= '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', (string)$shard_id);
+    return $s;
+}
+
+/**
+ * Migrate one child database ('main' or one shard) to $target_version.
+ *
+ * Idempotent and cheap at steady state: a per-scope, per-target temp flag skips
+ * even the version read once the database is confirmed current.
+ *
+ * @param PDO    $conn
+ * @param string $db_type         'main' or 'shard'
+ * @param float  $target_version
+ * @param string $base_dir        the app's db_migrations/ directory
+ * @param array  $opts            shard_id (for shards), label
+ * @return array  wn_migrate_pending() result, or ['status' => 'current']
+ */
+function wn_child_migrate($conn, $db_type, $target_version, $base_dir, $opts = []) {
+    $shard_id = $opts['shard_id'] ?? null;
+    $scope = wn_child_migration_scope($base_dir, $db_type, $shard_id);
+    if (_wn_migration_flag_exists($scope, $target_version)) return ['status' => 'current', 'reached' => true, 'failed' => null];
+
+    $current = get_current_db_version($conn);
+    if ($current >= $target_version) {
+        wn_migration_clear_failure($scope);
+        _wn_migration_flag_set($scope, $target_version);
+        return ['status' => 'current', 'reached' => true, 'failed' => null];
+    }
+
+    $label = $opts['label'] ?? ($shard_id !== null ? "child-shard/$shard_id" : "child-$db_type");
+    $r = wn_migrate_pending($conn, $db_type, $current, $target_version, $base_dir, $label, $scope);
+    if ($r['reached']) _wn_migration_flag_set($scope, $target_version);
+    $r['status'] = $r['failed'] ? 'failed' : 'migrated';
+    return $r;
+}
+
+/**
+ * Migrate every configured child shard. Per-shard flags + a per-request
+ * connection budget (WN_SHARD_MIGRATE_BUDGET, default 3; 0 = unlimited), same
+ * reasoning as check_and_migrate_all_shards(). Each shard stops at its own
+ * first failure; other shards still migrate.
+ *
+ * @param array    $shard_configs  [$shard_id => cfg] ($childShardConfigs)
+ * @param callable $prime          fn($shard_id): PDO|false (child_prime_shard)
+ * @return array   [$shard_id => result]
+ */
+function wn_child_migrate_shards($shard_configs, $prime, $target_version, $base_dir, $budget = null) {
+    $results = [];
+    if (empty($shard_configs)) return $results;
+
+    $all_scope = wn_child_migration_scope($base_dir, 'shards');
+    if (_wn_migration_flag_exists($all_scope, $target_version)) return $results;
+
+    if (!get_available_migrations('shard', $base_dir)) {
+        _wn_migration_flag_set($all_scope, $target_version);
+        return $results;
+    }
+
+    $budget = ($budget === null)
+        ? (defined('WN_SHARD_MIGRATE_BUDGET') ? (int)WN_SHARD_MIGRATE_BUDGET : 3)
+        : (int)$budget;
+    $spent = 0;
+    $all_at_target = true;
+
+    foreach ($shard_configs as $shard_id => $cfg) {
+        $scope = wn_child_migration_scope($base_dir, 'shard', $shard_id);
+        if (_wn_migration_flag_exists($scope, $target_version)) continue;
+
+        if ($budget > 0 && $spent >= $budget) { $all_at_target = false; break; }
+        $spent++;
+
+        $conn = call_user_func($prime, $shard_id);
+        if (!$conn) { $all_at_target = false; continue; }
+
+        $results[$shard_id] = $r = wn_child_migrate($conn, 'shard', $target_version, $base_dir, ['shard_id' => $shard_id]);
+        if (empty($r['reached'])) $all_at_target = false;
+    }
+
+    if ($all_at_target) _wn_migration_flag_set($all_scope, $target_version);
+    return $results;
 }

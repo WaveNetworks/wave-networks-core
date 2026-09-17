@@ -1003,10 +1003,14 @@ function schema_audit_child_config_targets($file) {
     return $out;
 }
 
-/** Read `$child_db_version = X;` style constants from a child bootstrap file. */
+/**
+ * Read `$child_db_version = X;` style constants. include/migration_versions.php is
+ * the single declaration every bootstrap includes; older apps still declare in
+ * common.php / common_api.php, and any copy left there is reported if it differs.
+ */
 function schema_audit_child_version($dir, $var) {
     $vals = [];
-    foreach (['include/common.php', 'include/common_api.php'] as $rel) {
+    foreach (['include/migration_versions.php', 'include/common.php', 'include/common_api.php'] as $rel) {
         $src = @file_get_contents(rtrim($dir, '/') . '/' . $rel);
         if ($src !== false && preg_match('/\$' . preg_quote($var, '/') . '\s*=\s*([0-9]+\.[0-9]+)\s*;/', $src, $m)) {
             $vals[$rel] = (float)$m[1];
@@ -1027,13 +1031,14 @@ function schema_audit_targets() {
 
     $targets[] = ['label' => 'core/main', 'layer' => 'core', 'app' => 'admin', 'role' => 'main',
         'shard_id' => null, 'conn' => null, 'dir' => $core_dir, 'db_type' => 'main',
-        'target' => isset($db_version) ? (float)$db_version : null];
+        'target' => isset($db_version) ? (float)$db_version : null, 'fail_scope' => 'main'];
     foreach ((array)($shardConfigs ?? []) as $id => $cfg) {
         if (empty($cfg['name'])) continue;
         $targets[] = ['label' => "core/shard/$id", 'layer' => 'core', 'app' => 'admin', 'role' => 'shard',
             'shard_id' => (string)$id, 'conn' => ['host' => ($cfg['host'] ?? '') ?: 'localhost', 'name' => $cfg['name'],
                 'user' => $cfg['user'] ?? '', 'pass' => $cfg['pass'] ?? ''], 'dir' => $core_dir,
-            'db_type' => 'shard', 'target' => isset($shard_version) ? (float)$shard_version : null];
+            'db_type' => 'shard', 'target' => isset($shard_version) ? (float)$shard_version : null,
+            'fail_scope' => function_exists('_wn_shard_flag_scope') ? _wn_shard_flag_scope($id) : null];
     }
 
     $webroot = dirname(__DIR__, 3);   // public_html/ (admin/ is a child)
@@ -1057,7 +1062,8 @@ function schema_audit_targets() {
 
         if ($cfg['main']) {
             $targets[] = ['label' => "$app/main", 'layer' => 'child', 'app' => $app, 'role' => 'main',
-                'shard_id' => null, 'conn' => $cfg['main'], 'dir' => $mdir, 'db_type' => 'main', 'target' => $mt];
+                'shard_id' => null, 'conn' => $cfg['main'], 'dir' => $mdir, 'db_type' => 'main', 'target' => $mt,
+                'fail_scope' => function_exists('wn_child_migration_scope') ? wn_child_migration_scope($mdir, 'main') : null];
         }
         $shards = $cfg['shards'];
         // Registry rows for this child (shard console). The child runtime migrates
@@ -1074,7 +1080,10 @@ function schema_audit_targets() {
         }
         foreach ($shards as $id => $conn) {
             $targets[] = ['label' => "$app/shard/$id", 'layer' => 'child', 'app' => $app, 'role' => 'shard',
-                'shard_id' => (string)$id, 'conn' => $conn, 'dir' => $mdir, 'db_type' => 'shard', 'target' => $st];
+                'shard_id' => (string)$id, 'conn' => $conn, 'dir' => $mdir, 'db_type' => 'shard', 'target' => $st,
+                // Registry-only shards are never migrated by the child runtime, so they carry no failure record.
+                'fail_scope' => (function_exists('wn_child_migration_scope') && strpos((string)$id, 'registry:') !== 0)
+                    ? wn_child_migration_scope($mdir, 'shard', $id) : null];
         }
     }
     return [$targets, $notes];
@@ -1091,7 +1100,7 @@ function schema_audit_run($only = '', $include_info = true) {
     $sets = [];
     $models = [];
     $dbs = [];
-    $summary = ['databases' => 0, 'ok' => 0, 'drift' => 0, 'uncertain_only' => 0, 'errors' => 0];
+    $summary = ['databases' => 0, 'ok' => 0, 'drift' => 0, 'uncertain_only' => 0, 'errors' => 0, 'migration_failures' => 0];
 
     foreach ($targets as $tg) {
         if ($only !== '' && stripos($tg['label'], $only) === false) continue;
@@ -1102,6 +1111,12 @@ function schema_audit_run($only = '', $include_info = true) {
                 'shard_id' => $tg['shard_id'], 'db_name' => null, 'migration_set' => $set_key,
                 'ledger_version' => null, 'target_version' => $tg['target'],
                 'latest_migration_file' => $files ? (float)schema_audit_last_key($files) : null];
+        // The migration loop stops at a failed file and records it (migrationFunctions.php).
+        if (!empty($tg['fail_scope']) && function_exists('wn_migration_failure')
+            && ($fail = wn_migration_failure($tg['fail_scope'])) !== null) {
+            $row['migration_failure'] = $fail;
+            $summary['migration_failures']++;
+        }
 
         $pdo = null;
         try {

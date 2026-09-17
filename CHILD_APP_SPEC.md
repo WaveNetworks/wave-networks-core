@@ -110,9 +110,9 @@ $child_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 include_once(__DIR__ . '/common/childDBFunctions.php');
 include_once(__DIR__ . '/common/appMigrationFunctions.php');
 
-// 5. Run child app migrations (independent of admin's versions)
-$child_db_version    = 1.0;
-$child_shard_version = 1.0;
+// 5. Run child app migrations (independent of admin's versions).
+//    Targets live ONLY in include/migration_versions.php ($child_db_version / $child_shard_version).
+include(__DIR__ . '/migration_versions.php');
 child_check_and_migrate($child_db, 'main', $child_db_version, __DIR__ . '/../db_migrations/');
 child_check_and_migrate_shards($child_shard_version, __DIR__ . '/../db_migrations/');
 
@@ -184,7 +184,12 @@ Child apps have THREE database layers:
 
 ### Child app migration rules
 - Same two-step rule as core: SQL file + version bump.
-- CRITICAL: update $child_db_version / $child_shard_version in YOUR-APP/include/common.php.
+- CRITICAL: update $child_db_version / $child_shard_version in YOUR-APP/include/migration_versions.php —
+  the ONE declaration; common.php, common_api.php, common_auth.php (and any cron bootstrap) all include it.
+  Never re-declare them in a bootstrap (they drifted: API requests skipped migrations web requests ran).
+- The loop is core's wn_child_migrate() / wn_child_migrate_shards() (migrationFunctions.php), wrapped by the
+  app's child_check_and_migrate*(). It STOPS at the first failed file: the ledger stays at the last success,
+  the failure is recorded (apiSchemaAudit row: migration_failure), and the file re-runs on the next request.
 - Child app versions start at 1.0 and are independent of core's versions.
 - Child app shard migrations run against CHILD'S OWN shard DBs, not admin's.
 - Use CREATE TABLE IF NOT EXISTS (idempotent).
