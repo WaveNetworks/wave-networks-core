@@ -14,7 +14,9 @@
     "phpoffice/phpspreadsheet": "^3.0",
     "robthree/twofactorauth": "^2.0",
     "onelogin/php-saml": "^4.0",
-    "minishlink/web-push": "^9.0"
+    "minishlink/web-push": "^9.0",
+    "robrichards/xmlseclibs": "~3.1.5",
+    "brick/math": "^0.14"
   },
   "config": {
     "platform": { "php": "8.2.0" },
