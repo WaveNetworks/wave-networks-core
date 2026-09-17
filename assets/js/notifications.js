@@ -75,6 +75,7 @@
         });
 
         list.innerHTML = html;
+        watchSeen(list);
 
         // Click handlers
         list.querySelectorAll('[data-notification-id]').forEach(function(el) {
@@ -90,6 +91,80 @@
                     window.location.href = destination;
                 });
             });
+        });
+    }
+
+    // ─── MARK READ WHEN SEEN ─────────────────────────────────────────────────
+    //
+    // An unread notification is marked read once the user has actually seen it in
+    // the open dropdown: at least 60% of its row inside the dropdown's visible area
+    // for SEEN_DWELL ms, while the tab is visible. Only rows that met that bar are
+    // marked, one markNotificationRead per id (never mark-all), so the rows below
+    // the fold of a scrolled dropdown stay unread until they are scrolled to. The
+    // row keeps its unread look for this opening (so the user can tell what was
+    // new); the badge drops straight away and the next opening shows it read.
+    // The POST is quiet: apiPost would toast "Notification marked as read." for
+    // every row the user merely looked at.
+
+    var SEEN_DWELL = 1000;
+    var seenObserver = null;
+    var seenTimers = {};
+    var seenDone = {};
+
+    function markSeenQuietly(notifId) {
+        if (seenDone[notifId]) return;
+        seenDone[notifId] = true;
+        var fd = new FormData();
+        fd.append('action', 'markNotificationRead');
+        fd.append('notification_id', notifId);
+        fetch('../api/index.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(json) {
+                if (json && json.error) { seenDone[notifId] = false; return; }
+                cachedNotifications.forEach(function(n) {
+                    if (String(n.notification_id) === String(notifId)) n.is_read = 1;
+                });
+                var badge = document.getElementById('notifBadge');
+                if (badge && !badge.classList.contains('d-none')) {
+                    var left = (parseInt(badge.textContent, 10) || 0) - 1;
+                    if (badge.textContent !== '99+') updateBadge(left);
+                }
+                document.dispatchEvent(new CustomEvent('wn:notification-read', { detail: { notification_id: notifId } }));
+            })
+            .catch(function() { seenDone[notifId] = false; });
+    }
+
+    function stopWatchingSeen() {
+        if (seenObserver) { seenObserver.disconnect(); seenObserver = null; }
+        Object.keys(seenTimers).forEach(function(id) { clearTimeout(seenTimers[id]); });
+        seenTimers = {};
+    }
+
+    function watchSeen(list) {
+        stopWatchingSeen();
+        var menu = document.getElementById('notifDropdown') || list.closest('.dropdown-menu');
+        if (!menu || !menu.classList.contains('show') || !('IntersectionObserver' in window)) return;
+
+        seenObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                var id = entry.target.getAttribute('data-notification-id');
+                if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+                    if (seenTimers[id]) return;
+                    seenTimers[id] = setTimeout(function() {
+                        delete seenTimers[id];
+                        if (!document.hidden && menu.classList.contains('show')) markSeenQuietly(id);
+                    }, SEEN_DWELL);
+                } else if (seenTimers[id]) {
+                    clearTimeout(seenTimers[id]);
+                    delete seenTimers[id];
+                }
+            });
+        }, { root: menu, threshold: [0, 0.6, 1] });
+
+        cachedNotifications.forEach(function(n) {
+            if (n.is_read === '1' || n.is_read === 1) return;
+            var el = list.querySelector('[data-notification-id="' + n.notification_id + '"]');
+            if (el) seenObserver.observe(el);
         });
     }
 
@@ -141,6 +216,13 @@
                 renderDropdown();
             });
         });
+        // show.bs.dropdown fires before the menu has .show; if the list came back
+        // first, start watching once it is actually open.
+        dropdown.addEventListener('shown.bs.dropdown', function() {
+            var list = document.getElementById('notifList');
+            if (list && !seenObserver && list.querySelector('[data-notification-id]')) watchSeen(list);
+        });
+        dropdown.addEventListener('hide.bs.dropdown', stopWatchingSeen);
     }
 
     // ─── PUSH SUBSCRIPTION ──────────────────────────────────────────────────
