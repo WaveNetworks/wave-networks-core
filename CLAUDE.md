@@ -654,6 +654,13 @@ Child apps build their own Privacy & Data UI (views/privacy.php) calling
 the shared helper functions. Child apps add app-specific data to exports
 (items, preferences, history) on top of admin's build_export_data() base.
 
+**Schema drift watches itself.** `cron/minutes/60/schema_audit.php` runs `schema_audit_run()`
+once a day over core main + shards and every child app on the deployment (the same engine as
+the `apiSchemaAudit` API action), writes the summary to `cron_log` (`job = schema_audit`, read
+with the `listCronRuns` admin action) and, when a database drifts, is unreadable or has a
+failed migration, writes an ERROR to the error log where admin and monitoring already look. A
+"table doesn't exist" line in an application log should no longer be how drift is discovered.
+
 **Erasing a user's child-app data (every child app with per-user rows must do this).**
 Users are deleted from admin (deleteUser), from admin's hourly cron (30-day self-delete,
 cron/minutes/60/process_account_deletions.php) and similar paths that never load a child

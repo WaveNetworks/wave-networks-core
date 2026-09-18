@@ -120,6 +120,29 @@ if (($action ?? null) == 'editUser') {
     }
 }
 
+// ─── CRON RUNS (admin read) ──────────────────────────────────────────────────
+// cron_log had no reader, so a scheduled job's result (the daily schema audit, the
+// account-deletion sweep) could only be seen on the server. Admin session.
+
+if (($action ?? null) == 'listCronRuns') {
+    $errs = array();
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))    { $errs['auth'] = 'Admin access required.'; }
+    if (count($errs) <= 0) {
+        $limit = min(200, max(1, (int) ($_POST['limit'] ?? 50)));
+        $job   = trim((string) ($_POST['job'] ?? ''));
+        $rows  = [];
+        $r = $job !== ''
+            ? db_query_prepared("SELECT job, ran_at, result FROM cron_log WHERE job LIKE ? ORDER BY ran_at DESC LIMIT $limit", ['%' . $job . '%'])
+            : db_query("SELECT job, ran_at, result FROM cron_log ORDER BY ran_at DESC LIMIT $limit");
+        while ($r && ($row = db_fetch($r))) { $rows[] = $row; }
+        $data['items'] = $rows;
+        $_SESSION['success'] = 'OK';
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
 // ─── USER DELETION EVENTS (admin read) ───────────────────────────────────────
 // Which erased users each child app has purged (gdprFunctions: user_deletion_event).
 // Ids and statuses only — the users are gone. Admin session.
