@@ -269,10 +269,12 @@ if (!function_exists('record_user_deletion_event')) {
         $uid = (int) $user_id;
         if ($uid <= 0) return 0;
         try {
-            db_query_prepared(
+            $ins = db_query_prepared(
                 "INSERT IGNORE INTO user_deletion_event (user_id, shard_id, source) VALUES (?, ?, ?)",
                 [$uid, $shard_id !== null && $shard_id !== '' ? (string) $shard_id : null, substr((string) $source, 0, 32)]
             );
+            // Whether this call is what recorded it, so a reconcile can report new events only.
+            $GLOBALS['_user_deletion_event_inserted'] = $ins ? ($ins->rowCount() > 0) : false;
             $r = db_query_prepared("SELECT event_id FROM user_deletion_event WHERE user_id = ?", [$uid]);
             $row = $r ? db_fetch($r) : null;
             return $row ? (int) $row['event_id'] : 0;
@@ -300,7 +302,10 @@ if (!function_exists('record_missing_user_deletions')) {
             $live = [];
             while ($r && ($row = db_fetch($r))) $live[(int) $row['user_id']] = true;
             foreach ($chunk as $uid) {
-                if (!isset($live[$uid]) && record_user_deletion_event($uid, null, $source) > 0) $n++;
+                if (isset($live[$uid])) continue;
+                // Count only the ones this run actually recorded; an event already on file is
+                // not news, and a reconcile that reports it every few minutes reads like a loop.
+                if (record_user_deletion_event($uid, null, $source) > 0 && !empty($GLOBALS['_user_deletion_event_inserted'])) $n++;
             }
         }
         return $n;
