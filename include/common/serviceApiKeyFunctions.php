@@ -239,14 +239,21 @@ function get_service_api_keys() {
 function require_api_scope($scope) {
     global $_SERVICE_API_KEY;
 
+    // A refusal is never silent, and never a 200: a caller must be able to tell
+    // "this key may not do that" from "there was nothing to return" (2026-09-18).
+    // The message names the scope the key needs and nothing else — not the key, not
+    // the scopes it does hold, not who owns it.
     if (!$_SERVICE_API_KEY) {
-        $_SESSION['error'] = 'Service API key required.';
+        $_SESSION['error'] = "This endpoint needs a service API key with the $scope scope. "
+            . 'Send it as: Authorization: Bearer wn_sk_…';
+        if (!headers_sent() && http_response_code() < 400) { http_response_code(401); }
         return false;
     }
 
     $scopes = json_decode($_SERVICE_API_KEY['scopes'], true) ?: [];
     if (!in_array($scope, $scopes)) {
-        $_SESSION['error'] = "Missing required scope: $scope";
+        $_SESSION['error'] = "Missing required scope: $scope — this API key does not carry it.";
+        if (!headers_sent() && http_response_code() < 400) { http_response_code(403); }
         return false;
     }
 

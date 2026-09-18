@@ -37,6 +37,12 @@ jobs:
         run: php scripts/clock-probe.php
         working-directory: admin
 
+      # A refusal must be visible: an under-scoped key gets 403 naming the scope, an action this
+      # deployment does not have gets 404 by name — never the same empty 200 as "nothing found".
+      - name: Check the API envelope (no silent refusal)
+        run: php scripts/api-envelope-probe.php
+        working-directory: admin
+
       - name: Prepare deploy staging
         run: |
           mkdir -p staging/admin

@@ -654,6 +654,15 @@ Child apps build their own Privacy & Data UI (views/privacy.php) calling
 the shared helper functions. Child apps add app-specific data to exports
 (items, preferences, history) on top of admin's build_export_data() base.
 
+**An API refusal is never silent.** `require_api_scope()` answers 401 when there is no service
+key and 403 when the key lacks the scope, naming the scope (never the key), and `api/index.php`
+keeps that status instead of flattening it to 400. An action name the deployment does not
+dispatch is refused by name with 404 (`wn_refuse_unknown_action()` in
+`include/common/apiDispatchFunctions.php`, reading the same action files the glob includes).
+Before 2026-09-18 both cases answered `200 {"error":"","results":[]}` — identical to "nothing
+found", which is how a fleet-wide check passed on apps it never ran on. `scripts/api-envelope-probe.php`
+(in the deploy, portable with `--root`) holds every endpoint to it.
+
 **One clock: UTC.** PHP runs in UTC (`date_default_timezone_set('UTC')` in `include/bootstrap.php`
 and `common_readonly.php`) and every database connection is opened with
 `PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"`, so `NOW()`, `CURRENT_TIMESTAMP`,
