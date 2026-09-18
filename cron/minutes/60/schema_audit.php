@@ -20,18 +20,20 @@ if (!function_exists('schema_audit_run')) {
     return;
 }
 
-// Day guard: one audit per calendar day, whichever hourly run gets there first.
-$ran_today = false;
+// Once a day, whichever hourly run gets there first. Measured as "a run in the last 20 hours",
+// not "a row dated today": a calendar comparison breaks at a clock change (the UTC move on
+// 2026-09-18 left a row stamped an hour in the future, which would have blocked a whole day)
+// and at every midnight edge. A row stamped in the future never blocks.
+$last = 0;
 if (function_exists('get_cron_logs')) {
-    foreach (get_cron_logs(200) as $row) {
-        if (($row['job'] ?? '') === 'schema_audit' && substr((string) ($row['ran_at'] ?? ''), 0, 10) === date('Y-m-d')) {
-            $ran_today = true;
-            break;
-        }
+    foreach (get_cron_logs(300) as $row) {
+        if (($row['job'] ?? '') !== 'schema_audit') continue;
+        $t = strtotime((string) ($row['ran_at'] ?? ''));
+        if ($t && $t <= time() && $t > $last) $last = $t;
     }
 }
-if ($ran_today && empty($GLOBALS['schema_audit_force'])) {
-    echo "    schema audit: already run today.\n";
+if ($last && (time() - $last) < 20 * 3600 && empty($GLOBALS['schema_audit_force'])) {
+    echo "    schema audit: ran " . round((time() - $last) / 3600, 1) . "h ago, skipping.\n";
     return;
 }
 
