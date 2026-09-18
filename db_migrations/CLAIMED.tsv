@@ -1,0 +1,56 @@
+# Every migration version this app has ever claimed, oldest first.
+#
+# One line per file: <family>/<version><TAB><what it is>. Claiming a version is a change to
+# this SHARED file, so two changes taking the same number collide in git instead of one
+# silently winning, and a .sql dropped by a rebase leaves its line behind for
+# scripts/migration-ledger-probe.php to name.
+#
+# Adding a migration: add the .sql AND its line here, and bump the declared version.
+# Never renumber or edit a version that has shipped. A number history never used is
+# recorded as: #gap <family>/<version> <why>
+main/1.0	Migration 1.0 - wave-networks-core Main Database
+main/1.1	Migration 1.1 for Main Database
+main/1.2	Migration 1.2 for Main Database
+main/1.3	Migration 1.3 for Main Database
+main/1.4	Migration 1.4 for Main Database
+main/1.5	Migration 1.5 for Main Database
+main/1.6	Migration 1.6 for Main Database
+main/1.7	Migration 1.7 for Main Database
+main/1.8	Migration 1.8 for Main Database
+main/1.9	Migration 1.9 for Main Database
+main/2.0	Migration 2.0 for Main Database
+main/2.1	Migration 2.1 for Main Database
+main/2.2	Migration 2.2 for Main Database
+main/2.3	Migration 2.3 for Main Database
+main/2.4	Migration 2.4 for Main Database
+main/2.5	Migration 2.5 for Main Database
+main/2.6	Migration 2.6 for Main Database
+main/2.7	Migration 2.7 for Main Database
+main/2.8	Migration 2.8 for Main Database
+main/2.9	Migration 2.9 for Main Database
+main/3.0	Migration 3.0 for Main Database
+main/3.1	Migration 3.1 for Main Database
+main/3.2	Migration 3.2 for Main Database
+main/3.3	Migration 3.3 for Main Database
+main/3.4	Migration 3.4 for Main Database
+main/3.5	Migration 3.5 for Main Database
+main/3.6	Migration 3.6 for Main Database
+main/3.7	Migration 3.7 for Main Database
+main/3.8	Migration 3.8 for Main Database
+main/3.9	Migration 3.9 for Main Database
+main/4.0	Migration 4.0 for Main Database
+main/4.1	Migration 4.1 for Main Database
+main/4.2	Migration 4.2 for Main Database
+main/4.3	Migration 4.3 for Main Database
+main/4.4	Migration 4.4 for Main Database
+main/4.5	Migration 4.5 for Main Database
+main/4.6	Migration 4.6 for Main Database
+main/4.7	Migration 4.7 for Main Database
+main/4.8	Migration 4.8 for Main Database
+main/4.9	Migration 4.9 for Main Database
+main/5.0	Migration 5.0 for Main Database
+main/5.1	Migration 5.1 for Main Database
+shard/1.0	Migration 1.0 - wave-networks-core Shard Database
+shard/1.1	Migration 1.1 for Shard Database
+shard/1.2	Migration 1.2 for Shard Database
+shard/1.3	Migration 1.3 for Shard Database

@@ -25,6 +25,13 @@ jobs:
         run: composer install --no-dev --no-interaction --optimize-autoloader
         working-directory: admin
 
+      # A migration version is claimed in db_migrations/CLAIMED.tsv, so two changes taking the
+      # same number collide in git and a .sql dropped by a rebase is named here rather than
+      # failing far away later (the ContactSwipe main/8.1 loss, 2026-09-18). DB-free.
+      - name: Check the migration ledger
+        run: php scripts/migration-ledger-probe.php
+        working-directory: admin
+
       - name: Prepare deploy staging
         run: |
           mkdir -p staging/admin
