@@ -33,7 +33,7 @@ foreach (array_slice($argv, 1) as $a) {
 }
 $root = rtrim((string) ($opts['root'] ?? dirname(__DIR__)), '/');
 $report_only = !empty($opts['report']);
-$label = basename($root);
+$label = basename(realpath($root) ?: $root);
 
 $fails = [];
 $oks   = [];
