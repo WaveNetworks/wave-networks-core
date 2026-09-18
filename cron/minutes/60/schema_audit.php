@@ -35,6 +35,15 @@ if ($ran_today && empty($GLOBALS['schema_audit_force'])) {
     return;
 }
 
+// The read-only bootstrap does not set the core version globals (it runs no migrations), and
+// the audit reads them to know what each core database should be at. Take them from the one
+// place that declares them rather than repeating the numbers here.
+if (!isset($db_version) || !isset($shard_version)) {
+    $decl = (string) @file_get_contents(__DIR__ . '/../../../include/bootstrap.php');
+    if (preg_match('~\$db_version\s*=\s*\$db_version\s*\?\?\s*([0-9.]+)~', $decl, $m))       $db_version    = (float) $m[1];
+    if (preg_match('~\$shard_version\s*=\s*\$shard_version\s*\?\?\s*([0-9.]+)~', $decl, $m)) $shard_version = (float) $m[1];
+}
+
 $audit = schema_audit_run('', false);
 $s = $audit['summary'];
 $line = sprintf('databases=%d ok=%d drift=%d uncertain=%d unreadable=%d migration_failures=%d',
