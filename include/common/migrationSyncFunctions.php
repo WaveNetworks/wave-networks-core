@@ -74,7 +74,9 @@ function connect_external_db($source) {
 
     try {
         $dsn = "mysql:host={$source['db_host']};port={$source['db_port']};dbname={$source['db_name']};charset=utf8mb4";
-        $pdo = new PDO($dsn, $source['db_user'], $password);
+        // Someone else's database: read it in UTC so imported datetimes mean one thing here.
+        $pdo = new PDO($dsn, $source['db_user'], $password,
+            [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return $pdo;
     } catch (PDOException $e) {

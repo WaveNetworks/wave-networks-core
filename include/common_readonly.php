@@ -46,10 +46,15 @@ if (!empty($files_location)) {
     if (!is_dir($files_location . 'branding/')) { @mkdir($files_location . 'branding/', 0755, true); }
 }
 
+// 2c. THE CLOCK: UTC here and on every connection (include/common/clockFunctions.php).
+date_default_timezone_set('UTC');
+
 // 3. PDO connection. NOT persistent — common_readonly.php is the bootstrap
 // for CLI cron scripts which run as one-shot processes and exit. Persistent
 // would do nothing here since there's no FPM worker to reuse the socket.
-$db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
+$db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword,
+    // One clock for the whole stack: UTC (include/common/clockFunctions.php).
+    [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 // 4. Glob-include all helpers

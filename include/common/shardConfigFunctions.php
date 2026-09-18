@@ -317,7 +317,8 @@ function shard_config_connect($row) {
         $conn = new PDO(
             "mysql:host={$row['db_host']};dbname={$row['db_name']};charset=utf8mb4",
             $row['db_user'], $pass,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 10]
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 10,
+             PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]   // one clock: UTC
         );
         return [$conn, ''];
     } catch (PDOException $e) {

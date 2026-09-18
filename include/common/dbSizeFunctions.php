@@ -193,7 +193,8 @@ function db_size_measure_one($schema, $conn) {
             $pdo = new PDO(
                 "mysql:host={$conn['host']};dbname={$conn['name']};charset=utf8mb4",
                 $conn['user'], $conn['pass'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5,
+                 PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]   // one clock: UTC
             );
             $st = $pdo->prepare($sql);
             $st->execute([$schema]);

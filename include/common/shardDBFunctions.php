@@ -36,6 +36,8 @@ function prime_shard($shard_id) {
             [
                 PDO::ATTR_PERSISTENT => true,
                 PDO::ATTR_ERRMODE    => PDO::ERRMODE_EXCEPTION,
+                // One clock: UTC (clockFunctions.php).
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'",
             ]
         );
         $shard_connections[$shard_id] = $conn;

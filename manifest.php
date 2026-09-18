@@ -20,7 +20,8 @@ if (file_exists($configFile)) {
 
 // Connect
 try {
-    $db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
+    $db = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword,
+        [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);   // one clock: UTC
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
     echo json_encode(['name' => 'Admin']);

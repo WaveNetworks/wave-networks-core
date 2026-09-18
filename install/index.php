@@ -38,7 +38,8 @@ if (file_exists($configPath)) {
     $installComplete = false;
     try {
         include $configPath;
-        $checkPdo = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
+        $checkPdo = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword,
+        [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);   // one clock: UTC
         $checkPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $tables = $checkPdo->query("SHOW TABLES LIKE 'user'")->fetchAll();
         if (!empty($tables)) {
@@ -106,7 +107,8 @@ if ($step === 'user' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
             include $configPath;
 
             // Connect to main DB
-            $pdo = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword);
+            $pdo = new PDO("mysql:host=$dbHostSpec;dbname=$dbInstance;charset=utf8mb4", $dbUserName, $dbPassword,
+        [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);   // one clock: UTC
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
             // Check if user table exists (migrations may not have run yet)
@@ -143,7 +145,8 @@ if ($step === 'user' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
                     try {
                         $shardPdo = new PDO(
                             "mysql:host={$shard1['host']};dbname={$shard1['name']};charset=utf8mb4",
-                            $shard1['user'], $shard1['pass']
+                            $shard1['user'], $shard1['pass'],
+                            [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]   // one clock: UTC
                         );
                         $shardPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -219,7 +222,8 @@ if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST
     // Test DB connections
     if (empty($errors)) {
         try {
-            $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4", $dbUser, $dbPass);
+            $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4", $dbUser, $dbPass,
+        [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);   // one clock: UTC
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $pdo = null;
         } catch (PDOException $e) {
@@ -230,7 +234,8 @@ if ($step === 'config' && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST
             $sUser = $shard['user'] !== '' ? $shard['user'] : $dbUser;
             $sPass = $shard['pass'] !== '' ? $shard['pass'] : $dbPass;
             try {
-                $pdo = new PDO("mysql:host={$shard['host']};dbname={$shard['name']};charset=utf8mb4", $sUser, $sPass);
+                $pdo = new PDO("mysql:host={$shard['host']};dbname={$shard['name']};charset=utf8mb4", $sUser, $sPass,
+        [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);   // one clock: UTC
                 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $pdo = null;
             } catch (PDOException $e) {

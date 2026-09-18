@@ -32,6 +32,11 @@ jobs:
         run: php scripts/migration-ledger-probe.php
         working-directory: admin
 
+      # One clock, UTC, on both sides of every connection (include/common/clockFunctions.php). DB-free.
+      - name: Check the clock (UTC on both sides)
+        run: php scripts/clock-probe.php
+        working-directory: admin
+
       - name: Prepare deploy staging
         run: |
           mkdir -p staging/admin

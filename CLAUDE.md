@@ -654,6 +654,21 @@ Child apps build their own Privacy & Data UI (views/privacy.php) calling
 the shared helper functions. Child apps add app-specific data to exports
 (items, preferences, history) on top of admin's build_export_data() base.
 
+**One clock: UTC.** PHP runs in UTC (`date_default_timezone_set('UTC')` in `include/bootstrap.php`
+and `common_readonly.php`) and every database connection is opened with
+`PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"`, so `NOW()`, `CURRENT_TIMESTAMP`,
+every `DEFAULT CURRENT_TIMESTAMP` column and every `date('Y-m-d H:i:s')` mean the same thing. A
+stored datetime is UTC whoever wrote it; a person's own zone is applied only when showing or
+reading a time (see ContactSwipe's `csTimezone.php`). `include/common/clockFunctions.php` holds the
+helpers (`wn_clock_init_pdo`, `wn_clock_pdo_options`, `wn_clock_check`) and
+`scripts/clock-probe.php` (in the deploy, and portable with `--root`) fails the build on a
+connection opened without it. Until 2026-09-18 MySQL used the host's local zone while PHP used
+UTC: in one table, SQL-written timestamps sat an hour ahead of PHP-written ones, queued email
+compared a PHP `scheduled_at` against `NOW()`, and ContactSwipe's UTC reminders were swept by
+`due_at <= NOW()` and fired an hour early through British Summer Time. Rows written before the
+change are in the old local zone and were left alone, so timestamps from 2026-09-18 until the
+next DST end read an hour earlier than the rows above them.
+
 **Schema drift watches itself.** `cron/minutes/60/schema_audit.php` runs `schema_audit_run()`
 once a day over core main + shards and every child app on the deployment (the same engine as
 the `apiSchemaAudit` API action), writes the summary to `cron_log` (`job = schema_audit`, read

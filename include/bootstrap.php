@@ -98,6 +98,13 @@ if (!empty($files_location)) {
     if (!is_dir($files_location . 'branding/')) { @mkdir($files_location . 'branding/', 0755, true); }
 }
 
+// 2c. THE CLOCK: UTC, on this side and on every connection below. PHP defaulted to UTC
+// while MySQL used the server's local zone, so every SQL-written timestamp sat an hour
+// ahead of every PHP-written one in the same table (include/common/clockFunctions.php says
+// what changed and what it broke). Set here, before anything can log a time; the helper
+// file is globbed later, so this line does not call it.
+date_default_timezone_set('UTC');
+
 // 3. PDO connection. Persistent so PHP-FPM workers reuse the socket across
 // requests instead of opening a fresh one per AJAX call. Especially matters
 // for child apps (each one opens its own $child_db on top of this $db).
@@ -107,6 +114,8 @@ $db = new PDO(
     [
         PDO::ATTR_PERSISTENT => true,
         PDO::ATTR_ERRMODE    => PDO::ERRMODE_EXCEPTION,
+        // One clock for the whole stack: UTC on both sides (include/common/clockFunctions.php).
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'",
     ]
 );
 

@@ -1126,7 +1126,9 @@ function schema_audit_run($only = '', $include_info = true) {
                 $c = $tg['conn'];
                 $pdo = new PDO("mysql:host={$c['host']};dbname={$c['name']};charset=utf8mb4",
                     $c['user'], $c['pass'],
-                    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]);
+                    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5,
+                     // one clock: UTC
+                     PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]);
             }
             $live = schema_audit_read_live($pdo);
         } catch (Throwable $e) {
