@@ -21,6 +21,22 @@ if (($_POST['action'] ?? '') == 'logJsError') {
         $page_url   = $_POST['page_url'] ?? '';
         $referrer   = $_POST['referrer'] ?? '';
 
+        // Severity. JS errors are ERROR by default, but the mobile shell also reports
+        // operational SIGNALS through this same endpoint (report.js, error_type
+        // 'mobile-signal'). '[mobile:needs-build]' is the deviation gauge firing: a
+        // field device on an older binary opened a screen whose server-side view JS has
+        // moved on. It is EXPECTED, the app handles it gracefully (renders the bundled
+        // copy + "This screen needs an app update"), and it clears only when a new store
+        // binary ships — never through a code change. Logged as ERROR it made the nokemo
+        // monitor file un-actionable "Fix:" tasks forever, once per device/screen. Keep
+        // it visible as WARNING (monitoring excludes WARNING/INFO from tasks); leave real
+        // breakage — 'no-handler' (a dead control) and 'fetch-fail' (a server/endpoint
+        // problem) — at ERROR.
+        $level = 'ERROR';
+        if ($error_type === 'mobile-signal' && preg_match('/^\[mobile:needs-build\]/', $message)) {
+            $level = 'WARNING';
+        }
+
         // Build context with JS-specific info
         $context = [];
         $context['error_type'] = $error_type;
@@ -72,11 +88,12 @@ if (($_POST['action'] ?? '') == 'logJsError') {
                          request_uri, request_method, user_id, ip_address, user_agent, php_version,
                          memory_usage, occurrence_count, last_seen_at, error_hash)
                      VALUES
-                        ('ERROR', :message, :file, :line, :trace, :context, :source, :page,
+                        (:level, :message, :file, :line, :trace, :context, :source, :page,
                          :uri, 'JS', :uid, :ip, :ua, NULL, NULL, 1, NOW(), :hash)"
                 );
 
                 $stmt->execute([
+                    ':level'   => $level,
                     ':message' => mb_substr($message, 0, 65535),
                     ':file'    => $file ? mb_substr($file, 0, 500) : null,
                     ':line'    => $line ?: null,
