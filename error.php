@@ -47,6 +47,10 @@ try {
     // Probes for an HTTP MCP endpoint (/admin/mcp.php, /admin/mcp/, /admin/api/mcp/)
     // are scanner noise — our MCP server (admin/mcp/server.php) is stdio JSON-RPC
     // only and deliberately exposes no HTTP route, so these 404s are expected.
+    // Probes for the KCFinder file-upload plugin (js/plugins/kcfinder/<conf|cache|
+    // core|lang|doc|integration|lib|tpl>/) are vulnerability-scanner noise — this
+    // plugin is a well-known arbitrary-upload target and we don't ship it (there is
+    // no admin/js tree at all), so every path under it 404s as expected probe traffic.
     $is_noise = ($status === 404 && (
         preg_match('#\.(css|js)\.map($|\?)#', $uri)
         || preg_match('#/admin/(media|branding|tour_media)/#', $uri)
@@ -54,6 +58,7 @@ try {
         || preg_match('#/admin/(vendor|db_migrations|cron|tests|include|config|views|snippets)/#', $uri)
         || preg_match('#/\.(git|svn|hg|env|aws|DS_Store|htpasswd)#i', $uri)
         || preg_match('#/admin/(api/)?mcp(\.php|/|$|\?)#', $uri)
+        || preg_match('#/kcfinder/#i', $uri)
     ));
     if (function_exists('log_error_to_db') && !$is_noise) {
         $msg = "HTTP $status: $method $uri";
