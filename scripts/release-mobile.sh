@@ -138,6 +138,11 @@ echo "── 5. assert device-portable ─────────────�
 fail=0
 grep -rnE '(src|href)="https?://' m/index.html m/js/*.js 2>/dev/null | grep -v '^\s*//' && { echo "   ✗ remote reference" >&2; fail=1; }
 grep -rnE '(src|href)="/' m/index.html 2>/dev/null && { echo "   ✗ absolute path in index.html" >&2; fail=1; }
+# A reference that climbs OUT of the bundle. This is the one the per-file check below cannot
+# see: it resolves those paths from m/, and from m/ "../assets/js/x.js" is the app repo's own
+# copy — present, readable, and not in the bundle at all. On the device there is no parent to
+# climb to, so the file is simply gone. Catch the shape, not the resolution.
+grep -rnE '(src|href)="\.\./' m/index.html 2>/dev/null && { echo "   ✗ reference escapes the bundle (../)" >&2; fail=1; }
 while read -r src; do
     src="${src%%\?*}"; [[ "$src" == "cordova.js" ]] && continue
     [[ -f "m/$src" ]] || { echo "   ✗ missing referenced file: $src" >&2; fail=1; }

@@ -157,6 +157,22 @@ foreach ($assetMap as $from => $to) {
     $html = str_replace("'" . $from . "'", "'" . $to . "'", $html);
 }
 
+// Everything else the app's template pulls out of its OWN assets/js. The map above is
+// explicit because those entries need a different name or must be dropped; an app's own
+// chrome JS needs neither, and follows one rule — vendored beside the bundle as
+// js/vendor/<basename>, which is exactly where release-mobile.sh step 3 goes looking for it.
+//
+// Without this the reference survives as "../assets/js/X.js": a path that resolves in the
+// web app's tree and 404s on the device. Silently, and with no build error to catch it —
+// the completeness assert runs from m/, where ../assets/js IS the app repo, so every one of
+// those escapes reads as present. contactswipe's shell referenced twenty of them, the map
+// engine (circles.js) among them, and built clean.
+$html = preg_replace('#(["\'])\.\./assets/js/([A-Za-z0-9._-]+\.js)#', '$1js/vendor/$2', $html);
+
+// m/ IS the bundle root. A template that reaches sideways into it (../m/sync.js) is naming
+// a file that sits at the bundle's top level, so the hop up and back is just the filename.
+$html = preg_replace('#(["\'])\.\./m/([A-Za-z0-9._-]+)#', '$1$2', $html);
+
 // CDN → vendored.
 $html = str_replace('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js', 'js/vendor/bootstrap.bundle.min.js', $html);
 $html = preg_replace('#<link[^>]*bootstrap-icons[^>]*>#i', '<link rel="stylesheet" href="assets/icons/bootstrap-icons.css">', $html);
