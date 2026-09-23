@@ -70,8 +70,14 @@ for ref in $refs; do
     base=$(basename "$ref")
     [[ "$base" == "bootstrap.bundle.min.js" ]] && continue
     if   [[ -f "assets/js/$base" ]];            then cp "assets/js/$base" m/js/vendor/
+    elif [[ -f "assets/js/vendor/$base" ]];     then cp "assets/js/vendor/$base" m/js/vendor/
     elif [[ -f "$ADMIN_ROOT/assets/js/$base" ]]; then cp "$ADMIN_ROOT/assets/js/$base" m/js/vendor/
     else echo "   ! chrome dep not found: $base (referenced by the shell)" >&2; fi
+done
+# The app's own stylesheets the shell links (build_shell maps ../assets/css/X → assets/css/X).
+for ref in $(grep -oE 'assets/css/[A-Za-z0-9._-]+\.css' m/index.html | sort -u); do
+    if [[ -f "$ref" ]]; then mkdir -p m/assets/css && cp "$ref" "m/$ref"
+    else echo "   ✗ app stylesheet not found: $ref (linked by the shell)" >&2; exit 1; fi
 done
 # App CSS the shell loads (real look), from core.
 cp "$ADMIN_ROOT/assets/css/style.css"              m/assets/vendor/style.css
@@ -136,13 +142,15 @@ HT
 
 echo "── 5. assert device-portable ─────────────────────────────"
 fail=0
-grep -rnE '(src|href)="https?://' m/index.html m/js/*.js 2>/dev/null | grep -v '^\s*//' && { echo "   ✗ remote reference" >&2; fail=1; }
-grep -rnE '(src|href)="/' m/index.html 2>/dev/null && { echo "   ✗ absolute path in index.html" >&2; fail=1; }
+# These guard what the bundle LOADS. An <a href> is navigation — a link out to the live site
+# (terms, privacy) is correct there — so lines carrying one are left out of all three.
+grep -rnE '(src|href)="https?://' m/index.html m/js/*.js 2>/dev/null | grep -v '^\s*//' | grep -vE '<a\b' && { echo "   ✗ remote reference" >&2; fail=1; }
+grep -rnE '(src|href)="/' m/index.html 2>/dev/null | grep -vE '<a\b' && { echo "   ✗ absolute path in index.html" >&2; fail=1; }
 # A reference that climbs OUT of the bundle. This is the one the per-file check below cannot
 # see: it resolves those paths from m/, and from m/ "../assets/js/x.js" is the app repo's own
 # copy — present, readable, and not in the bundle at all. On the device there is no parent to
 # climb to, so the file is simply gone. Catch the shape, not the resolution.
-grep -rnE '(src|href)="\.\./' m/index.html 2>/dev/null && { echo "   ✗ reference escapes the bundle (../)" >&2; fail=1; }
+grep -rnE '(src|href)="\.\./' m/index.html 2>/dev/null | grep -vE '<a\b' && { echo "   ✗ reference escapes the bundle (../)" >&2; fail=1; }
 while read -r src; do
     src="${src%%\?*}"; [[ "$src" == "cordova.js" ]] && continue
     [[ -f "m/$src" ]] || { echo "   ✗ missing referenced file: $src" >&2; fail=1; }

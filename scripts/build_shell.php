@@ -146,6 +146,15 @@ $assetMap = [
 // Strip the query-string cache-busters template.php adds (e.g. style.css?v=2026…).
 $html = preg_replace('/(\.(?:css|js))\?[^"\'\s>]*/', '$1', $html);
 
+// An app may load its OWN copy of core's chrome JS from assets/js/vendor/ instead of reaching
+// into ../../admin (pwt does). Same file, same fate — bs-init.js must still be dropped — so fold
+// each such reference onto core's key and let the map below decide.
+foreach ($assetMap as $from => $to) {
+    if (strpos($from, '../../admin/assets/js/') !== 0) continue;
+    $own = '../assets/js/vendor/' . basename($from);
+    $html = str_replace(['"' . $own . '"', "'" . $own . "'"], ['"' . $from . '"', "'" . $from . "'"], $html);
+}
+
 foreach ($assetMap as $from => $to) {
     if ($to === '__DROP__') {
         // Remove the whole <script src="…"> / <link href="…"> tag.
@@ -167,7 +176,19 @@ foreach ($assetMap as $from => $to) {
 // the completeness assert runs from m/, where ../assets/js IS the app repo, so every one of
 // those escapes reads as present. contactswipe's shell referenced twenty of them, the map
 // engine (circles.js) among them, and built clean.
-$html = preg_replace('#(["\'])\.\./assets/js/([A-Za-z0-9._-]+\.js)#', '$1js/vendor/$2', $html);
+$html = preg_replace('#(["\'])\.\./assets/js/(?:vendor/)?([A-Za-z0-9._-]+\.js)#', '$1js/vendor/$2', $html);
+
+// The app's own stylesheets (pwt: panorama, oracle-chat, illuminated-reading) keep their
+// place under assets/css/ — release-mobile.sh step 3 copies each one the shell references,
+// and their url(../img/…) then still lands on the assets/img/ it already vendors.
+$html = preg_replace('#(["\'])\.\./assets/css/([A-Za-z0-9._-]+\.css)#', '$1assets/css/$2', $html);
+
+// Footer links to the marketing site (../../site/terms.php) are pages, not assets — the device
+// has no site/ to climb to, so send them to the live one. Apps live at <origin>/<slug>/app/,
+// so ../../site/ is <origin>/site/.
+if ($appOrigin !== '') {
+    $html = preg_replace('#(<a\b[^>]*\bhref=["\'])\.\./\.\./site/#i', '$1' . $appOrigin . '/site/', $html);
+}
 
 // m/ IS the bundle root. A template that reaches sideways into it (../m/sync.js) is naming
 // a file that sits at the bundle's top level, so the hop up and back is just the filename.
