@@ -121,26 +121,20 @@ if (($action ?? null) == 'logout') {
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 
 if (($action ?? null) == 'register') {
-    $errs = array();
+    // What a valid sign-up is, and what an account is made of, live in
+    // registrationFunctions.php — shared with the mobile deviceRegister action. This
+    // block owns only what is specific to the web: reCAPTCHA and the redirects.
+    $in = [
+        'email'            => trim($_POST['email'] ?? ''),
+        'password'         => $_POST['password'] ?? '',
+        'confirm_password' => $_POST['confirm_password'] ?? '',
+        'first_name'       => trim($_POST['first_name'] ?? ''),
+        'last_name'        => trim($_POST['last_name'] ?? ''),
+        'agree_terms'      => $_POST['agree_terms'] ?? '',
+    ];
 
-    $email      = trim($_POST['email'] ?? '');
-    $password   = $_POST['password'] ?? '';
-    $confirm    = $_POST['confirm_password'] ?? '';
-    $first_name = trim($_POST['first_name'] ?? '');
-    $last_name  = trim($_POST['last_name'] ?? '');
-
-    // Check registration mode
-    $settings = db_fetch(db_query("SELECT registration_mode FROM auth_settings WHERE setting_id = 1"));
-    $mode = $settings['registration_mode'] ?? 'open';
-
-    if ($mode === 'closed') {
-        $errs['mode'] = 'Registration is currently closed.';
-    }
-
-    if (!valid_email($email))       { $errs['email'] = 'Valid email is required.'; }
-    if (!valid_password($password))  { $errs['password'] = 'Password must be at least 8 characters.'; }
-    if ($password !== $confirm)      { $errs['confirm'] = 'Passwords do not match.'; }
-    if (empty($_POST['agree_terms'])) { $errs['terms'] = 'You must agree to the Terms of Service and Privacy Policy.'; }
+    $mode = wn_registration_mode();
+    $errs = wn_registration_validate($in, $mode);
 
     if (count($errs) <= 0) {
         if (recaptcha_enabled() && !recaptcha_verify($_POST['g-recaptcha-response'] ?? '')) {
@@ -149,54 +143,14 @@ if (($action ?? null) == 'register') {
     }
 
     if (count($errs) <= 0) {
-        $existing = get_user_by_email($email);
-        if ($existing) {
-            $errs['email'] = 'An account with this email already exists.';
-        }
-    }
+        $created = wn_registration_create($in, $mode);
 
-    if (count($errs) <= 0) {
-        $hashed   = hash_password($password);
-        $shard_id = get_least_loaded_shard();
-        $confirmHash = generateHashCode(100);
-
-        $needs_confirm = ($mode === 'confirm') ? 0 : 1;
-
-        $r = db_query("INSERT INTO user (email, password, shard_id, is_confirmed, confirm_hash, confirm_hash_created, created_date)
-                        VALUES ('" . sanitize($email, SQL) . "', '$hashed', '$shard_id', '$needs_confirm', '$confirmHash', NOW(), NOW())");
-
-        if ($r) {
-            $new_id = db_insert_id();
-
-            // Create profile on shard
-            prime_shard($shard_id);
-            db_query_shard($shard_id, "INSERT INTO user_profile (user_id, first_name, last_name, created)
-                            VALUES ('$new_id', '" . sanitize($first_name, SQL) . "', '" . sanitize($last_name, SQL) . "', NOW())");
-
-            // Create homedir
-            $_SESSION['shard_id'] = $shard_id;
-            create_home_dir_id($new_id);
-            unset($_SESSION['shard_id']);
-
-            // Record consent for Terms of Service and Privacy Policy
-            if (function_exists('record_consent')) {
-                $tos_ver = get_latest_consent_version('terms_of_service');
-                $pp_ver  = get_latest_consent_version('privacy_policy');
-                record_consent($new_id, 'terms_of_service', 'granted', $tos_ver ? (int)$tos_ver['version_id'] : null);
-                record_consent($new_id, 'privacy_policy', 'granted', $pp_ver ? (int)$pp_ver['version_id'] : null);
-            }
-
-            // Claim anonymous A/B experiment assignments to the new user (Task #795)
-            // so this device's pre-register variant exposure links to the user_id.
-            if (function_exists('claim_experiment_assignments') && function_exists('current_device_id')) {
-                $cdid = current_device_id();
-                if ($cdid) { claim_experiment_assignments($cdid, (int)$new_id); }
-            }
-
-            // Send confirmation email if needed
-            if ($mode === 'confirm') {
-                send_confirmation_email($email, $confirmHash);
-                $_SESSION['pending_confirm_email'] = $email;
+        if (!empty($created['errors'])) {
+            $errs = $created['errors'];
+        } else {
+            // Send confirmation email if needed (sent by wn_registration_create)
+            if ($created['needs_confirm']) {
+                $_SESSION['pending_confirm_email'] = $created['email'];
                 // Prefer a dedicated "check your email" page if the app ships one;
                 // otherwise fall back to login + flash (keeps other apps working).
                 $authdir = dirname($_SERVER['SCRIPT_FILENAME'] ?? '');
@@ -211,8 +165,6 @@ if (($action ?? null) == 'register') {
             $_SESSION['success'] = 'Account created! You can now log in.';
             header('Location: login.php');
             exit;
-        } else {
-            $errs['db'] = db_error();
         }
     }
 

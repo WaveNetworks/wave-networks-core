@@ -50,6 +50,7 @@ main/4.8	Migration 4.8 for Main Database
 main/4.9	Migration 4.9 for Main Database
 main/5.0	Migration 5.0 for Main Database
 main/5.1	Migration 5.1 for Main Database
+main/5.2	Migration 5.2 for Main Database (device_register_attempt: device sign-up throttle)
 shard/1.0	Migration 1.0 - wave-networks-core Shard Database
 shard/1.1	Migration 1.1 for Shard Database
 shard/1.2	Migration 1.2 for Shard Database

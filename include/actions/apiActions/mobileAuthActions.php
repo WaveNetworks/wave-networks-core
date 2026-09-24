@@ -107,6 +107,86 @@ if (($_POST['action'] ?? '') == 'deviceLogin') {
     }
 }
 
+// ─── DEVICE REGISTER ─────────────────────────────────────────────────────────
+// Account creation from inside a bundled app. Same validation and the same account
+// (registrationFunctions.php) as the web form; only the bot gate differs, because
+// reCAPTCHA cannot run on an app:// origin. In its place: a honeypot field the app never
+// fills, and per-IP / per-device / site-wide attempt limits.
+//
+// Mirrors register.php's posture on registration_mode: 'closed' and 'invite' refuse (the
+// web page bounces both to login), 'confirm' creates the account but issues no token —
+// deviceLogin refuses an unconfirmed account, so a token here would be a way around it.
+
+if (($_POST['action'] ?? '') == 'deviceRegister') {
+    $in = [
+        'email'            => trim($_POST['email'] ?? ''),
+        'password'         => $_POST['password'] ?? '',
+        'confirm_password' => $_POST['confirm_password'] ?? '',
+        'first_name'       => trim($_POST['first_name'] ?? ''),
+        'last_name'        => trim($_POST['last_name'] ?? ''),
+        'agree_terms'      => $_POST['agree_terms'] ?? '',
+    ];
+    $mode = wn_registration_mode();
+
+    if ($mode === 'invite') {
+        if (!headers_sent()) { http_response_code(403); }
+        $_SESSION['error'] = 'Sign-up is by invitation only. Use the link in your invitation email.';
+    } elseif ($mode === 'closed') {
+        if (!headers_sent()) { http_response_code(403); }
+        $_SESSION['error'] = 'Registration is currently closed.';
+    } elseif (trim($_POST['website'] ?? '') !== '') {
+        // The honeypot: a field the app renders off-screen and never fills.
+        if (!headers_sent()) { http_response_code(403); }
+        $_SESSION['error'] = 'Sign-up refused.';
+    } else {
+        $errs = wn_registration_validate($in, $mode);
+
+        if (count($errs) <= 0) {
+            $wait = wn_device_register_throttle($_SERVER['REMOTE_ADDR'] ?? '', (string)($_SERVER['HTTP_X_WN_DEVICE'] ?? ''));
+            if ($wait > 0) {
+                if (!headers_sent()) {
+                    http_response_code(429);
+                    header('Retry-After: ' . (int)$wait);
+                }
+                $errs['throttle'] = 'Too many sign-up attempts. Please try again later.';
+            }
+        }
+
+        $created = null;
+        if (count($errs) <= 0) {
+            $created = wn_registration_create($in, $mode);
+            if (!empty($created['errors'])) {
+                $errs = $created['errors'];
+                if (isset($errs['email']) && !headers_sent()) { http_response_code(409); }
+            }
+        }
+
+        if (count($errs) > 0) {
+            $_SESSION['error'] = implode('<br>', $errs);
+        } elseif ($created['needs_confirm']) {
+            $data['confirm_required'] = true;
+            $data['email']            = $created['email'];
+            $_SESSION['success'] = 'Account created. Check your email to confirm it, then sign in.';
+        } else {
+            // Signed in on the spot, exactly as deviceLogin would sign them in.
+            $user  = get_user_by_email($created['email']);
+            $token = wn_issue_device_token($user['user_id']);
+
+            if (function_exists('record_login')) {
+                record_login($user['user_id'], 'password', 'success');
+            }
+            load_user_session($user);
+
+            $data['token']   = $token;
+            $data['user_id'] = (int)$user['user_id'];
+            $data['email']   = $user['email'];
+            $data['name']    = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
+
+            $_SESSION['success'] = 'Account created.';
+        }
+    }
+}
+
 // ─── DEVICE LOGOUT ───────────────────────────────────────────────────────────
 // Revokes the token this request arrived with. Deleting the api_key row is precisely
 // what "sign out this device" does in the profile UI — one revocation path, not two.

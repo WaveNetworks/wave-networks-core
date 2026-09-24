@@ -127,7 +127,7 @@ foreach (glob(__DIR__ . '/common/*.inc.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/mobile/*.php') as $f) { include_once($f); }
 
 // 5. Migrations
-$db_version    = $db_version ?? 5.1;
+$db_version    = $db_version ?? 5.2;
 $shard_version = $shard_version ?? 1.3;
 check_and_migrate_main_db();
 
