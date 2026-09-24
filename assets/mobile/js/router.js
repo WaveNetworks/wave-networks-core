@@ -203,30 +203,194 @@ window.WnRouter = (function () {
                 return;
             }
 
-            // THE REFUSAL. If this view's behavior has changed since the binary was
-            // built, its markup expects handlers we do not have. Keep what we shipped.
-            if (!WnStore.canRender(page, json.js_hash)) {
-                console.warn('[viv] ' + page + ' needs a newer build — showing the bundled version');
-                if (window.WnReport) WnReport.signal('needs-build', page);
-                if (!cached) render(page, emptyState(page, 'This screen needs an app update.'));
-                return;
-            }
-
-            WnStore.put(page, params, json.markup, {
-                view_hash: json.view_hash,
-                js_hash: json.js_hash
-            });
-            render(page, json.markup);
-
-            if (json.toast && window.showToast) {
-                ['success', 'error', 'warning', 'info'].forEach(function (k) {
-                    if (json.toast[k]) showToast(k === 'error' ? 'danger' : k, json.toast[k]);
-                });
-            }
+            land(page, params, json, cached);
         });
 
         if (push !== false) stack.push(page);
     }
+
+    /** Put a fetched fragment on screen — after a navigation or after a form post. */
+    function land(page, params, json, cached) {
+        // THE REFUSAL. If this view's behavior has changed since the binary was
+        // built, its markup expects handlers we do not have. Keep what we shipped.
+        if (!WnStore.canRender(page, json.js_hash)) {
+            console.warn('[viv] ' + page + ' needs a newer build — showing the bundled version');
+            if (window.WnReport) WnReport.signal('needs-build', page);
+            if (!cached) render(page, emptyState(page, 'This screen needs an app update.'));
+            toasts(json);
+            return;
+        }
+
+        WnStore.put(page, params, json.markup, {
+            view_hash: json.view_hash,
+            js_hash: json.js_hash
+        });
+        render(page, json.markup);
+        toasts(json);
+    }
+
+    function toasts(json) {
+        if (json.toast && window.showToast) {
+            ['success', 'error', 'warning', 'info'].forEach(function (k) {
+                if (json.toast[k]) showToast(k === 'error' ? 'danger' : k, json.toast[k]);
+            });
+        }
+    }
+
+    // Query params of a ?page= URL, minus the router's own and the transport flags.
+    function routeParams(query) {
+        return (query || '').replace(/^[?&]/, '')
+            .split('&')
+            .filter(function (kv) { return kv && !/^(page|reloadView|mobile|wn_flash|wn_flash_sig)=/.test(kv); })
+            .join('&');
+    }
+
+    /**
+     * Where a form goes, as a route: {page, params}, or null when it isn't ours.
+     * An empty action posts back to the current screen, as it would on the web.
+     */
+    function formRoute(form) {
+        var action = form.getAttribute('action');
+        if (action === null || action === '' || action === '#') {
+            var cur = parse(location.hash);
+            return { page: cur.page, params: cur.params };
+        }
+        if (/^[a-z][a-z0-9+.-]*:/i.test(action) || action.indexOf('//') === 0) return null;   // external
+        var m = action.match(/^(?:index\.php)?\?(.*)$/);
+        if (!m) return null;                          // a raw .php elsewhere: not a screen
+        var pm = m[1].match(/(?:^|&)page=([^&#]*)/);
+        return {
+            page: pm ? decodeURIComponent(pm[1]) : parse(location.hash).page,
+            params: routeParams(m[1].replace(/#.*$/, ''))
+        };
+    }
+
+    var posting = false;
+
+    /**
+     * Submit a view's form the way the web does, inside the app.
+     *
+     * The views are desktop views, so their forms are desktop forms. Left alone, a submit
+     * navigates the WebView to index.php?page=… — a file that doesn't exist in the bundle,
+     * so every post form on a phone went nowhere. A GET form becomes a route; a POST goes to
+     * the same ?page= URL the web posts to, in fragment mode, so the action runs unchanged
+     * and the answer is the re-rendered screen with its flash as toasts. A redirect the page
+     * answers with (post-redirect-get) is kept in fragment mode by core
+     * (mobileAuthFunctions.php), so we may land on a different screen than we posted to.
+     *
+     * @return {boolean} true if handled here; false to let the form do what it would.
+     */
+    function submitForm(form, submitter) {
+        if (form.hasAttribute('data-no-intercept')) return false;
+        var t = form.getAttribute('target');
+        if (t && t !== '_self') return false;
+        if (form.closest('[data-screen="login"]')) return false;   // the bundled login has its own handler
+        var route = formRoute(form);
+        if (!route) return false;
+
+        var fd = new FormData(form);
+        if (submitter && submitter.name && !submitter.disabled) fd.append(submitter.name, submitter.value || '');
+
+        var method = (form.getAttribute('method') || 'get').toLowerCase();
+        if (method !== 'post') {
+            var q = [];
+            fd.forEach(function (v, k) {
+                if (typeof v === 'string') q.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+            });
+            var all = [route.params, q.join('&')].filter(Boolean).join('&');
+            location.hash = '#/' + route.page + (all ? '?' + all : '');
+            return true;
+        }
+
+        if (!Platform.online()) {
+            if (window.showToast) showToast('warning', 'You\'re offline. Nothing was sent.');
+            return true;
+        }
+        if (posting) return true;   // a double tap must not send it twice
+        posting = true;
+
+        var buttons = form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]');
+        buttons.forEach(function (b) { b.disabled = true; });
+        var done = function () {
+            posting = false;
+            buttons.forEach(function (b) { b.disabled = false; });
+            hideLoading();
+        };
+        showLoading();
+
+        var url = window.WN_ENV.APP_BASE + 'index.php?page=' + encodeURIComponent(route.page)
+                + (route.params ? '&' + route.params : '')
+                + '&reloadView=true&mobile=1';
+
+        fetch(url, {
+            method: 'POST',
+            body: fd,
+            headers: window.WnApi.headers(),
+            credentials: window.WN_ENV.BUNDLED ? 'omit' : 'same-origin',
+            cache: 'no-store'
+        })
+            .then(function (r) {
+                if (r.status === 401 || r.status === 403) throw new Error('unauthorized');
+                var type = r.headers.get('content-type') || '';
+                if (type.indexOf('json') === -1) throw new Error('not-a-fragment');
+                return r.json().then(function (json) { return { json: json, url: r.url || '' }; });
+            })
+            .then(function (res) {
+                done();
+                var json = res.json;
+                if (json.markup === undefined) {
+                    // An action that answered with the plain API envelope and no view.
+                    if (json.error) showAlert('danger', json.error);
+                    else if (json.success) showAlert('success', json.success);
+                    reload();
+                    return;
+                }
+                // Where we actually landed — a post-redirect-get may have moved us on.
+                var page = json.page || route.page;
+                var qi = res.url.indexOf('?');
+                var params = qi === -1 ? route.params : routeParams(res.url.slice(qi + 1).replace(/#.*$/, ''));
+                var hash = '#/' + page + (params ? '?' + params : '');
+                if (hash !== location.hash) {
+                    // Record the route without a hashchange: the screen is already here.
+                    if (page !== current) { stack.push(page); history.pushState(null, '', hash); }
+                    else history.replaceState(null, '', hash);
+                }
+                land(page, params, json, true);
+            })
+            .catch(function (err) {
+                done();
+                if (err.message === 'unauthorized') return toLogin();
+                if (!Platform.online()) {
+                    document.body.classList.add('wn-offline');
+                    if (window.showToast) showToast('warning', 'You\'re offline. It may not have been saved.');
+                    return;
+                }
+                if (window.WnReport) WnReport.signal('form-post-fail', route.page);
+                if (window.showToast) showToast('danger', 'That didn\'t go through. Please try again.');
+            });
+        return true;
+    }
+
+    /**
+     * Route every view form through submitForm. Bubble phase, so a view's own submit
+     * handler runs first and a preventDefault there (its own fetch, a declined confirm())
+     * is respected. form.submit() skips the submit event entirely, so it is routed too.
+     */
+    function interceptForms() {
+        document.addEventListener('submit', function (e) {
+            if (e.defaultPrevented) return;
+            var form = e.target;
+            if (!form || form.tagName !== 'FORM') return;
+            if (submitForm(form, e.submitter || null)) e.preventDefault();
+        }, false);
+
+        var nativeSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function () {
+            if (!submitForm(this, null)) nativeSubmit.call(this);
+        };
+    }
+
+    function reload() { go(location.hash, false); }
 
     function emptyState(page, msg) {
         return '<div class="text-center text-muted py-5"><p class="mb-0">' + msg + '</p></div>';
@@ -367,6 +531,7 @@ window.WnRouter = (function () {
             });
             interceptLinks();
             interceptNotifications();
+            interceptForms();
 
             Platform.onBack(function () {
                 if (stack.length > 1) { stack.pop(); location.hash = '#/' + stack[stack.length - 1]; }
@@ -382,7 +547,7 @@ window.WnRouter = (function () {
         current: function () { return current; },
 
         /** Re-fetch the current screen. The views call this by name after a write. */
-        reload: function () { go(location.hash, false); }
+        reload: reload
     };
 })();
 

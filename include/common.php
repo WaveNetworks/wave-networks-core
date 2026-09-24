@@ -75,6 +75,10 @@ if (php_sapi_name() !== 'cli') {
     }
 }
 
+// 6a. Form posts from the mobile shell: keep a post's redirect inside the fragment path
+// and carry its flash across (mobileAuthFunctions.php).
+if (php_sapi_name() !== 'cli' && function_exists('wn_mobile_form_support')) { wn_mobile_form_support(); }
+
 // 6b. Device tracking — identify all visitors via persistent cookie
 if (function_exists('get_or_create_device')) {
     try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }

@@ -176,3 +176,90 @@ function wn_revoke_device_token($token) {
     db_query("DELETE FROM api_key WHERE api_key = '$token'");
     return true;
 }
+
+/*
+ * ── Form posts from the mobile shell ──────────────────────────────────────────────────
+ *
+ * The shell (assets/mobile/js/router.js) submits a view's <form method="post"> to the
+ * SAME ?page= URL the web posts to, with &mobile=1&reloadView=true, so the action runs
+ * exactly as on the web and the response is the re-rendered fragment. Two things about
+ * the web's post cycle don't survive the trip on their own:
+ *
+ *  1. Post-redirect-get. Many pages answer a post with `Location: index.php?page=…`. A
+ *     fetch follows that silently, WITHOUT mobile=1, and gets a full HTML page instead of
+ *     a fragment. So on a mobile request we rewrite a same-app Location to keep the
+ *     fragment flags (header_register_callback runs just before headers go out, so every
+ *     redirect the app issues is covered without touching a single action or view).
+ *
+ *  2. The flash. The web carries "Saved." across the redirect in the session. A device
+ *     request has no session (Bearer, no cookie, $_SESSION starts empty every time), so
+ *     the message would die with the POST. It rides on the redirect URL instead, signed
+ *     with a key derived from the caller's own device token, so only that device's
+ *     follow-up request can present it and nobody can mint a message into someone
+ *     else's screen through a link.
+ */
+
+/** Key for signing a device's carried flash — derived from its own token, never stored. */
+function wn_mobile_flash_key() {
+    $t = function_exists('wn_device_token') ? wn_device_token() : '';
+    return $t === '' ? '' : hash('sha256', 'wn-mobile-flash|' . $t, true);
+}
+
+/** Rewrite a same-app redirect so a mobile post lands on a fragment, flash included. */
+function wn_mobile_keep_redirect_in_fragment() {
+    $loc = null;
+    foreach (headers_list() as $h) {
+        if (stripos($h, 'Location:') === 0) { $loc = trim(substr($h, 9)); }
+    }
+    if ($loc === null || $loc === '') { return; }
+
+    // Only this app's own router: `index.php?…`, `?…`, or `index.php`. A redirect to
+    // ../auth/login.php, another app or an external site is left exactly as it is.
+    // The anchor is dropped: a fragment has no page to scroll, and the router keeps its
+    // own "#/page" hash.
+    if (($p = strpos($loc, '#')) !== false) { $loc = substr($loc, 0, $p); }
+    if (!preg_match('/^(?:index\.php)?(?:\?(.*))?$/', $loc, $m)) { return; }
+
+    parse_str($m[1] ?? '', $q);
+    unset($q['mobile'], $q['reloadView'], $q['wn_flash'], $q['wn_flash_sig']);
+    $q['reloadView'] = 'true';
+    $q['mobile']     = '1';
+
+    $key = wn_mobile_flash_key();
+    if ($key !== '') {
+        $flash = [];
+        foreach (['success', 'error', 'warning', 'info'] as $k) {
+            if (!empty($_SESSION[$k]) && is_string($_SESSION[$k])) { $flash[$k] = $_SESSION[$k]; }
+        }
+        if ($flash) {
+            $blob = rtrim(strtr(base64_encode(json_encode(['f' => $flash, 'x' => time() + 120])), '+/', '-_'), '=');
+            $q['wn_flash']     = $blob;
+            $q['wn_flash_sig'] = hash_hmac('sha256', $blob, $key);
+        }
+    }
+    header('Location: index.php?' . http_build_query($q), true);
+}
+
+/**
+ * Call once per request, after authentication. On a mobile fragment request it arms the
+ * redirect rewrite and, on the follow-up GET, restores a flash the device carried.
+ */
+function wn_mobile_form_support() {
+    if (($_GET['mobile'] ?? '') !== '1') { return; }
+
+    if (function_exists('header_register_callback')) {
+        header_register_callback('wn_mobile_keep_redirect_in_fragment');
+    }
+
+    $blob = $_GET['wn_flash'] ?? '';
+    $sig  = $_GET['wn_flash_sig'] ?? '';
+    $key  = wn_mobile_flash_key();
+    if (!is_string($blob) || !is_string($sig) || $blob === '' || $key === '') { return; }
+    if (!hash_equals(hash_hmac('sha256', $blob, $key), $sig)) { return; }
+
+    $d = json_decode(base64_decode(strtr($blob, '-_', '+/')), true);
+    if (!is_array($d) || (int) ($d['x'] ?? 0) < time() || !is_array($d['f'] ?? null)) { return; }
+    foreach (['success', 'error', 'warning', 'info'] as $k) {
+        if (!empty($d['f'][$k]) && is_string($d['f'][$k]) && empty($_SESSION[$k])) { $_SESSION[$k] = $d['f'][$k]; }
+    }
+}
