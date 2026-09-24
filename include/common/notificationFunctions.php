@@ -65,6 +65,8 @@ function send_notification($user_id, $shard_id, $category_slug, $title, $body, $
             'tag'        => 'wn-' . $category_slug,
             // Native apps route a tapped notification by category.
             'category'   => $category_slug,
+            // …and mark it read on tap (the in-app bell does the same on click).
+            'notification_id' => (int) $notification_id,
         ];
         send_push_to_user($user_id, $shard_id, $title, $body, $payload);
 
