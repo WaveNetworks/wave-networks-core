@@ -17,11 +17,18 @@ window.WnRouter = (function () {
     var current = null;
     var stack = [];
 
+    // The screen a bare launch / a fresh login lands on. Most apps have a `dashboard`
+    // view; an app whose home is something else (ContactSwipe's is `map`) names it as
+    // HOME_PAGE in its env.js. Hard-coding dashboard sent such an app to a screen its
+    // bundle does not have: refused as "needs an app update", and the home screen's own
+    // code never ran.
+    function home() { return (window.WN_ENV && window.WN_ENV.HOME_PAGE) || 'dashboard'; }
+
     function parse(hash) {
-        var h = (hash || location.hash || '#/dashboard').replace(/^#\/?/, '');
+        var h = (hash || location.hash || '#/' + home()).replace(/^#\/?/, '');
         var qi = h.indexOf('?');
         return {
-            page: (qi === -1 ? h : h.slice(0, qi)) || 'dashboard',
+            page: (qi === -1 ? h : h.slice(0, qi)) || home(),
             params: qi === -1 ? '' : h.slice(qi + 1)
         };
     }
@@ -366,10 +373,11 @@ window.WnRouter = (function () {
                 else if (Platform.isDevice && navigator.app) { navigator.app.exitApp(); }
             });
 
-            go(location.hash || '#/dashboard');
+            go(location.hash || '#/' + home());
         },
 
         go: go,
+        home: home,
         toLogin: toLogin,
         current: function () { return current; },
 

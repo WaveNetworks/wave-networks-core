@@ -217,8 +217,9 @@ window.WnLogin = (function () {
         // stays blank until the next launch.
         document.dispatchEvent(new CustomEvent('wn:authed'));
 
-        location.hash = '#/dashboard';
-        WnRouter.go('#/dashboard');
+        var dest = '#/' + (WnRouter.home ? WnRouter.home() : 'dashboard');
+        location.hash = dest;
+        WnRouter.go(dest);
     }
 
     function register(e) {
