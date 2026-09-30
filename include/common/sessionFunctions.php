@@ -115,6 +115,13 @@ function logout() {
  * deployment is unchanged.
  */
 function get_post_login_home($fallback = '../app/') {
+    // A site admin who opened /admin/ itself (.htaccess sends it to login.php?to=admin, and
+    // the login form posts back to the same URL) asked for the admin area: give them it.
+    // Everyone else still lands in the deployment's child app (7afd0e7). Owner 2026-09-30:
+    // "when I try to go to /admin/ I'm redirected to the app".
+    if (($_GET['to'] ?? '') === 'admin' && function_exists('has_role') && has_role('admin')) {
+        return $fallback;
+    }
     static $cached = null;
     if ($cached !== null) return $cached;
 
