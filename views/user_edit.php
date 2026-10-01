@@ -297,6 +297,7 @@ $active_tab = $_GET['tab'] ?? 'profile';
                                 <th>Type</th>
                                 <th>Action</th>
                                 <th>Version</th>
+                                <th>Via</th>
                                 <th>IP</th>
                             </tr>
                         </thead>
@@ -312,8 +313,13 @@ $active_tab = $_GET['tab'] ?? 'profile';
                                     <span class="badge bg-warning text-dark">Withdrawn</span>
                                     <?php } ?>
                                 </td>
-                                <td class="small"><?= h($entry['version_label'] ?? '-') ?></td>
-                                <td class="small"><code><?= h($entry['ip_address'] ?? '') ?></code></td>
+                                <td class="small">
+                                    <?php if (!empty($entry['version_label']) && isset(wn_legal_types()[$entry['consent_type']])) { ?>
+                                    <a href="index.php?page=legal&amp;type=<?= h($entry['consent_type']) ?>&amp;app=<?= h($entry['app_slug'] ?? '') ?>&amp;view=<?= (int) $entry['consent_version_id'] ?>"><?= h($entry['version_label']) ?></a><?php if (!empty($entry['app_slug'])) { ?> <span class="text-muted"><?= h($entry['app_slug']) ?></span><?php } ?>
+                                    <?php } else { ?><?= h($entry['version_label'] ?? '-') ?><?php } ?>
+                                </td>
+                                <td class="small text-muted"><?= h(str_replace('_', ' ', $entry['source'] ?? '')) ?></td>
+                                <td class="small"><code><?= h($entry['ip_address'] ?? '') ?></code><?php if (!empty($entry['ip_hash'])) { ?><div class="text-muted" title="SHA-256 of the IP, kept as acceptance evidence">#<?= h(substr($entry['ip_hash'], 0, 12)) ?></div><?php } ?></td>
                             </tr>
                             <?php } ?>
                         </tbody>

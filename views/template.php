@@ -62,7 +62,7 @@
                 <i class="bi bi-images sidebar-icon"></i>
                 <span class="sidebar-text">Media</span>
             </a>
-            <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration', 'error_log', 'api_keys', 'onboarding_tours']); ?>
+            <?php $settingsOpen = in_array($page ?? '', ['settings', 'email', 'oauth_providers', 'saml_providers', 'migration', 'error_log', 'api_keys', 'onboarding_tours', 'legal']); ?>
             <a class="nav-link text-white sidebar-parent"
                data-bs-toggle="collapse" href="#settingsMenu" role="button"
                aria-expanded="<?= $settingsOpen ? 'true' : 'false' ?>" aria-controls="settingsMenu">
@@ -77,6 +77,9 @@
                     </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'email' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=email">
                         <span class="sidebar-text">Email</span>
+                    </a>
+                    <a class="nav-link text-white <?= ($page ?? '') === 'legal' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=legal">
+                        <span class="sidebar-text">Privacy &amp; Terms</span>
                     </a>
                     <a class="nav-link text-white <?= ($page ?? '') === 'oauth_providers' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=oauth_providers">
                         <span class="sidebar-text">OAuth Providers</span>
@@ -325,6 +328,7 @@
 <script src="<?= h(core_asset_url('assets/js/color-mode.js')) ?>"></script>
 <script src="<?= h(core_asset_url('assets/js/theme.js')) ?>"></script>
 <script src="<?= h(core_asset_url('assets/js/notifications.js')) ?>"></script>
+<script src="<?= h(core_asset_url('assets/js/legal-notice.js')) ?>"></script>
 <?php
 // REGION: onboarding tour bootstrap
 if (function_exists('get_active_tour_for_user') && !empty($_SESSION['user_id'])) {

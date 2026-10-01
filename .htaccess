@@ -29,6 +29,11 @@ ErrorDocument 500 /admin/error.php
     # Serve onboarding tour media (uploaded welcome videos) via tour_media.php proxy
     RewriteRule ^tour_media/(.+)$ tour_media.php?f=$1 [L,QSA]
 
+    # Public legal documents (legal.php): /admin/legal/privacy, /admin/legal/terms and a
+    # permalink per version, /admin/legal/privacy/v/2.0
+    RewriteRule ^legal/(privacy|terms)/?$ legal.php?doc=$1 [L,QSA]
+    RewriteRule ^legal/(privacy|terms)/v/([0-9][0-9A-Za-z.\-]{0,31})/?$ legal.php?doc=$1&v=$2 [L,QSA]
+
     # Serve admin feedback screenshots (admin-only auth in PHP)
     RewriteRule ^feedback/screenshot/([0-9]+)$ feedback_screenshot.php?id=$1 [L,QSA]
 

@@ -134,6 +134,7 @@ $assetMap = [
     '../../admin/assets/js/sidebar.js'            => 'js/vendor/sidebar.js',
     '../../admin/assets/js/color-mode.js'         => 'js/vendor/color-mode.js',
     '../../admin/assets/js/notifications.js'      => 'js/vendor/notifications.js',
+    '../../admin/assets/js/legal-notice.js'       => 'js/vendor/legal-notice.js',
     '../assets/js/modal.js'                       => 'js/vendor/modal.js',
     '../assets/js/theme.js'                       => '__DROP__',   // desktop theme picker; mobile is fixed brand
     '../assets/js/toast.js'                       => 'js/vendor/toast.js',

@@ -47,6 +47,7 @@ $views = [
     'mobile_parity'            => __DIR__ . '/../views/mobile_parity.php',
     'account_security'         => __DIR__ . '/../views/account_security.php',
     'onboarding_tours'         => __DIR__ . '/../views/onboarding_tours.php',
+    'legal'                    => __DIR__ . '/../views/legal.php',
 ];
 
 if (isset($views[$page]) && file_exists($views[$page])) {

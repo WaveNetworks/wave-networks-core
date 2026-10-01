@@ -31,8 +31,11 @@ ob_start();
             <?php } ?>
             <?php if (!empty($version['content'])) { ?>
             <div class="border rounded p-2 small" style="max-height:200px;overflow-y:auto;">
-                <?= $version['content'] ?>
+                <?= function_exists('wn_legal_markdown') ? wn_legal_markdown($version['content']) : nl2br(h($version['content'])) ?>
             </div>
+            <?php } ?>
+            <?php if (function_exists('wn_legal_public_url')) { ?>
+            <a class="small" href="<?= h(wn_legal_public_url($type)) ?>" target="_blank" rel="noopener">Read the full <?= h(ucwords(str_replace('_', ' ', $type))) ?></a>
             <?php } ?>
         </div>
     </div>

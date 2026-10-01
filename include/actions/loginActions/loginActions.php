@@ -131,6 +131,7 @@ if (($action ?? null) == 'register') {
         'first_name'       => trim($_POST['first_name'] ?? ''),
         'last_name'        => trim($_POST['last_name'] ?? ''),
         'agree_terms'      => $_POST['agree_terms'] ?? '',
+        'consent_source'   => 'register_web',
     ];
 
     $mode = wn_registration_mode();

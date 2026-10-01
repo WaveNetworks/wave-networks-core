@@ -13,7 +13,7 @@ if (($action ?? null) == 'acceptReconsent') {
 
     if (count($errs) <= 0 && !empty($_SESSION['reconsent_needed'])) {
         foreach ($_SESSION['reconsent_needed'] as $type => $version) {
-            record_consent($uid, $type, 'granted', (int)$version['version_id']);
+            record_consent($uid, $type, 'granted', (int)$version['version_id'], 'reconsent_login');
         }
 
         unset($_SESSION['reconsent_needed']);

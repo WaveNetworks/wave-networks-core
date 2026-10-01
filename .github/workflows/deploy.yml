@@ -19,7 +19,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: gd, mbstring, xml, curl, zip, pdo_mysql
+          extensions: gd, mbstring, xml, curl, zip, pdo_mysql, pdo_sqlite
 
       - name: Install composer dependencies
         run: composer install --no-dev --no-interaction --optimize-autoloader
@@ -41,6 +41,13 @@ jobs:
       # deployment does not have gets 404 by name — never the same empty 200 as "nothing found".
       - name: Check the API envelope (no silent refusal)
         run: php scripts/api-envelope-probe.php
+        working-directory: admin
+
+      # Privacy Policy / Terms of Service are a version history: publishing makes a NEW row,
+      # a published row never changes, acceptance records the version (legalFunctions.php).
+      # Runs the real functions on in-memory SQLite. DB-free.
+      - name: Check legal document versioning
+        run: php scripts/legal-versioning-probe.php
         working-directory: admin
 
       - name: Prepare deploy staging

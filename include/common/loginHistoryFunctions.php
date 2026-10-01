@@ -72,30 +72,8 @@ function check_reconsent_needed($user_id) {
         return [];
     }
 
-    $required_types = ['terms_of_service', 'privacy_policy'];
-    $needs_reconsent = [];
-
-    foreach ($required_types as $type) {
-        $latest_version = get_latest_consent_version($type);
-        if (!$latest_version) continue;
-
-        // Get user's latest consent for this type
-        $r = db_query_prepared(
-            "SELECT consent_version_id FROM user_consent
-             WHERE user_id = ? AND consent_type = ? AND action = 'granted'
-             ORDER BY created DESC LIMIT 1",
-            [$uid, $type]
-        );
-        $user_consent = db_fetch($r);
-
-        if (!$user_consent) {
-            // Never consented
-            $needs_reconsent[$type] = $latest_version;
-        } elseif ((int)$user_consent['consent_version_id'] < (int)$latest_version['version_id']) {
-            // Consented to an older version
-            $needs_reconsent[$type] = $latest_version;
-        }
-    }
-
-    return $needs_reconsent;
+    // The legal documents decide (legalFunctions.php): owed when never accepted, or when a
+    // version published with "requires re-acceptance" has taken effect since the newest
+    // one this user accepted. A minor edit published without it asks nobody again.
+    return function_exists('wn_legal_pending') ? wn_legal_pending($uid) : [];
 }

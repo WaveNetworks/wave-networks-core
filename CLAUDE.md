@@ -648,6 +648,20 @@ policies and requires acceptance before entering the app.
 Auth pages: auth/consent.php (admin), auth/consent.php (child-app — same UI,
   child-app template). Action: consentActions.php → acceptReconsent.
 
+### Legal documents: versioned Privacy Policy / Terms (main 5.3)
+include/common/legalFunctions.php. Admin › Settings › Privacy & Terms (views/legal.php) edits a
+DRAFT (consent_version_draft) in markdown per app (app_slug = child dir, '' = whole site);
+publishing inserts a NEW consent_version row (label, effective_date — today or scheduled —
+summary = "what changed", requires_reacceptance, published_by/_at, content_sha256). A published
+row is NEVER updated or deleted (scripts/legal-versioning-probe.php fails the deploy on any
+UPDATE/DELETE of consent_version). In force = newest published + effective, app's own before ''.
+Public: /admin/legal/privacy|terms[/v/<label>] (legal.php; forwards to the app's own page).
+Child extension point: legal.json at the app root ({"privacy_policy": {"path": "privacy",
+"default": "legal/privacy_policy.md"}, ...}) — public path + text seeded as 1.0.
+Acceptance: user_consent.source + ip_hash; wn_legal_pending() = what check_reconsent_needed()
+returns; actions getLegalStatus / acceptLegalUpdate; assets/js/legal-notice.js shows the
+one-time notice (web + device shell via build_shell map). Render with wn_legal_render_public().
+
 ### Child app usage
 Child apps get all GDPR functions for free via common.php include chain.
 Child apps build their own Privacy & Data UI (views/privacy.php) calling

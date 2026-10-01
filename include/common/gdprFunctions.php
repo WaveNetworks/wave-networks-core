@@ -8,18 +8,29 @@
 // ── Consent tracking ─────────────────────────────────────────────────────────
 
 /**
- * Record a consent event (grant or withdraw).
+ * Record a consent event (grant or withdraw). Append-only.
+ * $source names the door it came through (register_web, register_device, reconsent_login,
+ * notice_web, notice_app, preferences …); the IP is kept as before and also as a hash
+ * (legalFunctions.php wn_legal_ip_hash) so acceptance evidence survives IP retention rules.
  */
-function record_consent($user_id, $consent_type, $action, $version_id = null) {
-    $s_uid   = (int) $user_id;
-    $s_type  = sanitize($consent_type, SQL);
-    $s_act   = sanitize($action, SQL);
-    $ip      = sanitize($_SERVER['REMOTE_ADDR'] ?? '', SQL);
-    $ua      = sanitize(substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 512), SQL);
-    $vid     = $version_id ? (int) $version_id : 'NULL';
-
-    db_query("INSERT INTO user_consent (user_id, consent_type, consent_version_id, action, ip_address, user_agent)
-              VALUES ('$s_uid', '$s_type', $vid, '$s_act', '$ip', '$ua')");
+function record_consent($user_id, $consent_type, $action, $version_id = null, $source = null) {
+    global $db;
+    $ip  = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    $ua  = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 512);
+    $vid = $version_id ? (int) $version_id : null;
+    $iph = $ip !== '' ? hash('sha256', 'wn-consent-ip|' . $ip) : null;
+    $src = $source !== null ? substr((string) $source, 0, 32) : null;
+    try {
+        $st = $db->prepare("INSERT INTO user_consent (user_id, consent_type, consent_version_id, action, ip_address, user_agent, ip_hash, source)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $st->execute([(int) $user_id, (string) $consent_type, $vid, (string) $action, $ip, $ua, $iph, $src]);
+        return true;
+    } catch (Throwable $e) {
+        // Before main 5.3 has run there is no ip_hash/source column: never lose the event.
+        $st = $db->prepare("INSERT INTO user_consent (user_id, consent_type, consent_version_id, action, ip_address, user_agent)
+                            VALUES (?, ?, ?, ?, ?, ?)");
+        return $st->execute([(int) $user_id, (string) $consent_type, $vid, (string) $action, $ip, $ua]);
+    }
 }
 
 /**
@@ -59,7 +70,7 @@ function get_all_consent_statuses($user_id) {
  */
 function get_consent_history($user_id) {
     $r = db_query_prepared(
-        "SELECT uc.*, cv.version_label, cv.consent_type as cv_type
+        "SELECT uc.*, cv.version_label, cv.consent_type as cv_type, cv.app_slug, cv.effective_date
          FROM user_consent uc
          LEFT JOIN consent_version cv ON uc.consent_version_id = cv.version_id
          WHERE uc.user_id = ?
@@ -72,29 +83,31 @@ function get_consent_history($user_id) {
 }
 
 /**
- * Get the latest version for a consent type.
+ * The version of a consent type in force now. For the legal documents (Privacy Policy,
+ * Terms of Service) that is wn_legal_current(): published, effective date arrived, this
+ * app's own before the deployment's. Other types keep their newest effective row.
  */
 function get_latest_consent_version($consent_type) {
+    if (function_exists('wn_legal_types') && isset(wn_legal_types()[$consent_type])) {
+        return wn_legal_current($consent_type);
+    }
     $r = db_query_prepared(
-        "SELECT * FROM consent_version WHERE consent_type = ? ORDER BY effective_date DESC, version_id DESC LIMIT 1",
-        [$consent_type]
+        "SELECT * FROM consent_version WHERE consent_type = ? AND effective_date <= ? ORDER BY effective_date DESC, version_id DESC LIMIT 1",
+        [$consent_type, gmdate('Y-m-d')]
     );
     return db_fetch($r) ?: null;
 }
 
 /**
- * Get all consent types and their latest versions.
+ * Get all consent types and the version of each in force now.
  */
 function get_all_consent_versions() {
-    $r = db_query(
-        "SELECT cv1.* FROM consent_version cv1
-         INNER JOIN (
-             SELECT consent_type, MAX(version_id) as max_id FROM consent_version GROUP BY consent_type
-         ) cv2 ON cv1.version_id = cv2.max_id
-         ORDER BY cv1.consent_type"
-    );
+    $r = db_query("SELECT DISTINCT consent_type FROM consent_version ORDER BY consent_type");
     $versions = [];
-    while ($row = db_fetch($r)) { $versions[$row['consent_type']] = $row; }
+    while ($row = db_fetch($r)) {
+        $v = get_latest_consent_version($row['consent_type']);
+        if ($v) { $versions[$row['consent_type']] = $v; }
+    }
     return $versions;
 }
 

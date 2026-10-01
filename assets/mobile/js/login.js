@@ -200,15 +200,11 @@ window.WnLogin = (function () {
         WnApi.setToken(res.token);
         WnApi.setUser({ user_id: res.user_id, email: res.email, name: res.name });
 
-        // Re-consent is a gate on the web, so it is a gate here too. The consent
-        // page is not a view either, so send them to the browser to complete it
-        // rather than half-admitting them into the app.
-        if (res.reconsent_needed && res.reconsent_needed.length) {
-            Platform.openExternal(window.WN_ENV.AUTH_BASE + 'consent.php');
-            fail('Please accept the updated policies to continue.');
-            WnApi.setToken('');
-            return;
-        }
+        // Policies to accept again (res.reconsent_needed) are answered INSIDE the app: the
+        // shell's legal-notice.js asks getLegalStatus once signed in and shows the summary
+        // with Accept. (Sending people to the browser's consent.php never worked — the
+        // browser has no session — and the check here read .length off an object.)
+        setTimeout(function () { if (window.WnLegalNotice) window.WnLegalNotice.check(); }, 800);
 
         WnStore.clear();          // never show the previous user's cached screens
 
@@ -341,10 +337,11 @@ window.WnLogin = (function () {
             on('wnRegister',  function () { showPanel('register'); });
             on('wnShowLogin', function () { showPanel('login'); });
 
-            // The policies are ordinary web pages; read them in the browser. Same pages
-            // auth/register.php links to (../site/ from the auth directory).
-            on('wnRegTos',     function () { Platform.openExternal(window.WN_ENV.AUTH_BASE + '../site/terms.php'); });
-            on('wnRegPrivacy', function () { Platform.openExternal(window.WN_ENV.AUTH_BASE + '../site/privacy.php'); });
+            // The policies are ordinary public web pages; read them in the browser. Core's
+            // /admin/legal/<doc> serves every deployment and forwards to the app's own page
+            // when it has one (legal.json), so this one link is right for every app.
+            on('wnRegTos',     function () { Platform.openExternal(window.WN_ENV.AUTH_BASE + '../../admin/legal/terms'); });
+            on('wnRegPrivacy', function () { Platform.openExternal(window.WN_ENV.AUTH_BASE + '../../admin/legal/privacy'); });
 
             var regForm = document.getElementById('wnRegForm');
             if (regForm) regForm.addEventListener('submit', register);

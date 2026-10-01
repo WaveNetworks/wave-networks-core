@@ -90,8 +90,11 @@ function wn_registration_create(array $in, $mode) {
     if (function_exists('record_consent')) {
         $tos_ver = get_latest_consent_version('terms_of_service');
         $pp_ver  = get_latest_consent_version('privacy_policy');
-        record_consent($new_id, 'terms_of_service', 'granted', $tos_ver ? (int)$tos_ver['version_id'] : null);
-        record_consent($new_id, 'privacy_policy', 'granted', $pp_ver ? (int)$pp_ver['version_id'] : null);
+        // The versions in force at this moment (legalFunctions.php: this app's own, else the
+        // deployment's), with the door the sign-up came through.
+        $src = (string) ($in['consent_source'] ?? 'register');
+        record_consent($new_id, 'terms_of_service', 'granted', $tos_ver ? (int)$tos_ver['version_id'] : null, $src);
+        record_consent($new_id, 'privacy_policy', 'granted', $pp_ver ? (int)$pp_ver['version_id'] : null, $src);
     }
 
     // Claim anonymous A/B experiment assignments to the new user (Task #795)

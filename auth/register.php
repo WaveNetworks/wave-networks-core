@@ -61,7 +61,7 @@ ob_start();
     <div class="mb-3 form-check">
         <input type="checkbox" class="form-check-input" id="agree_terms" name="agree_terms" value="1" required>
         <label class="form-check-label small" for="agree_terms">
-            I agree to the <a href="../site/terms.php" target="_blank">Terms of Service</a> and <a href="../site/privacy.php" target="_blank">Privacy Policy</a>
+            I agree to the <a href="../legal/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="../legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>
         </label>
     </div>
 

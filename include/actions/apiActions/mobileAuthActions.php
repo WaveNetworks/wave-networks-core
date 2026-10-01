@@ -125,6 +125,7 @@ if (($_POST['action'] ?? '') == 'deviceRegister') {
         'first_name'       => trim($_POST['first_name'] ?? ''),
         'last_name'        => trim($_POST['last_name'] ?? ''),
         'agree_terms'      => $_POST['agree_terms'] ?? '',
+        'consent_source'   => 'register_device',
     ];
     $mode = wn_registration_mode();
 
