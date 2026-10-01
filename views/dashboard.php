@@ -14,6 +14,12 @@ $updateInfo = null;
 if (has_role('admin')) {
     $updateInfo = check_for_updates();
 }
+// Graphics parity: how many use-case→asset links have drifted and need review.
+$graphicsNeedReview = 0;
+if (has_role('admin') && function_exists('use_case_assets_review_count')) {
+    $graphicsNeedReview = use_case_assets_review_count();
+}
+
 $hasUpdates = false;
 if ($updateInfo) {
     $hasUpdates = $updateInfo['admin']['outdated'];
@@ -67,6 +73,23 @@ if ($updateInfo) {
             </ul>
             <a href="https://subtheme.com/docs/changelog" target="_blank" class="btn btn-sm btn-outline-info">
                 View Changelog <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+        </div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php } ?>
+
+<?php if ($graphicsNeedReview > 0) { ?>
+<!-- Graphics parity banner -->
+<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+    <div class="d-flex align-items-start">
+        <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+        <div class="flex-grow-1">
+            <strong><?= (int)$graphicsNeedReview ?> graphic<?= $graphicsNeedReview == 1 ? '' : 's' ?> need review</strong>
+            <div class="small">A linked use-case graphic has drifted — the use case changed, its test is failing, or the latest run screenshot no longer matches the approved one.</div>
+            <a href="index.php?page=use_cases" class="btn btn-sm btn-outline-warning mt-1">
+                Review graphics <i class="bi bi-arrow-right"></i>
             </a>
         </div>
     </div>

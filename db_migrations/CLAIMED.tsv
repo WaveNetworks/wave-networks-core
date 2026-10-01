@@ -56,3 +56,4 @@ shard/1.0	Migration 1.0 - wave-networks-core Shard Database
 shard/1.1	Migration 1.1 for Shard Database
 shard/1.2	Migration 1.2 for Shard Database
 shard/1.3	Migration 1.3 for Shard Database
+main/5.4	Migration 5.4 for Main Database (use_case_asset: link Media library graphics to use cases, drift tracking)

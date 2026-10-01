@@ -65,6 +65,7 @@ $page_title = 'Use Cases';
                     <th>Slug / Name</th>
                     <th style="width: 120px;">Category</th>
                     <th style="width: 100px;">Status</th>
+                    <th style="width: 110px;">Graphics</th>
                     <th style="width: 130px;">Starting page</th>
                     <th style="width: 130px;">Ending action</th>
                     <th style="width: 70px;">Logs</th>
@@ -73,7 +74,7 @@ $page_title = 'Use Cases';
                 </tr>
             </thead>
             <tbody id="useCaseTable">
-                <tr><td colspan="9" class="text-center text-muted py-3">Loading...</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-3">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -99,6 +100,39 @@ $page_title = 'Use Cases';
             </div>
             <div class="modal-body text-center bg-body-tertiary">
                 <img id="shotModalImg" src="" alt="" class="img-fluid" style="max-height:78vh;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Link / replace graphic modal -->
+<div class="modal fade" id="linkModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="linkModalTitle">Link graphic</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-2" id="linkRoleWrap">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Role</label>
+                        <select class="form-select form-select-sm" id="linkRole"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Variant <span class="text-muted">(e.g. light / dark / en)</span></label>
+                        <input type="text" class="form-control form-control-sm" id="linkVariant" maxlength="50" placeholder="optional">
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label class="form-label small mb-0">Pick a Media library asset</label>
+                    <input type="text" class="form-control form-control-sm" style="width:180px;" placeholder="Search media…" oninput="loadMediaPicker(this.value)">
+                </div>
+                <div id="mediaPickerGrid" style="max-height:48vh;overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" id="linkConfirmBtn" onclick="confirmLink()" disabled>Save</button>
             </div>
         </div>
     </div>
@@ -142,7 +176,7 @@ function loadUseCases() {
         updateAppFilter(json.results.apps || []);
 
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">No use cases match. Click <strong>Refresh</strong> to re-derive from the latest test-user action logs, or wait for the nightly 4 AM cron.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">No use cases match. Click <strong>Refresh</strong> to re-derive from the latest test-user action logs, or wait for the nightly 4 AM cron.</td></tr>';
         } else {
             var html = '';
             items.forEach(function(item) {
@@ -218,6 +252,7 @@ function renderRow(item) {
     html += '</td>';
     html += '<td>' + categoryBadge(item.test_category) + '</td>';
     html += '<td>' + statusBadge(item.test_status) + '</td>';
+    html += '<td>' + graphicBadge(item) + '</td>';
     html += '<td class="small text-muted">' + escHtml(item.starting_page || '—') + '</td>';
     html += '<td class="small text-muted">' + escHtml(item.ending_action || '—') + '</td>';
     html += '<td class="small text-end">' + (item.derived_from_log_count || 0) + '</td>';
@@ -227,9 +262,22 @@ function renderRow(item) {
     return html;
 }
 
+function graphicBadge(item) {
+    var n  = item.graphic_count || 0;
+    var nr = item.graphic_needs_review || 0;
+    if (n === 0) {
+        return '<span class="badge bg-light text-muted border" title="No linked graphics">0</span>';
+    }
+    var html = '<span class="badge bg-secondary" title="' + n + ' linked graphic(s)"><i class="bi bi-image me-1"></i>' + n + '</span>';
+    if (nr > 0) {
+        html += ' <span class="badge bg-warning text-dark" title="' + nr + ' need review"><i class="bi bi-exclamation-triangle me-1"></i>' + nr + '</span>';
+    }
+    return html;
+}
+
 function renderDetailRow(item) {
     var html = '<tr id="detail-' + item.use_case_id + '" style="display:none;">';
-    html += '<td colspan="9" class="p-3 bg-body-tertiary" id="detail-content-' + item.use_case_id + '">';
+    html += '<td colspan="10" class="p-3 bg-body-tertiary" id="detail-content-' + item.use_case_id + '">';
     html += '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Loading detail...</div>';
     html += '</td></tr>';
     return html;
@@ -306,8 +354,192 @@ function loadDetail(id) {
         html += '</div>';
         html += '</div>';
 
+        // Graphics panel (linked media assets beside the latest passing run).
+        html += '<hr class="my-3">';
+        html += '<div id="graphics-' + id + '"><div class="text-muted small">'
+             +  '<i class="bi bi-hourglass-split me-1"></i>Loading graphics…</div></div>';
+
         content.innerHTML = html;
+        loadGraphics(id);
     });
+}
+
+// ── Graphics panel: linked assets BESIDE the latest passing run screenshots ──
+function loadGraphics(id) {
+    apiPost('getUseCaseAssets', { use_case_id: id }, function(json) {
+        var box = document.getElementById('graphics-' + id);
+        if (!box) return;
+        if (json.error) { box.innerHTML = '<div class="text-danger small">' + escHtml(json.error) + '</div>'; return; }
+        var res   = json.results || {};
+        var assets= res.assets || [];
+        var shots = res.run_screenshots || [];
+        var run   = res.latest_run;
+        var roles = res.roles || [];
+
+        var html = '<div class="d-flex justify-content-between align-items-center mb-2">';
+        html += '<h6 class="mb-0"><i class="bi bi-images me-1"></i>Graphics <span class="text-muted">(' + assets.length + ')</span></h6>';
+        html += '<button class="btn btn-sm btn-outline-primary" onclick="openLinkModal(' + id + ')"><i class="bi bi-plus-lg"></i> Link graphic</button>';
+        html += '</div>';
+
+        // Latest passing run screenshots (the parity reference).
+        html += '<div class="mb-3"><div class="small text-muted mb-1">Latest passing run';
+        html += run ? (' <code>#' + run.run_id + '</code> <span class="text-muted">' + escHtml(run.run_at || '') + '</span>') : ' — none yet';
+        html += '</div>';
+        if (shots.length) {
+            html += '<div class="d-flex flex-wrap gap-2">';
+            shots.forEach(function(s) {
+                html += '<a href="#" onclick="showShot(\'' + escAttr(s.url) + '\',\'' + escAttr(s.name) + '\');return false;" title="' + escAttr(s.name) + '">';
+                html += '<img src="' + escAttr(s.url) + '" alt="' + escAttr(s.name) + '" onerror="this.closest(\'a\').style.display=\'none\';" style="height:96px;width:auto;border:2px solid var(--bs-success);border-radius:6px;object-fit:cover;"></a>';
+            });
+            html += '</div>';
+        } else {
+            html += '<div class="text-muted small fst-italic">No run screenshots captured yet.</div>';
+        }
+        html += '</div>';
+
+        if (assets.length === 0) {
+            html += '<div class="text-muted small">No graphics linked. Use <strong>Link graphic</strong> to attach a Media library asset this use case depicts.</div>';
+        } else {
+            html += '<div class="row g-2">';
+            assets.forEach(function(a) {
+                html += renderAssetCard(a);
+            });
+            html += '</div>';
+        }
+        // Stash roles for the modal.
+        box.setAttribute('data-roles', JSON.stringify(roles));
+        box.innerHTML = html;
+    });
+}
+
+function reviewBadge(a) {
+    var s = a.live_status || a.review_status || 'pending';
+    var map = { approved: 'bg-success', needs_review: 'bg-warning text-dark', pending: 'bg-secondary' };
+    var label = { approved: 'approved', needs_review: 'needs review', pending: 'pending' }[s] || s;
+    return '<span class="badge ' + (map[s] || 'bg-secondary') + '">' + escHtml(label) + '</span>';
+}
+
+function renderAssetCard(a) {
+    var isVideo = (a.mime_type || '').indexOf('video') === 0;
+    var html = '<div class="col-md-4 col-sm-6">';
+    html += '<div class="card h-100">';
+    if (isVideo) {
+        html += '<div class="ratio ratio-1x1 bg-body-tertiary d-flex align-items-center justify-content-center"><i class="bi bi-film" style="font-size:2rem;"></i></div>';
+    } else {
+        html += '<a href="#" onclick="showShot(\'' + escAttr(a.asset_url) + '\',\'' + escAttr(a.original_name || '') + '\');return false;">';
+        html += '<img src="' + escAttr(a.asset_url) + '" class="card-img-top" style="height:120px;object-fit:contain;background:var(--bs-tertiary-bg);" alt="' + escAttr(a.original_name || '') + '"></a>';
+    }
+    html += '<div class="card-body p-2">';
+    html += '<div class="small fw-semibold text-truncate" title="' + escAttr(a.title || a.original_name || '') + '">' + escHtml(a.title || a.original_name || '') + '</div>';
+    html += '<div class="small text-muted"><span class="badge bg-light text-dark border">' + escHtml(a.role || '') + '</span>';
+    if (a.variant) html += ' <span class="badge bg-light text-dark border">' + escHtml(a.variant) + '</span>';
+    html += '</div>';
+    html += '<div class="mt-1">' + reviewBadge(a);
+    if ((a.live_status === 'needs_review') && a.live_reason) {
+        html += ' <span class="text-warning small" title="' + escAttr(a.live_reason) + '"><i class="bi bi-info-circle"></i></span>';
+    }
+    html += '</div>';
+    if (a.live_reason && a.live_status === 'needs_review') {
+        html += '<div class="small text-muted mt-1">' + escHtml(a.live_reason) + '</div>';
+    }
+    html += '<div class="btn-group btn-group-sm mt-2 w-100">';
+    html += '<button class="btn btn-outline-success" onclick="assetAction(\'approveUseCaseAsset\',' + a.link_id + ',' + a.use_case_id + ')" title="Record the current run as the approved reference">Approve</button>';
+    html += '<button class="btn btn-outline-secondary" onclick="openReplaceModal(' + a.link_id + ',' + a.use_case_id + ')" title="Point at a different media asset">Replace</button>';
+    html += '<button class="btn btn-outline-danger" onclick="if(confirm(\'Unlink this graphic?\'))assetAction(\'unlinkUseCaseAsset\',' + a.link_id + ',' + a.use_case_id + ')">Unlink</button>';
+    html += '</div>';
+    html += '</div></div></div>';
+    return html;
+}
+
+function assetAction(action, linkId, ucId) {
+    apiPost(action, { link_id: linkId }, function(json) {
+        if (json.error) { alert(json.error); return; }
+        loadGraphics(ucId);
+        loadUseCases();
+    });
+}
+
+var _linkTargetUc = null, _replaceTargetLink = null, _replaceTargetUc = null;
+
+function openLinkModal(ucId) {
+    _linkTargetUc = ucId;
+    _replaceTargetLink = null;
+    var box = document.getElementById('graphics-' + ucId);
+    var roles = [];
+    try { roles = JSON.parse(box.getAttribute('data-roles') || '[]'); } catch(e) {}
+    var sel = document.getElementById('linkRole');
+    sel.innerHTML = roles.map(function(r){ return '<option value="' + r + '">' + r + '</option>'; }).join('');
+    document.getElementById('linkVariant').value = '';
+    document.getElementById('linkModalTitle').textContent = 'Link graphic';
+    document.getElementById('linkRoleWrap').style.display = '';
+    loadMediaPicker('');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('linkModal')).show();
+}
+
+function openReplaceModal(linkId, ucId) {
+    _replaceTargetLink = linkId;
+    _replaceTargetUc = ucId;
+    _linkTargetUc = null;
+    document.getElementById('linkModalTitle').textContent = 'Replace graphic';
+    document.getElementById('linkRoleWrap').style.display = 'none';
+    loadMediaPicker('');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('linkModal')).show();
+}
+
+function loadMediaPicker(search) {
+    _pickedAsset = null;
+    var btn = document.getElementById('linkConfirmBtn');
+    if (btn) btn.disabled = true;
+    apiPost('listMediaForLink', { search: search || '' }, function(json) {
+        var grid = document.getElementById('mediaPickerGrid');
+        if (json.error) { grid.innerHTML = '<div class="text-danger small">' + escHtml(json.error) + '</div>'; return; }
+        var assets = (json.results || {}).assets || [];
+        if (!assets.length) { grid.innerHTML = '<div class="text-muted small p-2">No media assets. Upload them in the Media library first.</div>'; return; }
+        var html = '<div class="row g-2">';
+        assets.forEach(function(a) {
+            var isVideo = (a.mime_type || '').indexOf('video') === 0;
+            html += '<div class="col-3"><div class="card h-100 media-pick" style="cursor:pointer;" onclick="pickMedia(' + a.asset_id + ', this)">';
+            if (isVideo) {
+                html += '<div class="ratio ratio-1x1 d-flex align-items-center justify-content-center bg-body-tertiary"><i class="bi bi-film"></i></div>';
+            } else {
+                html += '<img src="' + escAttr(a.url) + '" style="height:72px;object-fit:contain;background:var(--bs-tertiary-bg);" alt="">';
+            }
+            html += '<div class="card-body p-1 small text-truncate" title="' + escAttr(a.title || a.original_name || '') + '">' + escHtml(a.title || a.original_name || '') + '</div>';
+            html += '</div></div>';
+        });
+        html += '</div>';
+        grid.innerHTML = html;
+    });
+}
+
+var _pickedAsset = null;
+function pickMedia(assetId, el) {
+    _pickedAsset = assetId;
+    document.querySelectorAll('#mediaPickerGrid .media-pick').forEach(function(c){ c.classList.remove('border','border-primary','border-3'); });
+    el.classList.add('border','border-primary','border-3');
+    document.getElementById('linkConfirmBtn').disabled = false;
+}
+
+function confirmLink() {
+    if (!_pickedAsset) return;
+    if (_replaceTargetLink) {
+        apiPost('replaceUseCaseAsset', { link_id: _replaceTargetLink, asset_id: _pickedAsset }, function(json) {
+            if (json.error) { alert(json.error); return; }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('linkModal')).hide();
+            loadGraphics(_replaceTargetUc); loadUseCases();
+        });
+    } else if (_linkTargetUc) {
+        apiPost('linkUseCaseAsset', {
+            use_case_id: _linkTargetUc,
+            asset_id:    _pickedAsset,
+            role:        document.getElementById('linkRole').value,
+            variant:     document.getElementById('linkVariant').value
+        }, function(json) {
+            if (json.error) { alert(json.error); return; }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('linkModal')).hide();
+            loadGraphics(_linkTargetUc); loadUseCases();
+        });
+    }
 }
 
 // Build viewable screenshot descriptors for a run. screenshot_paths is a

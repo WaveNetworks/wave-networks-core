@@ -67,7 +67,8 @@ function core_available_scopes() {
         'monitoring:read' => 'Read registered apps, monitoring events, stats',
         'monitoring:write'=> 'Trigger checks, create tasks, send reports, manage CRs',
         'actions:read'    => 'Read user/device action logs and use_case derivations',
-        'tests:write'     => 'Write use_case rows and use_case_test_run results',
+        'tests:write'     => 'Write use_case rows, test-run results, and use_case→asset links',
+        'tests:read'      => 'Read use_case rows, test runs, and linked graphics/assets',
         'media:read'      => 'Read media library assets (URLs, metadata) — for builder/agent embedding',
         'media:write'     => 'Upload media assets (e.g. archived source documents) — for builder/agent use',
         'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
@@ -97,7 +98,7 @@ function monitor_key_scopes() {
         'monitoring:read', 'monitoring:write',
         'feedback:read', 'feedback:write', 'feedback:admin',
         'credentials:read', 'credentials:write',
-        'actions:read', 'tests:write',
+        'actions:read', 'tests:write', 'tests:read',
         'media:read', 'media:write',
     ];
 }

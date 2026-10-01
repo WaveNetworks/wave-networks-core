@@ -56,9 +56,36 @@ if (($_POST['action'] ?? '') == 'getUseCases') {
                 LIMIT $per_page OFFSET $offset";
         $r = db_query_prepared($sql, $args);
         $items = [];
+        $ids   = [];
         if ($r) {
             while ($row = $r->fetch(PDO::FETCH_ASSOC)) {
+                $row['graphic_count']       = 0;
+                $row['graphic_needs_review']= 0;
                 $items[] = $row;
+                $ids[(int)$row['use_case_id']] = count($items) - 1;
+            }
+        }
+
+        // Graphics (use_case_asset) counts per use case on this page.
+        if (function_exists('ensure_use_case_asset_table') && $ids) {
+            ensure_use_case_asset_table();
+            $in = implode(',', array_map('intval', array_keys($ids)));
+            $gr = db_query(
+                "SELECT use_case_id,
+                        COUNT(*) AS c,
+                        SUM(review_status = 'needs_review') AS nr
+                 FROM use_case_asset
+                 WHERE use_case_id IN ($in)
+                 GROUP BY use_case_id"
+            );
+            if ($gr) {
+                while ($g = $gr->fetch(PDO::FETCH_ASSOC)) {
+                    $idx = $ids[(int)$g['use_case_id']] ?? null;
+                    if ($idx !== null) {
+                        $items[$idx]['graphic_count']        = (int)$g['c'];
+                        $items[$idx]['graphic_needs_review'] = (int)$g['nr'];
+                    }
+                }
             }
         }
 
