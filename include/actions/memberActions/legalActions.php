@@ -82,6 +82,10 @@ if (($_POST['action'] ?? '') == 'getLegalStatus') {
         $pending = function_exists('check_reconsent_needed') ? check_reconsent_needed($uid) : [];
         $list = [];
         foreach ($pending as $type => $v) {
+            // The notice is only for a version somebody PUBLISHED here (Admin › Privacy &
+            // Terms, or an app's legal.json default). The 2.5 seed rows (no text, no
+            // published_at) never raise it on any app; the sign-in gate is unchanged.
+            if (empty($v['published_at'])) continue;
             $list[] = [
                 'type'           => $type,
                 'title'          => !empty($v['title']) ? $v['title'] : wn_legal_types()[$type]['title'],

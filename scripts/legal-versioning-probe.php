@@ -176,6 +176,13 @@ if (!extension_loaded('pdo_sqlite')) {
         ? ok('markdown is escaped first: no script, no javascript: links; links, lists, headings render') : bad('markdown: ' . $html);
 }
 
+// ── 5b. apps that never opted in: no notice from the 2.5 seed rows ───────────
+$la = (string) @file_get_contents($root . '/include/actions/memberActions/legalActions.php');
+(strpos($la, 'if (empty($v[\'published_at\'])) continue;') !== false)
+    ? ok('the in-app notice ignores unpublished seed rows (apps that never opted in see none)') : bad('getLegalStatus would raise the notice from the 2.5 seed rows');
+$lp = (string) @file_get_contents($root . '/legal.php');
+(strpos($lp, '\'site/\' . $word . \'.php\'') !== false) ? ok('/admin/legal/<doc> falls back to an app\'s existing page when nothing is published') : bad('legal.php has no fallback to existing site/<doc>.php pages');
+
 // ── 6. dispatched ────────────────────────────────────────────────────────────
 $acts = '';
 foreach (glob($root . '/include/actions/memberActions/*.php') ?: [] as $f) $acts .= file_get_contents($f);

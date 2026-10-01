@@ -26,4 +26,17 @@ if (strpos($own, '/admin/legal/') !== 0) {
     header('Location: ' . $own, true, 302);
     exit;
 }
+// An app that has not published its text here keeps the page it already had: the
+// marketing site's /site/<doc>.php, or the app's own /<app>/<doc>.php. (Device sign-up links
+// here for every app; before 5.3 they went to ../site/<doc>.php.)
+$cur = wn_legal_current($type, $app);
+if ($label === '' && (!$cur || trim((string) ($cur['content'] ?? '')) === '')) {
+    $word = wn_legal_types()[$type]['word'];
+    foreach (['site/' . $word . '.php', ($app !== '' ? $app . '/' : '') . $word . '.php'] as $rel) {
+        if ($rel !== $word . '.php' && is_file(wn_legal_webroot() . '/' . $rel)) {
+            header('Location: /' . $rel, true, 302);
+            exit;
+        }
+    }
+}
 wn_legal_render_public($type, $app, $label !== '' ? $label : null);
