@@ -43,6 +43,9 @@ function send_email($to_email, $to_name, $subject, $body, $alt_body = '') {
     }
 
     $mail = new PHPMailer(true);
+    // UTF-8, not PHPMailer's default iso-8859-1: names with accents or emoji ("Zoë 🦊") in a
+    // subject or body otherwise arrive as mojibake.
+    $mail->CharSet = 'UTF-8';
 
     try {
         $mail->isSMTP();
