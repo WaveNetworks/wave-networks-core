@@ -94,6 +94,7 @@ if (($_POST['action'] ?? '') == 'getLegalStatus') {
                 'effective_date' => (string) $v['effective_date'],
                 'summary'        => (string) ($v['summary'] ?? ''),
                 'url'            => (string) ($v['url'] ?? wn_legal_public_url($type, null, null, true)),
+                'kind'           => (string) ($v['kind'] ?? 'update'),
             ];
         }
         $data['pending'] = $list;

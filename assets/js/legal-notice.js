@@ -31,7 +31,10 @@
     }
 
     function openUrl(url) {
-        if (global.Platform && typeof global.Platform.openExternal === 'function' && env.BUNDLED) {
+        // In the app: the in-app browser where this binary can show it, else the system one.
+        if (global.Platform && typeof global.Platform.openInApp === 'function' && env.BUNDLED) {
+            global.Platform.openInApp(url);
+        } else if (global.Platform && typeof global.Platform.openExternal === 'function' && env.BUNDLED) {
             global.Platform.openExternal(url);
         } else {
             global.open(url, '_blank', 'noopener');
@@ -49,13 +52,20 @@
         if (shown || !pending || !pending.length || !global.bootstrap || !global.bootstrap.Modal) { return; }
         shown = true;
         var names = pending.map(function (p) { return p.title; }).join(' and ');
+        // 'update': a newer version than the one they accepted. Otherwise ('first', 'none')
+        // they have not accepted this app's documents yet: the same one-tap Accept.
+        var updated = pending.some(function (p) { return p.kind === 'update'; });
+        var heading = updated ? 'We\u2019ve updated our ' + names : 'Our ' + names;
+        var lead = updated
+            ? 'Please take a moment to review what changed. By selecting Accept you agree to the updated '
+            : 'Please take a moment to read them. By selecting Accept you agree to the ';
         var items = pending.map(function (p) {
             return '<div class="wn-legal-item border rounded p-3 mb-2">'
                 + '<div class="d-flex justify-content-between align-items-baseline gap-2">'
                 + '<strong>' + esc(p.title) + '</strong>'
                 + '<span class="small text-nowrap" style="opacity:.75">Version ' + esc(p.version_label) + '</span></div>'
                 + '<div class="small mb-1" style="opacity:.75">Effective ' + esc(fmtDate(p.effective_date)) + '</div>'
-                + (p.summary ? '<p class="small mb-2">' + esc(p.summary) + '</p>' : '')
+                + (p.summary && p.kind === 'update' ? '<p class="small mb-2">' + esc(p.summary) + '</p>' : '')
                 + '<a href="' + esc(p.url) + '" class="small wn-legal-read" data-url="' + esc(p.url) + '">Read the full ' + esc(p.title) + '</a>'
                 + '</div>';
         }).join('');
@@ -67,9 +77,9 @@
         el.setAttribute('data-bs-backdrop', 'static');
         el.setAttribute('data-bs-keyboard', 'false');
         el.innerHTML = '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">'
-            + '<div class="modal-header"><h5 class="modal-title" id="wnLegalNoticeTitle">We’ve updated our ' + esc(names) + '</h5></div>'
-            + '<div class="modal-body"><p class="small">Please take a moment to review what changed. By selecting Accept you agree to the updated '
-            + (pending.length > 1 ? 'documents' : 'document') + '.</p>' + items
+            + '<div class="modal-header"><h5 class="modal-title" id="wnLegalNoticeTitle">' + esc(heading) + '</h5></div>'
+            + '<div class="modal-body"><p class="small">' + lead
+            + (pending.length > 1 ? 'Terms of Service and Privacy Policy' : esc(names)) + '.</p>' + items
             + '<p class="small text-danger mb-0 d-none" id="wnLegalErr"></p></div>'
             + '<div class="modal-footer"><button type="button" class="btn btn-primary w-100" id="wnLegalAccept">Accept</button></div>'
             + '</div></div>';

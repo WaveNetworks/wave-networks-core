@@ -90,7 +90,7 @@ if (($action ?? null) == 'login') {
 
         // Check if user needs to re-consent to updated policies
         if (function_exists('check_reconsent_needed')) {
-            $reconsent = check_reconsent_needed($user['user_id']);
+            $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
             if (!empty($reconsent)) {
                 $_SESSION['reconsent_needed'] = $reconsent;
                 header('Location: consent.php');
@@ -131,7 +131,8 @@ if (($action ?? null) == 'register') {
         'first_name'       => trim($_POST['first_name'] ?? ''),
         'last_name'        => trim($_POST['last_name'] ?? ''),
         'agree_terms'      => $_POST['agree_terms'] ?? '',
-        'consent_source'   => 'register_web',
+        'consent_source'   => 'signup_web',
+        'legal_version_ids'=> (string) ($_POST['legal_version_ids'] ?? ''),
     ];
 
     $mode = wn_registration_mode();
@@ -405,7 +406,7 @@ if (($action ?? null) == 'verify2FA') {
 
         // Check re-consent
         if (function_exists('check_reconsent_needed')) {
-            $reconsent = check_reconsent_needed($user['user_id']);
+            $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
             if (!empty($reconsent)) {
                 $_SESSION['reconsent_needed'] = $reconsent;
                 header('Location: consent.php');

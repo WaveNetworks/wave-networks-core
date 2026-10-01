@@ -94,7 +94,7 @@ if (($_POST['action'] ?? '') == 'deviceLogin') {
         // Re-consent is a real gate, not a warning: the app must show it before the
         // user goes any further, exactly as the web redirect does.
         if (function_exists('check_reconsent_needed')) {
-            $reconsent = check_reconsent_needed($user['user_id']);
+            $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
             if (!empty($reconsent)) { $data['reconsent_needed'] = $reconsent; }
         }
 
@@ -125,7 +125,8 @@ if (($_POST['action'] ?? '') == 'deviceRegister') {
         'first_name'       => trim($_POST['first_name'] ?? ''),
         'last_name'        => trim($_POST['last_name'] ?? ''),
         'agree_terms'      => $_POST['agree_terms'] ?? '',
-        'consent_source'   => 'register_device',
+        'consent_source'   => 'signup_app',
+        'legal_version_ids'=> (string) ($_POST['legal_version_ids'] ?? ''),
     ];
     $mode = wn_registration_mode();
 

@@ -98,14 +98,17 @@ window.WnLogin = (function () {
             +       '<label for="wnRegWebsite">Website</label>'
             +       '<input type="text" id="wnRegWebsite" tabindex="-1" autocomplete="off">'
             +     '</div>'
-            +     '<div class="mb-3 form-check">'
+            // The agreement is explicit: nothing is created until it is ticked (the button stays
+            // disabled), and the versions shown here are the ones recorded (legal_version_ids).
+            +     '<div class="mb-3 form-check wn-reg-agree">'
             +       '<input type="checkbox" class="form-check-input" id="wnRegTerms" required>'
             +       '<label class="form-check-label small" for="wnRegTerms">'
             +         'I agree to the <a href="#" id="wnRegTos">Terms of Service</a> and '
-            +         '<a href="#" id="wnRegPrivacy">Privacy Policy</a>'
+            +         'the <a href="#" id="wnRegPrivacy">Privacy Policy</a>'
             +       '</label>'
+            +       '<div class="form-text" id="wnRegLegalVer"></div>'
             +     '</div>'
-            +     '<button type="submit" class="btn btn-primary w-100" id="wnRegBtn">Create account</button>'
+            +     '<button type="submit" class="btn btn-primary w-100" id="wnRegBtn" disabled>Agree &amp; create account</button>'
             +   '</form>'
             +   '<p class="text-center text-muted small mt-4 mb-0">'
             +     'Already have an account? <a href="#" id="wnShowLogin">Sign in</a>'
@@ -114,8 +117,43 @@ window.WnLogin = (function () {
     }
 
     /** Swap between the sign-in and sign-up panels, keeping the shared header and error box. */
+    // The Terms / Privacy versions in force (getLegalVersions, public): shown on the sign-up
+    // panel, opened by its links, and posted back so the account records what was shown.
+    var legal = null;
+    function legalUrl(doc) {
+        var key = doc === 'terms' ? 'terms_of_service' : 'privacy_policy';
+        if (legal && legal[key] && legal[key].url) return legal[key].url;
+        return window.WN_ENV.AUTH_BASE + '../../admin/legal/' + doc;   // forwards to the app's own page
+    }
+    function openLegal(doc) {
+        var url = legalUrl(doc);
+        if (typeof Platform.openInApp === 'function') Platform.openInApp(url); else Platform.openExternal(url);
+    }
+    function loadLegal() {
+        if (legal) return;
+        var body = new FormData();
+        body.append('action', 'getLegalVersions');
+        fetch(window.WN_ENV.API_BASE + 'index.php', { method: 'POST', body: body, credentials: window.WN_ENV.BUNDLED ? 'omit' : 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                legal = (json && json.results && json.results.versions) || {};
+                var t = legal.terms_of_service, p = legal.privacy_policy, el = document.getElementById('wnRegLegalVer');
+                if (el && t && p) el.textContent = 'Terms of Service ' + t.version_label + ' · Privacy Policy ' + p.version_label;
+            })
+            .catch(function () {});
+    }
+    function legalIds() {
+        if (!legal) return '';
+        return ['terms_of_service', 'privacy_policy'].map(function (k) { return legal[k] ? legal[k].version_id : ''; }).filter(Boolean).join(',');
+    }
+    function syncRegBtn() {
+        var b = document.getElementById('wnRegBtn'), c = document.getElementById('wnRegTerms');
+        if (b && c) b.disabled = !c.checked;
+    }
+
     function showPanel(which) {
         var reg = which === 'register';
+        if (reg) loadLegal();
         document.getElementById('wnLoginPanel').classList.toggle('d-none', reg);
         document.getElementById('wnRegPanel').classList.toggle('d-none', !reg);
         document.getElementById('wnLoginTitle').textContent = reg ? 'Create your account' : 'Welcome back';
@@ -248,6 +286,7 @@ window.WnLogin = (function () {
         body.append('password', val('wnRegPassword'));
         body.append('confirm_password', val('wnRegConfirm'));
         body.append('agree_terms', '1');
+        body.append('legal_version_ids', legalIds());
         body.append('website', val('wnRegWebsite'));
 
         fetch(window.WN_ENV.API_BASE + 'index.php', {
@@ -258,8 +297,8 @@ window.WnLogin = (function () {
         })
             .then(function (r) { return r.json(); })
             .then(function (json) {
-                btn.disabled = false;
-                btn.textContent = 'Create account';
+                btn.textContent = 'Agree & create account';
+                syncRegBtn();
 
                 var res = json.results || {};
 
@@ -286,8 +325,8 @@ window.WnLogin = (function () {
                 signedIn(res);
             })
             .catch(function () {
-                btn.disabled = false;
-                btn.textContent = 'Create account';
+                btn.textContent = 'Agree & create account';
+                syncRegBtn();
                 fail(Platform.online()
                     ? 'Could not reach the server. Please try again.'
                     : "You're offline. Connect to create an account.");
@@ -340,8 +379,10 @@ window.WnLogin = (function () {
             // The policies are ordinary public web pages; read them in the browser. Core's
             // /admin/legal/<doc> serves every deployment and forwards to the app's own page
             // when it has one (legal.json), so this one link is right for every app.
-            on('wnRegTos',     function () { Platform.openExternal(window.WN_ENV.AUTH_BASE + '../../admin/legal/terms'); });
-            on('wnRegPrivacy', function () { Platform.openExternal(window.WN_ENV.AUTH_BASE + '../../admin/legal/privacy'); });
+            on('wnRegTos',     function () { openLegal('terms'); });
+            on('wnRegPrivacy', function () { openLegal('privacy'); });
+            var agree = document.getElementById('wnRegTerms');
+            if (agree) agree.addEventListener('change', syncRegBtn);
 
             var regForm = document.getElementById('wnRegForm');
             if (regForm) regForm.addEventListener('submit', register);

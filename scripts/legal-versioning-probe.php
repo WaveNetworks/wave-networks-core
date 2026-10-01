@@ -102,10 +102,10 @@ if (!extension_loaded('pdo_sqlite')) {
     ($c0 && $c0['app_slug'] === '' && $c0['version_label'] === '1.0') ? ok('an app with no version of its own gets the whole-site version') : bad('fallback to the whole-site version failed');
 
     // Sign-up: record what is in force.
-    foreach (['terms_of_service', 'privacy_policy'] as $t) { $v = get_latest_consent_version($t); record_consent(7, $t, 'granted', $v ? (int) $v['version_id'] : null, 'register_web'); }
+    foreach (['terms_of_service', 'privacy_policy'] as $t) { $v = get_latest_consent_version($t); record_consent(7, $t, 'granted', $v ? (int) $v['version_id'] : null, 'signup_web'); }
     $h = wn_legal_acceptance_history(7);
-    (count($h) === 2 && $h[0]['version_id'] && $h[0]['source'] === 'register_web' && $h[0]['ip_hash'] === hash('sha256', 'wn-consent-ip|203.0.113.9'))
-        ? ok('sign-up records the version ids in force, the door (register_web) and an IP hash')
+    (count($h) === 2 && $h[0]['version_id'] && $h[0]['source'] === 'signup_web' && $h[0]['ip_hash'] === hash('sha256', 'wn-consent-ip|203.0.113.9'))
+        ? ok('sign-up records the version ids in force, the door (signup_web) and an IP hash')
         : bad('sign-up acceptance is missing version/source/ip hash: ' . json_encode($h));
     wn_legal_pending(7) === [] ? ok('a user who accepted at sign-up owes nothing') : bad('a fresh sign-up is asked to accept again');
     count(wn_legal_pending(8)) === 2 ? ok('a user with no acceptance at all owes both documents') : bad('a user who never accepted is not asked');
@@ -123,7 +123,23 @@ if (!extension_loaded('pdo_sqlite')) {
         ? ok('publishing creates a new version 1.0 with who and when') : bad('first publish: ' . json_encode($r1));
     wn_legal_draft('privacy_policy', 'probeapp') === null ? ok('publishing clears the draft') : bad('the draft survived publishing');
     (wn_legal_current('privacy_policy')['version_id'] ?? 0) == ($r1['version_id'] ?? -1) ? ok("the app's own version replaces the whole-site one") : bad('the app version is not in force');
-    wn_legal_pending(7) === [] ? ok('a version published without re-acceptance asks nobody') : bad('a minor version made users accept again');
+    // The app's FIRST own version: everyone who accepted only the whole-site seed owes it once
+    // ('first'), through the in-app notice — never the sign-in gate.
+    $pf = wn_legal_pending(7);
+    (array_keys($pf) === ['privacy_policy'] && ($pf['privacy_policy']['kind'] ?? '') === 'first')
+        ? ok("an app's first own version is owed once by existing users (kind 'first')") : bad('first own version: ' . json_encode(array_map(fn($v) => $v['kind'] ?? '?', $pf)));
+    wn_legal_gate_needed(7) === [] ? ok("the sign-in gate does not block on a 'first' acceptance (the in-app notice asks)") : bad('the sign-in gate blocks a first acceptance');
+    $fa = wn_legal_accept(7, (string) $r1['version_id'], 'notice_app');
+    (($fa['accepted']['privacy_policy'] ?? 0) == $r1['version_id'] && wn_legal_pending(7) === []) ? ok('one Accept records 1.0 (notice_app) and nothing is owed after') : bad('first accept: ' . json_encode($fa));
+    $r1b = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.\n\nTypo fixed.", 'summary' => 'Typo.', 'requires_reacceptance' => 0], 1, 'admin@nokemo.com');
+    (($r1b['version_label'] ?? '') === '1.1' && wn_legal_pending(7) === []) ? ok('a version published without re-acceptance (1.1) asks nobody') : bad('a minor version made users accept again: ' . json_encode($r1b));
+    // Sign-up records what the form showed (legal_version_ids), else what is in force.
+    (wn_legal_signup_version_id('privacy_policy', $r1['version_id'] . ',999') === (int) $r1['version_id']
+        && wn_legal_signup_version_id('privacy_policy', '') === (int) $r1b['version_id']
+        && wn_legal_signup_version_id('privacy_policy', '1') === (int) $r1b['version_id'])
+        ? ok('sign-up records the version the form showed; an id from another document or scope falls back to the one in force') : bad('signup version resolution');
+    $sv = wn_legal_signup_versions();
+    (($sv['privacy_policy']['version_label'] ?? '') === '1.1' && !empty($sv['terms_of_service']['url'])) ? ok('getLegalVersions lists both documents in force for a sign-up form') : bad('signup versions: ' . json_encode($sv));
 
     // Publish 2.0 with re-acceptance: a NEW row; 1.0 untouched.
     $before = $v1;
@@ -133,7 +149,7 @@ if (!extension_loaded('pdo_sqlite')) {
         ? ok('publishing again creates a NEW row numbered 2.0 (re-acceptance = major)') : bad('second publish: ' . json_encode($r2));
     $row($before['version_id']) === $before ? ok('the earlier version is byte-identical after the next publish') : bad('publishing changed an earlier version');
     (wn_legal_intact($v1) === true && wn_legal_intact($v2) === true) ? ok('each published text matches its SHA-256') : bad('content_sha256 does not match the stored text');
-    count(wn_legal_versions('privacy_policy', 'probeapp')) === 2 ? ok('history lists both versions') : bad('history is wrong');
+    count(wn_legal_versions('privacy_policy', 'probeapp')) === 3 ? ok('history lists every version') : bad('history is wrong');
     $d = wn_legal_diff($v1['content'], $v2['content']);
     (count(array_filter($d, fn($x) => $x['op'] === '+')) === 2 && !array_filter($d, fn($x) => $x['op'] === '-')) ? ok('the diff between 1.0 and 2.0 shows exactly the added lines') : bad('diff: ' . json_encode($d));
 
@@ -141,7 +157,7 @@ if (!extension_loaded('pdo_sqlite')) {
     $e1 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => 'x', 'summary' => 's', 'version_label' => '2.0']);
     $e2 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => 'x', 'summary' => 's', 'effective_date' => '2001-01-01']);
     $e3 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "  \n", 'summary' => 's']);
-    (!empty($e1['errors']['label']) && !empty($e2['errors']['effective']) && !empty($e3['errors']['content']) && count(wn_legal_versions('privacy_policy', 'probeapp')) === 2)
+    (!empty($e1['errors']['label']) && !empty($e2['errors']['effective']) && !empty($e3['errors']['content']) && count(wn_legal_versions('privacy_policy', 'probeapp')) === 3)
         ? ok('a taken number, a past date and an empty text are refused and publish nothing') : bad('refusals: ' . json_encode([$e1, $e2, $e3]));
 
     // Acceptance of the re-acceptance version.
@@ -166,7 +182,7 @@ if (!extension_loaded('pdo_sqlite')) {
 
     // Public page data + URLs.
     $pg = wn_legal_page('privacy_policy', 'probeapp', '1.0');
-    ($pg['version'] && $pg['version']['version_label'] === '1.0' && !$pg['is_current'] && count($pg['history']) === 2)
+    ($pg['version'] && $pg['version']['version_label'] === '1.0' && !$pg['is_current'] && count($pg['history']) === 3)
         ? ok('a permalink serves that exact version, marked as not current, with the history (scheduled one hidden)') : bad('permalink page: ' . json_encode(['v' => $pg['version']['version_label'] ?? null, 'h' => count($pg['history'])]));
     wn_legal_public_url('privacy_policy', 'probeapp', '2.0') === '/admin/legal/privacy/v/2.0' ? ok('without legal.json the public URL is /admin/legal/privacy[/v/<n>]') : bad('public url: ' . wn_legal_public_url('privacy_policy', 'probeapp', '2.0'));
 
@@ -182,6 +198,16 @@ $la = (string) @file_get_contents($root . '/include/actions/memberActions/legalA
     ? ok('the in-app notice ignores unpublished seed rows (apps that never opted in see none)') : bad('getLegalStatus would raise the notice from the 2.5 seed rows');
 $lp = (string) @file_get_contents($root . '/legal.php');
 (strpos($lp, '\'site/\' . $word . \'.php\'') !== false) ? ok('/admin/legal/<doc> falls back to an app\'s existing page when nothing is published') : bad('legal.php has no fallback to existing site/<doc>.php pages');
+
+// ── 5c. sign-up asks explicitly, on the web and in the app ────────────────────
+$lj = (string) @file_get_contents($root . '/assets/mobile/js/login.js');
+(strpos($lj, 'id="wnRegBtn" disabled') !== false && strpos($lj, "body.append('legal_version_ids'") !== false && strpos($lj, "'getLegalVersions'") !== false && strpos($lj, 'Platform.openInApp') !== false)
+    ? ok('app sign-up: Agree & create account stays disabled until ticked, links open in-app, the shown version ids are posted') : bad('app sign-up agreement is not explicit or does not post legal_version_ids');
+$sn = (string) @file_get_contents($root . '/snippets/legal_agree.php');
+(strpos($sn, 'name="legal_version_ids"') !== false && strpos($sn, 'btn.disabled = !box.checked') !== false && strpos((string) @file_get_contents($root . '/auth/register.php'), 'legal_agree.php') !== false)
+    ? ok('web sign-up: the shared agreement snippet (disabled until ticked, version ids posted)') : bad('web sign-up agreement snippet missing');
+$srcs = (string) @file_get_contents($root . '/include/actions/loginActions/loginActions.php') . (string) @file_get_contents($root . '/include/actions/apiActions/mobileAuthActions.php');
+(strpos($srcs, "'signup_web'") !== false && strpos($srcs, "'signup_app'") !== false) ? ok("sign-ups are recorded as signup_web / signup_app") : bad('sign-up sources are not signup_web / signup_app');
 
 // ── 6. dispatched ────────────────────────────────────────────────────────────
 $acts = '';

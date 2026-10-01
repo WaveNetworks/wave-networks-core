@@ -329,9 +329,14 @@ function wn_legal_ip_hash($ip = null) {
 }
 
 /**
- * Versions this user still has to accept: type => version row (+ 'url').
- * Owed when the user never accepted the document, or when a version published with
- * requires_reacceptance has taken effect since the newest one they accepted in that scope.
+ * Versions this user still has to accept: type => version row (+ 'url', 'kind').
+ *   kind 'none'   — never accepted this document at all (as before 5.3: the sign-in gate)
+ *   kind 'first'  — accepted only another scope's version (e.g. the whole-site seed) and never
+ *                   this app's own: an app that publishes its own text asks everyone once
+ *   kind 'update' — a version published with requires_reacceptance has taken effect since the
+ *                   newest one they accepted in this scope
+ * A version published without re-acceptance asks nobody who accepted an earlier one.
+ * An app with no versions of its own is served the whole-site rows, so nothing changes for it.
  */
 function wn_legal_pending($user_id, $app = null) {
     $uid = (int) $user_id;
@@ -342,22 +347,66 @@ function wn_legal_pending($user_id, $app = null) {
         if (!$cur) continue;
         $scope = (string) $cur['app_slug'];
         $any = wn_legal_q("SELECT consent_version_id FROM user_consent WHERE user_id = ? AND consent_type = ? AND action = 'granted' LIMIT 1", [$uid, $type]);
-        if (!$any) { $out[$type] = $cur; continue; }
+        if (!$any) { $out[$type] = $cur + ['kind' => 'none']; continue; }
+        $inScope = wn_legal_q(
+            "SELECT MAX(cv.version_id) AS vid FROM user_consent uc JOIN consent_version cv ON cv.version_id = uc.consent_version_id
+              WHERE uc.user_id = ? AND uc.consent_type = ? AND uc.action = 'granted' AND cv.app_slug = ?",
+            [$uid, $type, $scope]);
+        $have = (int) ($inScope[0]['vid'] ?? 0);
+        if ($have === 0) {
+            // The whole-site seed rows (no text) were all anyone accepted before an app had
+            // its own: only an app's OWN document makes that a 'first' acceptance.
+            if ($scope !== '') $out[$type] = $cur + ['kind' => 'first'];
+            elseif (!empty($cur['requires_reacceptance'])) $out[$type] = $cur + ['kind' => 'update'];
+            continue;
+        }
         $req = wn_legal_q(
             "SELECT version_id FROM consent_version
               WHERE consent_type = ? AND app_slug = ? AND requires_reacceptance = 1 AND effective_date <= ?
               ORDER BY version_id DESC LIMIT 1",
             [$type, $scope, wn_legal_today()]);
-        if (!$req) continue;
-        $have = wn_legal_q(
-            "SELECT uc.consent_id FROM user_consent uc JOIN consent_version cv ON cv.version_id = uc.consent_version_id
-              WHERE uc.user_id = ? AND uc.consent_type = ? AND uc.action = 'granted' AND cv.app_slug = ? AND cv.version_id >= ?
-              LIMIT 1",
-            [$uid, $type, $scope, (int) $req[0]['version_id']]);
-        if (!$have) $out[$type] = $cur;
+        if ($req && $have < (int) $req[0]['version_id']) $out[$type] = $cur + ['kind' => 'update'];
     }
     foreach ($out as $type => $v) $out[$type]['url'] = wn_legal_public_url($type, $app, null, true);
     return $out;
+}
+
+/**
+ * What the SIGN-IN gate (auth/consent.php) blocks on: everything owed except a 'first'
+ * acceptance, which the in-app notice asks for in one tap instead of stopping sign-in.
+ */
+function wn_legal_gate_needed($user_id) {
+    $p = function_exists('check_reconsent_needed') ? check_reconsent_needed($user_id) : [];
+    return array_filter($p, function ($v) { return ($v['kind'] ?? '') !== 'first'; });
+}
+
+/** The versions in force, for a sign-up form to show and post back (legal_version_ids). */
+function wn_legal_signup_versions($app = null) {
+    $out = [];
+    foreach (wn_legal_types() as $type => $t) {
+        $v = wn_legal_current($type, $app);
+        if (!$v) continue;
+        $out[$type] = ['version_id' => (int) $v['version_id'], 'version_label' => (string) $v['version_label'],
+                       'title' => $t['title'], 'url' => wn_legal_public_url($type, $app, null, true)];
+    }
+    return $out;
+}
+
+/**
+ * The version id to record for a sign-up: the one the form showed (posted legal_version_ids)
+ * when it is a published, in-force-or-earlier version of that document in this app's scope;
+ * otherwise the one in force now.
+ */
+function wn_legal_signup_version_id($type, $posted, $app = null) {
+    $app = $app === null ? wn_legal_app() : (string) $app;
+    $cur = wn_legal_current($type, $app);
+    $ids = array_filter(array_map('intval', is_array($posted) ? $posted : explode(',', (string) $posted)));
+    foreach ($ids as $id) {
+        $v = wn_legal_version($id);
+        if ($v && $v['consent_type'] === $type && $cur && (string) $v['app_slug'] === (string) $cur['app_slug']
+            && $v['effective_date'] <= wn_legal_today()) return (int) $id;
+    }
+    return $cur ? (int) $cur['version_id'] : null;
 }
 
 /**

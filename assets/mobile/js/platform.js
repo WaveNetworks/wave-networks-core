@@ -13,6 +13,7 @@ window.Platform = (function () {
     var ready = false;
     var queue = [];
     var isDevice = typeof window.cordova !== 'undefined';
+    var sceneAware = null;   // openInApp: does this binary's in-app browser show on iOS?
 
     function flush() {
         ready = true;
@@ -44,6 +45,33 @@ window.Platform = (function () {
             } else {
                 window.open(url, '_blank', 'noopener');
             }
+        },
+
+        /**
+         * Open a page to READ and come back from (a policy, a preview): the in-app browser
+         * with a Done button where this binary can show it, else the system browser.
+         * iOS: stock cordova-plugin-inappbrowser 6.0.0 opens _blank in a window cordova-ios 8
+         * never puts on screen, so _blank is used only when the plugin answers 'sceneAware'
+         * (the fixed copy newer app builds vendor); older binaries get _system. Android: in-app.
+         */
+        openInApp: function (url) {
+            var cd = window.cordova, iab = isDevice && cd && cd.InAppBrowser && typeof cd.InAppBrowser.open === 'function' ? cd.InAppBrowser : null;
+            if (!iab) { window.open(url, '_blank', 'noopener'); return; }
+            var ios = cd.platformId === 'ios' || /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+            var inApp = function () {
+                try { if (iab.open(url, '_blank', 'location=no,toolbar=yes,closebuttoncaption=Done,presentationstyle=pagesheet')) return; } catch (e) {}
+                iab.open(url, '_system');
+            };
+            if (!ios) { inApp(); return; }
+            if (sceneAware === null) {
+                sceneAware = new Promise(function (res) {
+                    if (typeof cd.exec !== 'function') { res(false); return; }
+                    var t = setTimeout(function () { res(false); }, 1500);
+                    try { cd.exec(function () { clearTimeout(t); res(true); }, function () { clearTimeout(t); res(false); }, 'InAppBrowser', 'sceneAware', []); }
+                    catch (e) { clearTimeout(t); res(false); }
+                });
+            }
+            sceneAware.then(function (ok) { if (ok) inApp(); else iab.open(url, '_system'); });
         },
 
         share: function (text, url) {

@@ -58,12 +58,7 @@ ob_start();
         <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
     </div>
 
-    <div class="mb-3 form-check">
-        <input type="checkbox" class="form-check-input" id="agree_terms" name="agree_terms" value="1" required>
-        <label class="form-check-label small" for="agree_terms">
-            I agree to the <a href="../legal/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="../legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>
-        </label>
-    </div>
+    <?php include(__DIR__ . '/../snippets/legal_agree.php'); ?>
 
     <?php if (recaptcha_enabled()) { ?>
     <div class="mb-3">
@@ -72,7 +67,7 @@ ob_start();
     </div>
     <?php } ?>
 
-    <button type="submit" class="btn btn-primary w-100">Create Account</button>
+    <button type="submit" class="btn btn-primary w-100">Agree &amp; create account</button>
 </form>
 
 <div class="text-center mt-3">
