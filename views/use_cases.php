@@ -26,6 +26,7 @@ $page_title = 'Use Cases';
                 <span class="badge bg-danger" id="badgeFailing">0 failing</span>
                 <span class="badge bg-info text-dark" id="badgeFlaky">0 flaky</span>
                 <span class="badge bg-dark" id="badgeDisabled">0 disabled</span>
+                <span class="badge bg-danger" id="badgeNeedsAttention" title="Flagged by a rating drop or rising error rate vs the previous build">0 needs attention</span>
 
                 <select class="form-select form-select-sm" id="appFilter" onchange="currentPage=1; loadUseCases()" style="width: auto;">
                     <option value="">All apps</option>
@@ -65,6 +66,7 @@ $page_title = 'Use Cases';
                     <th>Slug / Name</th>
                     <th style="width: 120px;">Category</th>
                     <th style="width: 100px;">Status</th>
+                    <th style="width: 150px;">Health</th>
                     <th style="width: 110px;">Graphics</th>
                     <th style="width: 130px;">Starting page</th>
                     <th style="width: 130px;">Ending action</th>
@@ -74,7 +76,7 @@ $page_title = 'Use Cases';
                 </tr>
             </thead>
             <tbody id="useCaseTable">
-                <tr><td colspan="10" class="text-center text-muted py-3">Loading...</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-3">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -176,7 +178,7 @@ function loadUseCases() {
         updateAppFilter(json.results.apps || []);
 
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">No use cases match. Click <strong>Refresh</strong> to re-derive from the latest test-user action logs, or wait for the nightly 4 AM cron.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-3">No use cases match. Click <strong>Refresh</strong> to re-derive from the latest test-user action logs, or wait for the nightly 4 AM cron.</td></tr>';
         } else {
             var html = '';
             items.forEach(function(item) {
@@ -201,6 +203,11 @@ function updateStats(s) {
     document.getElementById('badgeFailing').textContent  = (s.failing  || 0) + ' failing';
     document.getElementById('badgeFlaky').textContent    = (s.flaky    || 0) + ' flaky';
     document.getElementById('badgeDisabled').textContent = (s.disabled || 0) + ' disabled';
+    var na = document.getElementById('badgeNeedsAttention');
+    if (na) {
+        na.textContent = (s.needs_attention || 0) + ' needs attention';
+        na.style.display = (s.needs_attention || 0) > 0 ? '' : 'none';
+    }
 }
 
 function updateAppFilter(apps) {
@@ -252,6 +259,7 @@ function renderRow(item) {
     html += '</td>';
     html += '<td>' + categoryBadge(item.test_category) + '</td>';
     html += '<td>' + statusBadge(item.test_status) + '</td>';
+    html += '<td>' + healthCell(item) + '</td>';
     html += '<td>' + graphicBadge(item) + '</td>';
     html += '<td class="small text-muted">' + escHtml(item.starting_page || '—') + '</td>';
     html += '<td class="small text-muted">' + escHtml(item.ending_action || '—') + '</td>';
@@ -260,6 +268,26 @@ function renderRow(item) {
     html += '<td class="small">' + escHtml(item.updated || '—') + '</td>';
     html += '</tr>';
     return html;
+}
+
+function healthCell(item) {
+    var html = '';
+    if (item.health_status === 'needs_attention') {
+        html += '<span class="badge bg-danger" title="' + escAttr(item.flag_reason || 'Regression flagged') + '"><i class="bi bi-exclamation-triangle me-1"></i>needs attention</span> ';
+    }
+    // Rating
+    if (item.rating_count && item.rating_count > 0) {
+        var avg = (item.rating_avg != null) ? Number(item.rating_avg).toFixed(1) : '—';
+        var cls = (item.rating_avg >= 4) ? 'bg-success' : (item.rating_avg >= 3 ? 'bg-warning text-dark' : 'bg-danger');
+        html += '<span class="badge ' + cls + '" title="' + item.rating_count + ' rating(s)"><i class="bi bi-star-fill me-1"></i>' + avg + '</span> ';
+    } else {
+        html += '<span class="badge bg-light text-muted border" title="No ratings yet">no ratings</span> ';
+    }
+    // Error users on the flow
+    if (item.error_users && item.error_users > 0) {
+        html += '<span class="badge bg-danger" title="users hitting open errors on this flow"><i class="bi bi-bug me-1"></i>' + item.error_users + '</span>';
+    }
+    return html || '<span class="text-muted">—</span>';
 }
 
 function graphicBadge(item) {
@@ -277,7 +305,7 @@ function graphicBadge(item) {
 
 function renderDetailRow(item) {
     var html = '<tr id="detail-' + item.use_case_id + '" style="display:none;">';
-    html += '<td colspan="10" class="p-3 bg-body-tertiary" id="detail-content-' + item.use_case_id + '">';
+    html += '<td colspan="11" class="p-3 bg-body-tertiary" id="detail-content-' + item.use_case_id + '">';
     html += '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Loading detail...</div>';
     html += '</td></tr>';
     return html;
@@ -354,6 +382,10 @@ function loadDetail(id) {
         html += '</div>';
         html += '</div>';
 
+        // Health panel: per-build trend of rating, error rate and test status,
+        // plus the latest comments.
+        html += renderHealthPanel(json.results);
+
         // Graphics panel (linked media assets beside the latest passing run).
         html += '<hr class="my-3">';
         html += '<div id="graphics-' + id + '"><div class="text-muted small">'
@@ -362,6 +394,72 @@ function loadDetail(id) {
         content.innerHTML = html;
         loadGraphics(id);
     });
+}
+
+// ── Health panel: per-build trend + regression flag + latest comments ────────
+function renderHealthPanel(res) {
+    var uc    = res.use_case || {};
+    var trend = res.trend || [];
+    var comments = res.comments || [];
+    var health = res.health || {};
+
+    var html = '<hr class="my-3">';
+    html += '<div class="d-flex align-items-center mb-2"><h6 class="mb-0"><i class="bi bi-heart-pulse me-1"></i>Use case health</h6>';
+    if (health.score != null) {
+        var sc = Number(health.score);
+        var scls = sc >= 80 ? 'bg-success' : (sc >= 50 ? 'bg-warning text-dark' : 'bg-danger');
+        html += ' <span class="badge ' + scls + ' ms-2" title="Composite of test status, error rate and ratings">score ' + sc + '</span>';
+    }
+    html += '</div>';
+
+    if (uc.health_status === 'needs_attention') {
+        html += '<div class="alert alert-danger py-2 small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>'
+             +  '<strong>Needs attention</strong> on build <code>' + escHtml(uc.flag_build || '') + '</code>: '
+             +  escHtml(uc.flag_reason || '') + '</div>';
+    }
+
+    html += '<div class="row g-3"><div class="col-md-7">';
+    html += '<p class="mb-1 small text-muted">Per-build trend (newest first). Error users = distinct users hitting an open error on this flow\'s pages in that build\'s window.</p>';
+    if (trend.length === 0) {
+        html += '<div class="text-muted small">No ratings recorded yet, so no per-build trend. The in-flow prompt feeds this once users start rating.</div>';
+    } else {
+        html += '<table class="table table-sm small mb-0 align-middle"><thead><tr>'
+             +  '<th>Build</th><th class="text-end">Rating</th><th class="text-end">#</th>'
+             +  '<th class="text-end">Error users</th><th>Last rated</th></tr></thead><tbody>';
+        trend.forEach(function(t) {
+            var avg = (t.rating_avg != null) ? Number(t.rating_avg).toFixed(2) : '—';
+            var acls = (t.rating_avg >= 4) ? 'text-success' : (t.rating_avg >= 3 ? 'text-warning' : 'text-danger');
+            html += '<tr>';
+            html += '<td><code>' + escHtml(t.build || '(web)') + '</code></td>';
+            html += '<td class="text-end ' + (t.rating_avg != null ? acls : 'text-muted') + '">' + avg + '</td>';
+            html += '<td class="text-end">' + (t.rating_count || 0) + '</td>';
+            html += '<td class="text-end ' + ((t.error_users||0) > 0 ? 'text-danger' : 'text-muted') + '">' + (t.error_users || 0) + '</td>';
+            html += '<td class="text-muted">' + escHtml(t.last_rated_at || '—') + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+    }
+    html += '</div>';
+
+    // Latest comments
+    html += '<div class="col-md-5"><p class="mb-1"><strong>Latest comments</strong> (' + comments.length + '):</p>';
+    if (comments.length === 0) {
+        html += '<div class="text-muted small">No comments yet.</div>';
+    } else {
+        html += '<div class="list-group list-group-flush small">';
+        comments.forEach(function(c) {
+            html += '<div class="list-group-item px-0 py-1">';
+            html += '<span class="badge bg-secondary me-1">' + (c.rating || '?') + '★</span>';
+            if (c.app_build) html += '<code class="me-1">' + escHtml(c.app_build) + '</code>';
+            html += '<span class="badge bg-light text-dark border me-1">' + escHtml(c.platform || '') + '</span>';
+            html += '<span class="text-muted">' + escHtml(c.created || '') + '</span>';
+            html += '<div>' + escHtml(c.comment || '') + '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
 }
 
 // ── Graphics panel: linked assets BESIDE the latest passing run screenshots ──

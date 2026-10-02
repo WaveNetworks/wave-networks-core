@@ -48,7 +48,8 @@ if (($_POST['action'] ?? '') == 'getUseCases') {
         // Page of items
         $sql = "SELECT use_case_id, source_app, slug, name, description,
                        requires_login, starting_page, ending_action,
-                       test_category, test_status, derived_from_log_count,
+                       test_category, test_status, health_status, health_json,
+                       flag_reason, flag_build, derived_from_log_count,
                        last_seen_at, last_test_run_id, created, updated
                 FROM use_case
                 $sql_where
@@ -61,6 +62,14 @@ if (($_POST['action'] ?? '') == 'getUseCases') {
             while ($row = $r->fetch(PDO::FETCH_ASSOC)) {
                 $row['graphic_count']       = 0;
                 $row['graphic_needs_review']= 0;
+                // Surface a compact health summary from the cached health_json so
+                // the list column is cheap (populated by uc_compute_health()).
+                $h = json_decode($row['health_json'] ?? 'null', true);
+                $row['rating_avg']   = is_array($h) ? ($h['rating_avg']   ?? null) : null;
+                $row['rating_count'] = is_array($h) ? ($h['rating_count'] ?? 0)   : 0;
+                $row['error_users']  = is_array($h) ? ($h['error_users']  ?? 0)   : 0;
+                $row['health_score'] = is_array($h) ? ($h['health_score'] ?? ($h['score'] ?? null)) : null;
+                unset($row['health_json']);
                 $items[] = $row;
                 $ids[(int)$row['use_case_id']] = count($items) - 1;
             }
@@ -105,6 +114,10 @@ if (($_POST['action'] ?? '') == 'getUseCases') {
                 $stats['total'] += (int)$row['c'];
             }
         }
+        // How many are currently flagged 'needs attention' (regression).
+        $na = db_query("SELECT COUNT(*) AS c FROM use_case WHERE health_status = 'needs_attention'");
+        $stats['needs_attention'] = $na ? (int)$na->fetch(PDO::FETCH_ASSOC)['c'] : 0;
+
         $apps = [];
         $ar = db_query("SELECT DISTINCT source_app FROM use_case ORDER BY source_app ASC");
         if ($ar) {
@@ -157,6 +170,32 @@ if (($_POST['action'] ?? '') == 'getUseCaseDetail') {
             }
             $data['use_case'] = $uc;
             $data['runs']     = $runs;
+
+            // Health: per-build trend (rating avg/count + error rate + test
+            // status) plus the latest comments. uc_compute_health refreshes the
+            // cached score; uc_rating_builds gives the per-build trend.
+            if (function_exists('uc_compute_health')) {
+                $data['health']   = uc_compute_health($uid);
+                $data['builds']   = uc_rating_builds($uid);
+                $data['comments'] = uc_recent_comments($uid, 10);
+                // Error rate per build window, aligned to the rating builds.
+                $trend = [];
+                $builds = $data['builds'];
+                for ($i = 0; $i < count($builds); $i++) {
+                    $since = ($i + 1 < count($builds)) ? ($builds[$i + 1]['last_rated_at'] ?: null) : null;
+                    $until = $builds[$i]['last_rated_at'] ?: null;
+                    $err   = uc_error_rate($uc, $since, $i === 0 ? null : $until);
+                    $trend[] = [
+                        'build'        => $builds[$i]['build'],
+                        'rating_avg'   => $builds[$i]['avg'],
+                        'rating_count' => $builds[$i]['count'],
+                        'error_users'  => $err['affected_users'],
+                        'error_events' => $err['error_events'],
+                        'last_rated_at'=> $builds[$i]['last_rated_at'],
+                    ];
+                }
+                $data['trend'] = $trend;
+            }
         }
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
