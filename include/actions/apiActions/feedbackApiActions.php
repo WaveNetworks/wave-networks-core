@@ -298,6 +298,65 @@ if (($action ?? null) == 'apiBulkCascadeFeedbackFromCR') {
     }
 }
 
+// ── Mark feedback shipped (reconcile-on-ship) ───────────────
+//
+// Nokemo's reconcile-on-ship pass (feedback pipeline, task #2244 part 3) calls
+// this when an EARLIER piece of feedback is judged to ask for the same thing a
+// now-shipped change request delivered. One atomic remote step: link the
+// feedback to the shipped CR, flip it to 'resolved', and notify the submitter
+// that something they asked for just shipped — "You shipped this". Generic:
+// every monitored app's feedback author gets the credit notification for free.
+//
+// Never closes feedback without a link — change_request_id is required and the
+// CR must exist and be completed (a low-confidence match is parked in nokemo's
+// owner queue instead, and never reaches here).
+if (($action ?? null) == 'apiMarkFeedbackShipped') {
+    if (require_api_scope('feedback:admin')) {
+        $errs = [];
+        $fid  = intval($_POST['feedback_id'] ?? 0);
+        $crid = intval($_POST['change_request_id'] ?? 0);
+        if ($fid <= 0)  { $errs['feedback_id'] = 'feedback_id is required.'; }
+        if ($crid <= 0) { $errs['change_request_id'] = 'change_request_id is required (feedback is never closed without a link).'; }
+
+        $feedback = $fid > 0 ? get_feedback_by_id($fid) : null;
+        $cr = $crid > 0 ? db_fetch(db_query("SELECT change_request_id, title, status, source_app
+                                             FROM change_request WHERE change_request_id = '$crid'")) : null;
+        if (count($errs) <= 0 && !$feedback) { $errs['feedback'] = 'Feedback not found.'; }
+        if (count($errs) <= 0 && !$cr)       { $errs['cr'] = 'Change request not found.'; }
+        if (count($errs) <= 0 && $cr['status'] !== 'completed') {
+            $errs['status'] = 'Change request is not completed — nothing shipped to credit.';
+        }
+
+        if (count($errs) <= 0) {
+            // Link (sets status='grouped', enriches CR, notifies "being acted on")
+            // only when not already pointed at this CR, then flip to resolved.
+            if ((int) ($feedback['change_request_id'] ?? 0) !== $crid) {
+                group_feedback_with_request($fid, $crid);
+            }
+            $already_resolved = ($feedback['status'] ?? '') === 'resolved';
+            db_query("UPDATE feedback SET status = 'resolved', change_request_id = '$crid' WHERE feedback_id = '$fid'");
+
+            // "You shipped this" — credit notification to the submitter.
+            if (!$already_resolved && !empty($feedback['user_id'])) {
+                _notify_feedback_user((int) $feedback['user_id'], 'feedback_update',
+                    'Something you asked for just shipped',
+                    'Feedback you sent has been delivered in: "' . ($cr['title'] ?? 'a change request') . '". Thanks for helping improve the platform!',
+                    ['source_app' => $feedback['source_app'] ?? ($cr['source_app'] ?? null)]
+                );
+            }
+
+            $data['feedback_id']       = $fid;
+            $data['change_request_id'] = $crid;
+            $data['user_id']           = (int) ($feedback['user_id'] ?? 0);
+            $data['source_app']        = $feedback['source_app'] ?? null;
+            $data['notified']          = (!$already_resolved && !empty($feedback['user_id']));
+            $_SESSION['success'] = 'Feedback marked shipped.';
+        } else {
+            $_SESSION['error'] = implode(' ', $errs);
+        }
+    }
+}
+
 // ── Upvote feedback ─────────────────────────────────────────
 if (($action ?? null) == 'apiUpvoteFeedback') {
     if (require_api_scope('feedback:write')) {
