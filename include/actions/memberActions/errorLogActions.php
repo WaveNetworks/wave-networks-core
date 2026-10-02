@@ -68,7 +68,14 @@ if (($_POST['action'] ?? '') == 'resolveErrorLog') {
     if (empty($_POST['error_id'])) { $errs['id'] = 'Error ID required.'; }
 
     if (count($errs) <= 0) {
-        resolve_error_log((int)$_POST['error_id'], $_SESSION['user_id']);
+        $reason = $_POST['resolution_reason'] ?? null;
+        resolve_error_log(
+            (int)$_POST['error_id'],
+            $_SESSION['user_id'],
+            ($reason === '' ? null : $reason),
+            $_POST['resolution_notes'] ?? null,
+            $_POST['resolution_ref'] ?? null
+        );
         $_SESSION['success'] = 'Error marked as resolved.';
     } else {
         $_SESSION['error'] = implode('<br>', $errs);

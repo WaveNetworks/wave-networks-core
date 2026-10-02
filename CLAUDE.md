@@ -295,9 +295,31 @@ API actions (include/actions/apiActions/errorLogApiActions.php):
   Authenticated via service API key (Bearer token). Scope-gated.
   apiGetErrorLogs     — list (scope: error_log:read)
   apiGetErrorLog      — single entry (scope: error_log:read)
-  apiResolveErrorLog  — resolve (scope: error_log:write)
+  apiResolveErrorLog  — resolve (scope: error_log:write). Accepts resolution_reason,
+                        resolution_notes, resolution_ref (commit sha or task id).
   apiUnresolveErrorLog — reopen (scope: error_log:write)
   apiGetErrorStats    — dashboard stats + source list (scope: error_log:read)
+  apiListFixedErrorsSince — fixed-error announcements since a cursor (scope: error_log:read).
+                        Params: since_event_id (cursor), source_app, limit. Returns a
+                        privacy-safe projection (date + page + ready-to-show message +
+                        affected user ids), a count, and next_cursor. NEVER the stack trace.
+
+### Crediting every user a bug hit (migration 5.5)
+error_log de-duplicates by error_hash and keeps only the FIRST user_id, so a bug that
+hit 300 people would otherwise know only one. Three pieces close that gap:
+  error_occurrence_user (main) — one row per (error_hash, user_id), UNIQUE(error_hash,
+    user_id), written by log_error_to_db for logged-in users only (cheap idempotent
+    upsert in its own guard — it never fails the request or the de-duplicated log row).
+  error_log.resolution_ref — a link to the fix (commit sha or task id).
+  error_fixed_event (main) — a durable announcement queue. resolve_error_log() writes one
+    row (INSERT IGNORE, idempotent per error_id) ONLY when the resolution is 'fixed' AND
+    carries a resolution_ref — nothing shipped means nothing to credit. The resolving
+    request is admin's and never loads a child app, so this mirrors user_deletion_event:
+    child apps POLL it via apiListFixedErrorsSince and credit/notify from their own cron.
+    Privacy: the event stores the affected user ids + the DATE and PAGE only. Users are
+    ever shown just "A problem you ran into on <date> on the <page> page is now fixed."
+    — never the stack trace, file, or line. Helpers: record_error_fixed_event(),
+    get_fixed_error_events_since() in errorLogFunctions.php.
 
 Cron: cron/days/1/cleanup_error_log.php — deletes entries older than 30 days.
 

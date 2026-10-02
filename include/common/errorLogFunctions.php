@@ -118,6 +118,26 @@ function log_error_to_db($level, $message, $file = null, $line = null, $trace = 
                 ':hash'    => $hash,
             ]);
         }
+
+        // Record EVERY logged-in user who hit this error (the de-duplicated row
+        // above keeps only the first). Cheap idempotent upsert, logged-in only,
+        // in its own guard so a failure here never fails the request or the main
+        // log. A fix can later credit/notify all of them via error_fixed_event.
+        if (!empty($_SESSION['user_id'])) {
+            try {
+                $u = $db->prepare(
+                    "INSERT INTO error_occurrence_user
+                        (error_hash, user_id, first_seen_at, last_seen_at, occurrence_count)
+                     VALUES (:hash, :uid, NOW(), NOW(), 1)
+                     ON DUPLICATE KEY UPDATE
+                        last_seen_at = NOW(),
+                        occurrence_count = occurrence_count + 1"
+                );
+                $u->execute([':hash' => $hash, ':uid' => (int)$_SESSION['user_id']]);
+            } catch (\Throwable $eu) {
+                // Non-fatal: the de-duplicated error_log row is already written.
+            }
+        }
     } catch (\Throwable $e) {
         // DB logging failed — fall back to standard error_log
         error_log("[$level] $message in $file on line $line");
@@ -239,9 +259,10 @@ function clear_error_logs($older_than_days = 30) {
  * @param int    $user_id            The admin who resolved it
  * @param string $resolution_reason  One of: fixed, already_fixed, cant_fix, noise, wont_fix (optional)
  * @param string $resolution_notes   Free-text explanation (optional, max 500 chars)
+ * @param string $resolution_ref     Link to the fix — a commit sha or task id (optional, max 255)
  * @return bool
  */
-function resolve_error_log($error_id, $user_id, $resolution_reason = null, $resolution_notes = null) {
+function resolve_error_log($error_id, $user_id, $resolution_reason = null, $resolution_notes = null, $resolution_ref = null) {
     $allowed = ['fixed', 'already_fixed', 'cant_fix', 'noise', 'wont_fix'];
     if ($resolution_reason !== null && !in_array($resolution_reason, $allowed, true)) {
         $resolution_reason = null;
@@ -249,15 +270,138 @@ function resolve_error_log($error_id, $user_id, $resolution_reason = null, $reso
     if ($resolution_notes !== null) {
         $resolution_notes = mb_substr((string)$resolution_notes, 0, 500);
     }
-    return (bool)db_query_prepared(
+    if ($resolution_ref !== null) {
+        $resolution_ref = mb_substr(trim((string)$resolution_ref), 0, 255);
+        if ($resolution_ref === '') { $resolution_ref = null; }
+    }
+    $ok = (bool)db_query_prepared(
         "UPDATE error_log
          SET resolved_at = NOW(),
              resolved_by = ?,
              resolution_reason = ?,
-             resolution_notes = ?
+             resolution_notes = ?,
+             resolution_ref = ?
          WHERE error_id = ?",
-        [(int)$user_id, $resolution_reason, $resolution_notes, (int)$error_id]
+        [(int)$user_id, $resolution_reason, $resolution_notes, $resolution_ref, (int)$error_id]
     );
+
+    // A genuine fix that carries a link to the fix is announced so child apps can
+    // credit and notify everyone who hit it. noise/wont_fix/already_fixed/cant_fix,
+    // or a 'fixed' with no ref, are NOT announced — nothing shipped to credit for.
+    if ($ok && $resolution_reason === 'fixed' && $resolution_ref !== null) {
+        record_error_fixed_event((int)$error_id);
+    }
+    return $ok;
+}
+
+/**
+ * Announce that an error was fixed: snapshot the affected users and a privacy-safe
+ * description (date + page, NEVER the stack trace) into error_fixed_event, which
+ * child apps drain from their own cron to credit / notify those users.
+ *
+ * The resolving request is admin's and never loads a child app, so this mirrors the
+ * user_deletion_event model: a durable queue polled via apiListFixedErrorsSince.
+ * Idempotent per error_id (UNIQUE(error_id) + INSERT IGNORE).
+ *
+ * @param int $error_id
+ * @return int event rows written (0 if already announced or no such error)
+ */
+function record_error_fixed_event($error_id) {
+    $eid = (int)$error_id;
+    if ($eid <= 0) { return 0; }
+    try {
+        $r = db_query_prepared(
+            "SELECT error_hash, source_app, page, user_id, resolution_ref, resolved_at
+               FROM error_log WHERE error_id = ?",
+            [$eid]
+        );
+        $row = $r ? db_fetch($r) : null;
+        if (!$row || empty($row['error_hash'])) { return 0; }
+        $hash = $row['error_hash'];
+
+        // Every logged-in user who ever hit this error, plus the one named on the
+        // de-duplicated row itself (covers errors logged before this table existed).
+        $ids = [];
+        $ur = db_query_prepared(
+            "SELECT user_id FROM error_occurrence_user WHERE error_hash = ?",
+            [$hash]
+        );
+        while ($ur && ($u = db_fetch($ur))) { $ids[(int)$u['user_id']] = true; }
+        if (!empty($row['user_id'])) { $ids[(int)$row['user_id']] = true; }
+        unset($ids[0]);
+        $user_ids = array_values(array_map('intval', array_keys($ids)));
+
+        // The date a user last ran into it — the only time surface users are shown.
+        $occurred_on = null;
+        $lr = db_query_prepared(
+            "SELECT MAX(last_seen_at) AS last FROM error_occurrence_user WHERE error_hash = ?",
+            [$hash]
+        );
+        $lrow = $lr ? db_fetch($lr) : null;
+        if ($lrow && !empty($lrow['last'])) { $occurred_on = substr((string)$lrow['last'], 0, 10); }
+
+        $ins = db_query_prepared(
+            "INSERT IGNORE INTO error_fixed_event
+                (error_id, error_hash, source_app, page, occurred_on,
+                 affected_user_ids, resolution_ref, resolved_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                $eid,
+                $hash,
+                $row['source_app'] ?: null,
+                $row['page'] ?: null,
+                $occurred_on,
+                json_encode($user_ids),
+                $row['resolution_ref'] ?: null,
+                $row['resolved_at'] ?: date('Y-m-d H:i:s'),
+            ]
+        );
+        return $ins ? $ins->rowCount() : 0;
+    } catch (\Throwable $e) {
+        error_log("record_error_fixed_event error_id=$eid: " . $e->getMessage());
+        return 0;
+    }
+}
+
+/**
+ * Fixed-error announcements since a cursor, for a child app to credit/notify its
+ * users. Privacy-safe projection only — date + page, never the stack trace.
+ *
+ * @param int    $since_event_id Return events with event_id greater than this (cursor)
+ * @param string $source_app     Optional: only this app's errors
+ * @param int    $limit          Max rows (1..500)
+ * @return array rows with decoded affected_user_ids + a ready-to-show message
+ */
+function get_fixed_error_events_since($since_event_id = 0, $source_app = null, $limit = 100) {
+    $since = max(0, (int)$since_event_id);
+    $limit = max(1, min(500, (int)$limit));
+    $where = 'event_id > ?';
+    $params = [$since];
+    if ($source_app !== null && $source_app !== '') {
+        $where .= ' AND source_app = ?';
+        $params[] = (string)$source_app;
+    }
+    $r = db_query_prepared(
+        "SELECT event_id, error_id, error_hash, source_app, page, occurred_on,
+                affected_user_ids, resolution_ref, resolved_at
+           FROM error_fixed_event
+          WHERE $where
+          ORDER BY event_id ASC
+          LIMIT $limit",
+        $params
+    );
+    $rows = $r ? db_fetch_all($r) : [];
+    foreach ($rows as &$row) {
+        $uids = json_decode((string)($row['affected_user_ids'] ?? ''), true);
+        $row['affected_user_ids'] = is_array($uids) ? array_values(array_map('intval', $uids)) : [];
+        $row['affected_count'] = count($row['affected_user_ids']);
+        // The only sentence a user is ever shown — no stack trace, file, or line.
+        $where_txt = !empty($row['page']) ? ('on the ' . $row['page'] . ' page') : 'in the app';
+        $when_txt  = !empty($row['occurred_on']) ? (' on ' . $row['occurred_on']) : '';
+        $row['user_message'] = 'A problem you ran into' . $when_txt . ' ' . $where_txt . ' is now fixed.';
+    }
+    unset($row);
+    return $rows;
 }
 
 /**

@@ -61,11 +61,32 @@ if (($action ?? null) == 'apiResolveErrorLog') {
             (int)$_POST['error_id'],
             (int)$_SERVICE_API_KEY['created_by'],
             ($reason === '' ? null : $reason),
-            $_POST['resolution_notes'] ?? null
+            $_POST['resolution_notes'] ?? null,
+            // A commit sha or task id. Required for a 'fixed' resolution to announce
+            // an error_fixed event so affected users can be credited/notified.
+            $_POST['resolution_ref'] ?? null
         );
         $_SESSION['success'] = 'Error marked as resolved.';
     } elseif (!empty($errs)) {
         $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
+// ---- LIST FIXED-ERROR ANNOUNCEMENTS (for nokemo / child apps to credit users) ----
+// Poll with a cursor: pass the highest event_id you've seen as since_event_id.
+// Returns a privacy-safe projection — date + page + a ready-to-show message, plus
+// the affected user ids to credit — and NEVER the stack trace, file, or line.
+if (($action ?? null) == 'apiListFixedErrorsSince') {
+    if (require_api_scope('error_log:read')) {
+        $since      = max(0, (int)($_POST['since_event_id'] ?? 0));
+        $source_app = (isset($_POST['source_app']) && $_POST['source_app'] !== '') ? $_POST['source_app'] : null;
+        $limit      = max(1, min(500, (int)($_POST['limit'] ?? 100)));
+
+        $events = get_fixed_error_events_since($since, $source_app, $limit);
+        $data['events']     = $events;
+        $data['count']      = count($events);
+        $data['next_cursor'] = $events ? (int)end($events)['event_id'] : $since;
+        $_SESSION['success'] = 'OK';
     }
 }
 
