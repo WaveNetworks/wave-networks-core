@@ -121,4 +121,118 @@ if (!empty($screenshots)) {
     $manifest['screenshots'] = $screenshots;
 }
 
+// ── App-provided pwa.json merge ───────────────────────────────────────────
+// A child app may ship pwa.json at its repo root (deployed at
+// public_html/<slug>/pwa.json) to enrich Chrome's install UI far beyond what
+// branding gives: many screenshots per form factor, maskable icons, shortcuts,
+// categories. Merge it OVER the branding values.
+//
+// manifest.php is served from /admin/, but pwa.json's src/url are relative to
+// the app folder (/<slug>/), so rewrite them to ../<slug>/… — correct relative
+// to the manifest's base. start_url/id/scope stay admin's, untouched.
+$webroot  = dirname(__DIR__);   // public_html/ (admin/ is a child of it)
+$pwa      = null;
+$pwa_slug = null;
+foreach (glob($webroot . '/*/pwa.json') ?: [] as $pj) {
+    $slug = basename(dirname($pj));
+    if ($slug === 'admin') continue;
+    $decoded = json_decode(@file_get_contents($pj), true);
+    if (!is_array($decoded)) continue;
+    if ($pwa !== null) {
+        error_log("manifest.php: multiple pwa.json found; using '$pwa_slug', ignoring '$slug'");
+        continue;
+    }
+    $pwa      = $decoded;
+    $pwa_slug = $slug;
+}
+
+if ($pwa !== null) {
+    $app_dir = $webroot . '/' . $pwa_slug;
+    // Rewrite an app-relative src/url to be correct from /admin/. Absolute paths
+    // (/… or http(s)://…) are left as the app declared them.
+    $rw = function ($src) use ($pwa_slug) {
+        $src = (string)$src;
+        if ($src === '' || preg_match('#^(https?:)?/#i', $src)) return $src;
+        return '../' . $pwa_slug . '/' . ltrim($src, './');
+    };
+
+    if (!empty($pwa['description']))           $manifest['description']      = $pwa['description'];
+    if (!empty($pwa['categories']) && is_array($pwa['categories']))
+                                               $manifest['categories']       = array_values($pwa['categories']);
+    if (!empty($pwa['display_override']) && is_array($pwa['display_override']))
+                                               $manifest['display_override'] = array_values($pwa['display_override']);
+    if (!empty($pwa['launch_handler']) && is_array($pwa['launch_handler']))
+                                               $manifest['launch_handler']   = $pwa['launch_handler'];
+
+    // Icons — append the app's (incl. maskable) entries; branding icons stay.
+    if (!empty($pwa['icons']) && is_array($pwa['icons'])) {
+        $merged_icons = $manifest['icons'] ?? [];
+        foreach ($pwa['icons'] as $ic) {
+            if (empty($ic['src'])) continue;
+            $ic['src'] = $rw($ic['src']);
+            $merged_icons[] = $ic;
+        }
+        if (!empty($merged_icons)) $manifest['icons'] = $merged_icons;
+    }
+
+    // Screenshots — replace branding fallback with the app's set. Validate each:
+    // drop if the file is unreadable, if its real pixels disagree with 'sizes',
+    // or if its longer side exceeds 2.3× the shorter (Chrome's aspect-ratio rule).
+    // Cap at 8 per form factor. Log every drop at info level.
+    if (!empty($pwa['screenshots']) && is_array($pwa['screenshots'])) {
+        $kept  = [];
+        $perff = [];   // count kept per form_factor
+        foreach ($pwa['screenshots'] as $sc) {
+            if (empty($sc['src'])) continue;
+            $label = $sc['src'];
+            $disk  = $app_dir . '/' . ltrim((string)$sc['src'], './');
+            $info  = @getimagesize($disk);
+            if (!$info) {
+                error_log("manifest.php: pwa screenshot dropped (unreadable): $pwa_slug/$label");
+                continue;
+            }
+            $actual = $info[0] . 'x' . $info[1];
+            if (!empty($sc['sizes']) && $sc['sizes'] !== $actual) {
+                error_log("manifest.php: pwa screenshot dropped (sizes '{$sc['sizes']}' != actual $actual): $pwa_slug/$label");
+                continue;
+            }
+            $long  = max($info[0], $info[1]);
+            $short = min($info[0], $info[1]);
+            if ($short > 0 && ($long / $short) > 2.3) {
+                error_log("manifest.php: pwa screenshot dropped (aspect " . round($long / $short, 2) . " > 2.3): $pwa_slug/$label");
+                continue;
+            }
+            $ff = (isset($sc['form_factor']) && $sc['form_factor'] === 'wide') ? 'wide' : 'narrow';
+            $perff[$ff] = ($perff[$ff] ?? 0) + 1;
+            if ($perff[$ff] > 8) {
+                error_log("manifest.php: pwa screenshot dropped (>8 for form_factor $ff): $pwa_slug/$label");
+                continue;
+            }
+            $sc['src']   = $rw($sc['src']);
+            $sc['sizes'] = $actual;   // trust the real pixels
+            $kept[]      = $sc;
+        }
+        if (!empty($kept)) {
+            $manifest['screenshots'] = $kept;
+        }
+    }
+
+    // Shortcuts — rewrite each url and any nested icon src.
+    if (!empty($pwa['shortcuts']) && is_array($pwa['shortcuts'])) {
+        $shortcuts = [];
+        foreach ($pwa['shortcuts'] as $sh) {
+            if (empty($sh['name']) || empty($sh['url'])) continue;
+            $sh['url'] = $rw($sh['url']);
+            if (!empty($sh['icons']) && is_array($sh['icons'])) {
+                foreach ($sh['icons'] as &$shic) {
+                    if (!empty($shic['src'])) $shic['src'] = $rw($shic['src']);
+                }
+                unset($shic);
+            }
+            $shortcuts[] = $sh;
+        }
+        if (!empty($shortcuts)) $manifest['shortcuts'] = $shortcuts;
+    }
+}
+
 echo json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
