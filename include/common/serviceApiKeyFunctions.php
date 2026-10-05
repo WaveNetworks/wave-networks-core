@@ -93,7 +93,7 @@ function core_available_scopes() {
  * @return string[]
  */
 function monitor_key_scopes() {
-    return [
+    $core = [
         'error_log:read', 'error_log:write',
         'monitoring:read', 'monitoring:write',
         'feedback:read', 'feedback:write', 'feedback:admin',
@@ -101,6 +101,37 @@ function monitor_key_scopes() {
         'actions:read', 'tests:write', 'tests:read',
         'media:read', 'media:write',
     ];
+    return array_values(array_unique(array_merge($core, child_monitor_key_scopes())));
+}
+
+/**
+ * App-specific scopes a child app wants nokemo's monitoring key to hold, declared in the
+ * same api-scopes.json as {"monitor_key": ["myapp_queue:read", ...]}. Only scopes that file
+ * also declares under "scopes" count, so an app can never hand the key a core scope (or
+ * another app's) this way. Without this, an app pipeline nokemo drives (e.g. ContactSwipe's
+ * integration request gate) needed a key minted by hand on that deployment.
+ *
+ * @return string[]
+ */
+function child_monitor_key_scopes() {
+    static $cache = null;
+    if ($cache !== null) { return $cache; }
+    $cache   = [];
+    $webroot = dirname(dirname(dirname(__DIR__)));
+    foreach (glob($webroot . '/*/api-scopes.json') ?: [] as $f) {
+        if (basename(dirname($f)) === 'admin') { continue; }
+        $j = json_decode((string)@file_get_contents($f), true);
+        if (!is_array($j) || empty($j['monitor_key']) || !is_array($j['monitor_key'])
+            || !isset($j['scopes']) || !is_array($j['scopes'])) { continue; }
+        foreach ($j['monitor_key'] as $scope) {
+            if (is_string($scope) && isset($j['scopes'][$scope])
+                && preg_match('/^[a-z0-9_]+:[a-z0-9_]+$/', $scope)
+                && !isset(core_available_scopes()[$scope])) {
+                $cache[] = $scope;
+            }
+        }
+    }
+    return $cache;
 }
 
 /**

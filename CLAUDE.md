@@ -425,7 +425,9 @@ Scopes: JSON array of scope strings. get_available_scopes() = core_available_sco
   Core scopes win on a name collision; names must match `word:word`.
   nokemo's monitoring key (the one holding monitoring:write) is kept at
   monitor_key_scopes() automatically on each validation — add a pipeline scope
-  THERE, never by hand-editing keys per deployment.
+  THERE, never by hand-editing keys per deployment. An APP-specific pipeline scope
+  goes in the app's api-scopes.json as `"monitor_key": ["scope:name"]` (must also be
+  declared under "scopes"; core scopes are ignored) — child_monitor_key_scopes().
   media:write → apiUploadMedia (base64; type sniffed from bytes). The admin media
   library is for site-wide admin assets (brand art, archived citations), NOT
   user-generated content, which stays in the app's per-user storage.
