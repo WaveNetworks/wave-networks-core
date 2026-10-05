@@ -51,6 +51,10 @@ cd "$APP_ROOT"
 echo "── 1. styles ─────────────────────────────────────────────"
 npx sass "$ADMIN_ROOT/assets/mobile/scss/mobile-shell.scss" m/assets/mobile-shell.css --style compressed --load-path=node_modules --no-source-map
 npx sass "$THEME_SCSS" m/assets/vendor/theme.css --style compressed --load-path=node_modules --no-source-map
+# A remote @import (Google Fonts in a bootswatch theme) is refused by the bundle CSP
+# (style-src 'self') and logs an error on every launch; the app self-hosts its fonts.
+# (A Google Fonts URL holds ';' itself — "wght@400;500" — so match to the ) or the quote.)
+perl -0pi -e 's/\@import\s*(?:url\(\s*["\x27]?https?:\/\/[^)]*\)|["\x27]https?:\/\/[^"\x27]*["\x27])[^;]*;//g' m/assets/vendor/theme.css
 echo "   mobile-shell.css (core) + theme.css (app)"
 
 echo "── 2. hoist behavior + render the shell (core build scripts) ──"
