@@ -75,7 +75,7 @@ if (($action ?? null) == 'apiListUseCaseRegressionsSince') {
     if (in_array('monitoring:read', $scopes, true) || in_array('actions:read', $scopes, true)) {
         $has = true;
     }
-    if (!$has) { require_api_scope('monitoring:read'); }
+    if (!$has) { $has = require_api_scope('monitoring:read'); }
     if ($has) {
         $since = (int)($_POST['since_event_id'] ?? 0);
         $app   = trim((string)($_POST['source_app'] ?? ''));
@@ -100,7 +100,7 @@ if (($action ?? null) == 'apiAckUseCaseRegression') {
     $key = $_SERVICE_API_KEY ?? null;
     $scopes = $key ? (json_decode($key['scopes'] ?? '[]', true) ?: []) : [];
     $ok = in_array('monitoring:write', $scopes, true) || in_array('tests:write', $scopes, true);
-    if (!$ok) { require_api_scope('monitoring:write'); }
+    if (!$ok) { $ok = require_api_scope('monitoring:write'); }
     if ($ok) {
         $eid = (int)($_POST['event_id'] ?? 0);
         if ($eid <= 0) {
