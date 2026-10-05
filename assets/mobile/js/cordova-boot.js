@@ -6,9 +6,13 @@
  * 404s and the CSP refuses the returned HTML error page as a script. Harmless (the app
  * is correctly in browser mode) but it looks like a real error in the console.
  *
- * The device-vs-web tell is the protocol: a device bundle loads over file:// (Android)
- * or an app/ionic/capacitor scheme (iOS WKWebView), never http(s). Same signal env.js
- * uses for API_BASE.
+ * The device-vs-web tell is the ORIGIN, not the protocol alone: iOS WKWebView loads the
+ * bundle over an app/ionic/capacitor scheme, but cordova-android 13+ serves it from
+ * https://localhost (old Android: file://). Until 2026-10-05 this file tested the protocol
+ * only, so on Android it never loaded cordova.js and the app ran with NO native plugins
+ * (the phone-shell harness's android-boot scenario caught it). Same test as env.js:
+ * not http(s), or a localhost host. A dev server on localhost just 404s cordova.js —
+ * harmless, platform.js still resolves to browser mode.
  *
  * document.write is deliberate: it injects cordova.js into the parser stream so it runs
  * BEFORE platform.js, which decides device-vs-browser by whether window.cordova exists.
@@ -18,7 +22,9 @@
 (function () {
     'use strict';
 
-    var isWeb = location.protocol === 'http:' || location.protocol === 'https:';
+    var h = location.hostname;
+    var isLocalHost = h === 'localhost' || h === '127.0.0.1' || h === '';
+    var isWeb = (location.protocol === 'http:' || location.protocol === 'https:') && !isLocalHost;
     if (isWeb) { return; }   // nothing to load; platform.js will resolve to browser mode
 
     // Don't load cordova.js twice. Some build pipelines inject their own
