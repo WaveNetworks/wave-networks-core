@@ -334,9 +334,15 @@ foreach ($screens as $page => $s) {
 }
 
 // Screens with no behavior of their own still need a file, so the shell can load
-// one script per screen without special-casing.
+// one script per screen without special-casing. ALWAYS (re)written: until 2026-10-05 this
+// skipped an existing file, so a screen that LOST its behavior kept shipping the old script
+// from any persistent checkout (contactswipe universes kept calling the retired
+// startOurFamilies and crashed). Files for screens that no longer exist are removed too.
+foreach (glob("$outDir/*.js") ?: [] as $f) {
+    if (!isset($manifest['screens'][basename($f, '.js')])) { unlink($f); }
+}
 foreach ($manifest['screens'] as $page => $m) {
-    if ($m['js_hash'] === '' && !file_exists("$outDir/$page.js")) {
+    if ($m['js_hash'] === '') {
         file_put_contents("$outDir/$page.js",
             "/* GENERATED — views/" . $screens[$page]['meta']['file'] . " has no behavior of its own. */\n"
             . "WnScreens.define(" . json_encode($page) . ", function () {});\n");
