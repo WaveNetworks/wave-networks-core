@@ -380,12 +380,79 @@
         }
     });
 
+    // ─── WHAT'S NEW ─────────────────────────────────────────────────────────
+    // The app's published changelog from nokemo (getWhatsNew). A megaphone next to the bell,
+    // shown only when there is something published; a dot until the newest entry is seen.
+
+    var WN_SEEN_KEY = 'wn_whats_new_seen';
+
+    function escHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function whatsNewModal(entries) {
+        var m = document.getElementById('whatsNewModal');
+        if (!m) {
+            m = document.createElement('div');
+            m.className = 'modal fade';
+            m.id = 'whatsNewModal';
+            m.tabIndex = -1;
+            m.innerHTML = '<div class="modal-dialog modal-dialog-scrollable"><div class="modal-content">' +
+                '<div class="modal-header"><h5 class="modal-title"><i class="bi bi-megaphone me-2"></i>What\'s new</h5>' +
+                '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>' +
+                '<div class="modal-body" id="whatsNewBody"></div></div></div>';
+            document.body.appendChild(m);
+        }
+        var badge = { 'new': 'bg-success', improved: 'bg-primary', fixed: 'bg-secondary' };
+        var html = '', week = '';
+        entries.forEach(function(e) {
+            if (e.week !== week) {
+                week = e.week;
+                html += '<h6 class="text-muted small text-uppercase mt-3 mb-2">Week of ' + escHtml(e.entry_date) + '</h6>';
+            }
+            html += '<div class="mb-2"><span class="badge ' + (badge[e.kind] || 'bg-secondary') + ' me-2">' +
+                    escHtml(e.kind) + '</span><span class="fw-semibold">' + escHtml(e.title) + '</span>' +
+                    (e.body ? '<div class="small text-muted">' + escHtml(e.body) + '</div>' : '') + '</div>';
+        });
+        document.getElementById('whatsNewBody').innerHTML = html;
+        if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(m).show();
+    }
+
+    function initWhatsNew() {
+        var bell = document.getElementById('notificationBell');
+        if (!bell || document.getElementById('whatsNewBtn')) return;
+        safeApiPost('getWhatsNew', {}, function(json) {
+            var entries = (json && json.results && json.results.entries) || [];
+            if (!entries.length) return;
+            var newest = entries[0].entry_date || '';
+            var seen = '';
+            try { seen = localStorage.getItem(WN_SEEN_KEY) || ''; } catch (e) {}
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.id = 'whatsNewBtn';
+            btn.title = 'What\'s new';
+            btn.className = 'btn btn-sm btn-outline-light position-relative me-2';
+            btn.innerHTML = '<i class="bi bi-megaphone"></i>' + (newest > seen
+                ? '<span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger rounded-circle" id="whatsNewDot"></span>' : '');
+            btn.addEventListener('click', function() {
+                try { localStorage.setItem(WN_SEEN_KEY, newest); } catch (e) {}
+                var dot = document.getElementById('whatsNewDot');
+                if (dot) dot.remove();
+                whatsNewModal(entries);
+            });
+            bell.parentNode.insertBefore(btn, bell);
+        });
+    }
+
     // ─── INIT ───────────────────────────────────────────────────────────────
 
     document.addEventListener('DOMContentLoaded', function() {
         // Only init if bell icon exists (user is logged in)
         if (!document.getElementById('notificationBell')) return;
 
+        initWhatsNew();
         initDropdown();
         initMarkAllRead();
         startPolling();
