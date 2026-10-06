@@ -332,9 +332,12 @@ $shellHtml = preg_replace(
 // script-src 'self' is the load-bearing rule (no inline/remote code — Apple 2.5.2). The
 // app's own origin is allowed for connect/img/media so the bundle can reach its API and
 // render user media; it comes from --app-origin (the same domain env.js uses).
+// 'wasm-unsafe-eval' lets bundled WebAssembly compile (it allows no JS eval): an app's
+// lazy assets/lazy/ may ship a wasm module (ContactSwipe's face finder, task #2293), and
+// without it WebAssembly.instantiate is refused under script-src 'self'.
 $o = $appOrigin !== '' ? ' ' . $appOrigin : '';
 $csp = '<meta http-equiv="Content-Security-Policy" content="'
-     . "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+     . "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
      . "img-src 'self'$o data: blob:; media-src 'self'$o blob:; "
      . "font-src 'self'; connect-src 'self'$o; form-action 'none'; base-uri 'none'"
      . '">';

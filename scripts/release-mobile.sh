@@ -106,6 +106,14 @@ if compgen -G "assets/fonts/*.woff2" > /dev/null; then
     cp assets/fonts/*.woff2 m/assets/fonts/
     cp assets/fonts/app-fonts.css m/assets/ 2>/dev/null || true
 fi
+# Lazily loaded app assets (wasm, models, big vendor code a screen fetches on demand —
+# ContactSwipe's face finder, task #2293). The shell references none of them, so the
+# ref-derived vendor step above never sees them. Copied whole to the SAME relative path the
+# web serves (assets/lazy/), and the size is printed because it all ships in the bundle.
+if [[ -d assets/lazy ]]; then
+    cp -r assets/lazy m/assets/
+    echo "   assets/lazy → bundle: $(du -sh m/assets/lazy | cut -f1)"
+fi
 
 echo "── 4. cache-bust (this host's CDN pins bare URLs) ────────"
 php -r '
@@ -136,6 +144,7 @@ cat > m/.htaccess <<'HT'
 # Servers do not map .webmanifest by default; without this the browser gets an
 # empty Content-Type and may refuse to parse the manifest (and so ignore the icon).
 AddType application/manifest+json .webmanifest
+AddType application/wasm .wasm
 <FilesMatch "\.(html|json|webmanifest)$">
     Header set Cache-Control "no-cache, must-revalidate"
 </FilesMatch>
