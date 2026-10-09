@@ -141,6 +141,11 @@ window.WnRouter = (function () {
                 // answer is "you're signed out". Catch it as what it is.
                 if (r.status === 401 || r.status === 403) throw new Error('unauthorized');
 
+                // A 5xx is the server (or the proxy in front of it) having a bad moment, not
+                // a signed-out user — a proxy's 502 page is HTML, and the check below would
+                // otherwise bounce a signed-in user to the login screen.
+                if (r.status >= 500) throw new Error('http-' + r.status);
+
                 var type = r.headers.get('content-type') || '';
                 if (r.redirected || type.indexOf('json') === -1) throw new Error('unauthorized');
 
@@ -192,13 +197,26 @@ window.WnRouter = (function () {
         // spa-nav gives, so a tap doesn't feel dead while the next screen loads.
         showLoading();
 
-        fetchFragment(page, params, function (err, json) {
+        fetchFragment(page, params, function done(err, json, retried) {
+            // One retry for a transient failure. On a cold start or a resume from background
+            // the WebView reports online before its network is actually up, so the first
+            // fragment (the home screen, before any view is current) rejects with a bare
+            // "Failed to fetch" while the server is fine — that is what kept filing
+            // '[mobile:fetch-fail] map (view: —)'. A second try a moment later lands.
+            if (err && !retried && err.message !== 'unauthorized' && Platform.online()) {
+                return setTimeout(function () {
+                    fetchFragment(page, params, function (e, j) { done(e, j, true); });
+                }, 1500);
+            }
             hideLoading();
             if (err) {
                 if (err.message === 'unauthorized') return toLogin();
                 // A genuine fetch failure while online is worth surfacing (a broken/renamed
                 // fragment endpoint, a server error) — not mere offline, which is expected.
-                if (Platform.online() && window.WnReport) WnReport.signal('fetch-fail', page);
+                // Say WHY, so a real one can be told from a network blip.
+                if (Platform.online() && window.WnReport) {
+                    WnReport.signal('fetch-fail', page + ' [' + (err.message || err.name || 'error') + ', after retry]');
+                }
                 if (!cached) render(page, emptyState(page, 'Couldn\'t reach the server. Pull down to try again.'));
                 return;
             }
