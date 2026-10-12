@@ -113,7 +113,7 @@ function wn_login_code_send_email($email, $code) {
     $link     = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? '')
               . $base . '/auth/code.php?e=' . rawurlencode($email) . '&c=' . $code;
     $browser  = function_exists('parse_browser_name') ? parse_browser_name($_SERVER['HTTP_USER_AGENT'] ?? '') : '';
-    $who      = trim(($browser ? $browser . ' ' : '') . 'from IP ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+    $who      = trim(($browser && $browser !== 'Other' ? $browser . ' ' : 'a browser ') . 'at IP address ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
     $when     = gmdate('j M Y, H:i') . ' UTC';
     $e        = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
 
@@ -122,12 +122,18 @@ function wn_login_code_send_email($email, $code) {
           . '<p>Enter it on the sign-in page, or tap the button to sign in on this device:</p>'
           . '<p><a href="' . $e($link) . '" style="display:inline-block;padding:10px 18px;background:#0d6efd;color:#fff;border-radius:6px;text-decoration:none">Sign in to ' . $e($site) . '</a></p>'
           . '<p>The code works once, for ' . WN_LOGIN_CODE_TTL_MIN . ' minutes.</p>'
-          . '<p style="color:#666">Asked for by ' . $e($who) . ' at ' . $e($when) . '.<br>'
+          . '<p style="color:#666">Asked for from ' . $e($who) . ' on ' . $e($when) . '.<br>'
           . 'If this wasn\'t you, ignore this email. Nobody can sign in without the code.</p>';
+
+    $text = "Your " . $site . " sign-in code: " . $code . "\n\n"
+          . "Enter it on the sign-in page, or open this link on this device:\n" . $link . "\n\n"
+          . "The code works once, for " . WN_LOGIN_CODE_TTL_MIN . " minutes.\n\n"
+          . "Asked for from " . $who . " on " . $when . ".\n"
+          . "If this wasn't you, ignore this email. Nobody can sign in without the code.\n";
 
     $subject = $code . ' is your ' . $site . ' sign-in code';
     if (function_exists('send_email_now')) {
-        return send_email_now($email, '', $subject, $body, ['source_app' => 'core']);
+        return send_email_now($email, '', $subject, $body, ['source_app' => 'core', 'alt_body' => $text]);
     }
     return send_email($email, '', $subject, $body);
 }
