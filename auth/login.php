@@ -83,6 +83,12 @@ if ($saml_providers) { ?>
 </div>
 <?php } ?>
 
+<?php if (function_exists('wn_login_code_enabled') && wn_login_code_enabled()) { ?>
+<div class="d-grid mb-3">
+    <a href="code.php" class="btn btn-outline-secondary"><i class="bi bi-envelope"></i> Email me a sign-in code</a>
+</div>
+<?php } ?>
+
 <div class="text-center">
     <a href="forgot.php" class="small">Forgot your password?</a>
 </div>
