@@ -9,7 +9,7 @@
  * holds a shard's database password, and the operator never edits config.php on
  * a server.
  *
- * Actions: shardList · shardAdd · shardTest · shardMigrate · shardSetStatus · shardStats
+ * Actions: shardList · shardAdd · shardTest · shardMigrate · shardSetStatus · shardDelete · shardStats
  *
  * A NOTE ON MIGRATING CHILD SHARDS: shardMigrate covers the ADMIN layer only.
  * A child app's shard schema version and migration directory belong to the child
@@ -243,6 +243,35 @@ if (($action ?? null) == 'shardSetStatus') {
                 $data['shard_id']    = $row['shard_id'];
                 $data['status']      = $status;
                 $_SESSION['success'] = "Shard {$row['shard_id']} is now $status.";
+            } else {
+                $_SESSION['error'] = $err;
+            }
+        }
+    }
+}
+
+// ─── shardDelete ────────────────────────────────────────────────────────────
+
+if (($action ?? null) == 'shardDelete') {
+    if (require_api_scope('shards:admin')) {
+        $layer = _shard_api_layer();
+        $slug  = _shard_api_slug();
+        $row   = _shard_api_find($layer, $slug, trim((string)($_POST['shard_id'] ?? '')));
+
+        if (!$row) {
+            $_SESSION['error'] = 'Unknown shard.';
+        } elseif ($row['status'] === 'active') {
+            // An active row is a placement target; drain or disable it first.
+            $_SESSION['error'] = "Shard {$row['shard_id']} is active. Drain or disable it before deleting.";
+        } elseif ((int)$row['user_count'] > 0) {
+            // A user's shard never changes, so deleting the row cuts them off.
+            $_SESSION['error'] = "Shard {$row['shard_id']} still holds {$row['user_count']} users.";
+        } else {
+            list($ok, $err) = shard_config_delete($layer, $slug, $row['shard_id']);
+            if ($ok) {
+                $data['shard_id']    = $row['shard_id'];
+                $data['deleted']     = true;
+                $_SESSION['success'] = "Shard {$row['shard_id']} removed from the registry (the database itself was not touched).";
             } else {
                 $_SESSION['error'] = $err;
             }

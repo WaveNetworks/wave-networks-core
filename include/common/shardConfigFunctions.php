@@ -284,6 +284,18 @@ function shard_config_upsert($layer, $app_slug, $shard_id, $host, $name, $user, 
     return $ok === false ? [false, 'Could not save the shard.'] : [true, ''];
 }
 
+/**
+ * Remove one registry row. Callers enforce the guards (no users, not active);
+ * this only deletes. The database on the host is left alone.
+ */
+function shard_config_delete($layer, $app_slug, $shard_id) {
+    $ok = db_query_prepared(
+        "DELETE FROM shard_config WHERE layer = ? AND app_slug = ? AND shard_id = ?",
+        [(string)$layer, (string)$app_slug, (string)$shard_id]
+    );
+    return $ok === false ? [false, 'Could not delete the shard.'] : [true, ''];
+}
+
 function shard_config_set_status($layer, $app_slug, $shard_id, $status) {
     if (!in_array($status, ['pending', 'active', 'draining', 'disabled'], true)) {
         return [false, 'Unknown status.'];
