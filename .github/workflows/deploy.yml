@@ -50,6 +50,13 @@ jobs:
         run: php scripts/legal-versioning-probe.php
         working-directory: admin
 
+      # Credentials in the DB are sealed (enc:v1:, AES key from config) or hashed (sha256:) —
+      # include/common/secretFunctions.php, task #2397. Write sites checked statically; the sweep,
+      # idempotency, legacy reads and key rotation run on in-memory SQLite. DB-free.
+      - name: Check stored secrets are sealed
+        run: php scripts/stored-secrets-probe.php
+        working-directory: admin
+
       - name: Prepare deploy staging
         run: |
           mkdir -p staging/admin

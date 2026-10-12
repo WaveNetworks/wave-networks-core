@@ -189,7 +189,9 @@ if (($action ?? null) == 'forgotPassword') {
         // Always show success message (prevent email enumeration)
         if ($user) {
             $token = generateHashCode(100);
-            db_query("INSERT INTO forgot (user_id, forgot_token, created) VALUES ('{$user['user_id']}', '$token', NOW())");
+            // Only the hash is stored (task #2397); the link carries the token itself.
+            $token_hash = wn_token_hash($token);
+            db_query("INSERT INTO forgot (user_id, forgot_token, created) VALUES ('{$user['user_id']}', '$token_hash', NOW())");
             send_reset_email($email, $token);
         }
 
@@ -215,7 +217,7 @@ if (($action ?? null) == 'resetPassword') {
     if ($password !== $confirm)      { $errs['confirm'] = 'Passwords do not match.'; }
 
     if (count($errs) <= 0) {
-        $safe_token = sanitize($token, SQL);
+        $safe_token = sanitize(wn_token_hash($token), SQL);
         $r = db_query("SELECT * FROM forgot WHERE forgot_token = '$safe_token' AND used = 0 AND created > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
         $forgot = db_fetch($r);
 
@@ -276,8 +278,10 @@ if (($action ?? null) == 'registerInvite') {
     if ($password !== $confirm)      { $errs['confirm'] = 'Passwords do not match.'; }
 
     if (count($errs) <= 0) {
-        $safe_token = sanitize($token, SQL);
-        $r = db_query("SELECT * FROM invite WHERE invite_token = '$safe_token' AND used = 0");
+        // Hashed at rest (migration main/5.9); a raw row written by older child code still matches.
+        $safe_token = sanitize(wn_token_hash($token), SQL);
+        $safe_raw   = sanitize($token, SQL);
+        $r = db_query("SELECT * FROM invite WHERE invite_token IN ('$safe_token', '$safe_raw') AND used = 0");
         $invite = db_fetch($r);
 
         if (!$invite) {

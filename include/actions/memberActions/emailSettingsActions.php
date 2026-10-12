@@ -61,7 +61,8 @@ if (($_POST['action'] ?? '') == 'saveEmailSettings') {
                 updated = NOW()";
 
         if (!empty($smtp_pass_input)) {
-            $s_pass = sanitize($smtp_pass_input, SQL);
+            // Sealed at rest (secretFunctions.php, task #2397); opened only by get_email_settings().
+            $s_pass = sanitize(wn_secret_seal($smtp_pass_input), SQL);
             $set .= ", smtp_pass = '$s_pass'";
         }
 

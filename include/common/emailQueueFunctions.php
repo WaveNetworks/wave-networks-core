@@ -25,12 +25,23 @@ function get_email_settings() {
         // Table may not exist yet (pre-migration)
     }
 
+    // Self-heal: a row saved before task #2397 is plain text — seal it now (idempotent).
+    if (!empty($settings['smtp_pass']) && !wn_secret_is_sealed($settings['smtp_pass'])) {
+        $sealed = wn_secret_seal($settings['smtp_pass']);
+        if ($sealed !== false) {
+            try {
+                $up = $db->prepare("UPDATE email_settings SET smtp_pass = ? WHERE setting_id = 1 AND smtp_pass = ?");
+                $up->execute([$sealed, $settings['smtp_pass']]);
+            } catch (PDOException $e) {}
+        }
+    }
+
     // Fall back to config.php globals for any empty DB fields
     $cache = [
         'smtp_host'          => !empty($settings['smtp_host'])          ? $settings['smtp_host']          : ($smtp_host ?? ''),
         'smtp_port'          => !empty($settings['smtp_port'])          ? (int)$settings['smtp_port']     : (int)($smtp_port ?? 587),
         'smtp_user'          => !empty($settings['smtp_user'])          ? $settings['smtp_user']          : ($smtp_user ?? ''),
-        'smtp_pass'          => !empty($settings['smtp_pass'])          ? $settings['smtp_pass']          : ($smtp_pass ?? ''),
+        'smtp_pass'          => !empty($settings['smtp_pass'])          ? wn_secret_open($settings['smtp_pass']) : ($smtp_pass ?? ''),
         'smtp_encryption'    => !empty($settings['smtp_encryption'])    ? $settings['smtp_encryption']    : 'tls',
         'default_from_email' => !empty($settings['default_from_email']) ? $settings['default_from_email'] : ($mail_from ?? ''),
         'default_from_name'  => !empty($settings['default_from_name'])  ? $settings['default_from_name']  : ($mail_from_name ?? ''),
@@ -76,7 +87,7 @@ function _get_email_settings_fresh() {
             'smtp_host'          => !empty($settings['smtp_host'])          ? $settings['smtp_host']          : ($smtp_host ?? ''),
             'smtp_port'          => !empty($settings['smtp_port'])          ? (int)$settings['smtp_port']     : (int)($smtp_port ?? 587),
             'smtp_user'          => !empty($settings['smtp_user'])          ? $settings['smtp_user']          : ($smtp_user ?? ''),
-            'smtp_pass'          => !empty($settings['smtp_pass'])          ? $settings['smtp_pass']          : ($smtp_pass ?? ''),
+            'smtp_pass'          => !empty($settings['smtp_pass'])          ? wn_secret_open($settings['smtp_pass']) : ($smtp_pass ?? ''),
             'smtp_encryption'    => !empty($settings['smtp_encryption'])    ? $settings['smtp_encryption']    : 'tls',
             'default_from_email' => !empty($settings['default_from_email']) ? $settings['default_from_email'] : ($mail_from ?? ''),
             'default_from_name'  => !empty($settings['default_from_name'])  ? $settings['default_from_name']  : ($mail_from_name ?? ''),

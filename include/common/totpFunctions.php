@@ -47,5 +47,6 @@ function totp_qr_code($label, $secret) {
  * @return bool
  */
 function totp_verify($secret, $code) {
-    return totp_instance()->verifyCode($secret, $code);
+    // totp_secret is sealed at rest (task #2397); an unmarked legacy value opens as itself.
+    return totp_instance()->verifyCode(wn_secret_open($secret), $code);
 }

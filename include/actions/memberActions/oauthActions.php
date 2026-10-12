@@ -23,13 +23,15 @@ if (($action ?? null) == 'saveOAuthProvider') {
     if (count($errs) <= 0) {
         $safe_name   = sanitize($provider_name, SQL);
         $safe_cid    = sanitize($client_id, SQL);
-        $safe_secret = sanitize($client_secret, SQL);
+        // Sealed at rest (secretFunctions.php, task #2397). Write-only: blank = unchanged.
+        $safe_secret = sanitize(wn_secret_seal($client_secret), SQL);
 
         if ($provider_id) {
+            $secret_set = $client_secret !== '' ? ", client_secret = '$safe_secret'" : '';
             db_query("UPDATE oauth_provider SET
                 provider_name = '$safe_name',
-                client_id = '$safe_cid',
-                client_secret = '$safe_secret'
+                client_id = '$safe_cid'
+                $secret_set
                 WHERE provider_id = '$provider_id'");
         } else {
             db_query("INSERT INTO oauth_provider (provider_name, client_id, client_secret, is_enabled)

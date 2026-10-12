@@ -9,7 +9,7 @@ if (!$token) {
 }
 
 // Verify token is valid
-$safe_token = sanitize($token, SQL);
+$safe_token = sanitize(wn_token_hash($token), SQL); // hashed at rest, task #2397
 $r = db_query("SELECT * FROM forgot WHERE forgot_token = '$safe_token' AND used = 0 AND created > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
 $forgot = db_fetch($r);
 

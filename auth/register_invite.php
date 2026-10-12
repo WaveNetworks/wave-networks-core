@@ -9,8 +9,10 @@ if (!$invite_token) {
 }
 
 // Verify invite token
-$safe_token = sanitize($invite_token, SQL);
-$r = db_query("SELECT * FROM invite WHERE invite_token = '$safe_token' AND used = 0");
+// Hashed at rest (migration main/5.9); a raw row written by older child code still matches.
+$safe_token = sanitize(wn_token_hash($invite_token), SQL);
+$safe_raw   = sanitize($invite_token, SQL);
+$r = db_query("SELECT * FROM invite WHERE invite_token IN ('$safe_token', '$safe_raw') AND used = 0");
 $invite = db_fetch($r);
 
 if (!$invite) {

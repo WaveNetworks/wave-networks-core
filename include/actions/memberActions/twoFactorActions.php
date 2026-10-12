@@ -15,7 +15,8 @@ if (($action ?? null) == 'enable2FA') {
         $secret = totp_generate_secret();
         $user_id = (int)$_SESSION['user_id'];
 
-        db_query("UPDATE user SET totp_secret = '$secret' WHERE user_id = '$user_id'");
+        $sealed_secret = sanitize(wn_secret_seal($secret), SQL); // sealed at rest, task #2397
+        db_query("UPDATE user SET totp_secret = '$sealed_secret' WHERE user_id = '$user_id'");
 
         $qr = totp_qr_code($_SESSION['email'], $secret);
 
