@@ -181,6 +181,8 @@ function get_allowed_senders() {
  *   'body_text'     => string (auto-stripped from HTML if omitted)
  *   'source_app'    => string (e.g. 'coaching'; defaults to 'core')
  *   'scheduled_at'  => string datetime (defaults to NOW)
+ *   'headers'       => array name => value of extra headers, e.g. In-Reply-To / References /
+ *                      Message-ID to thread a reply (see wn_email_clean_headers())
  * @return int|false  queue_id on success, false on validation failure
  */
 function queue_email($to_email, $to_name, $subject, $body_html, $opts = []) {
@@ -243,6 +245,9 @@ function queue_email($to_email, $to_name, $subject, $body_html, $opts = []) {
     // Max attempts from settings
     $max_attempts = $settings['max_attempts'];
 
+    $headers = wn_email_clean_headers($opts['headers'] ?? []);
+    $s_headers = $headers ? "'" . sanitize(json_encode($headers), SQL) . "'" : 'NULL';
+
     // Sanitize and insert
     $s_from_email   = sanitize($from_email, SQL);
     $s_from_name    = sanitize($from_name, SQL);
@@ -256,11 +261,11 @@ function queue_email($to_email, $to_name, $subject, $body_html, $opts = []) {
     $s_scheduled_at = sanitize($scheduled_at, SQL);
 
     $sql = "INSERT INTO email_queue
-            (from_email, from_name, reply_to, to_email, to_name, subject, body_html, body_text,
+            (from_email, from_name, reply_to, to_email, to_name, subject, body_html, body_text, headers_json,
              status, attempts, max_attempts, source_app, created, scheduled_at)
             VALUES
             ('$s_from_email', '$s_from_name', '$s_reply_to', '$s_to_email', '$s_to_name', '$s_subject',
-             '$s_body_html', '$s_body_text', 'queued', 0, '$max_attempts', '$s_source_app', NOW(), '$s_scheduled_at')";
+             '$s_body_html', '$s_body_text', $s_headers, 'queued', 0, '$max_attempts', '$s_source_app', NOW(), '$s_scheduled_at')";
 
     $r = db_query($sql);
     if ($r) {
@@ -311,8 +316,20 @@ function send_email_now($to_email, $to_name, $subject, $body_html, $opts = []) {
     $alt_body   = $opts['alt_body']   ?? strip_tags($body_html);
     $source_app = $opts['source_app'] ?? 'core';
 
-    // Send immediately via the low-level send_email()
-    $ok = send_email($to_email, $to_name, $subject, $body_html, $alt_body);
+    // Send immediately via the low-level send_email(). With extra headers (a threaded reply) send
+    // through the queue sender instead, which honours from/reply-to and the headers.
+    $headers = wn_email_clean_headers($opts['headers'] ?? []);
+    if ($headers) {
+        $ok = send_queued_email([
+            'from_email' => $from_email ?: $settings['default_from_email'],
+            'from_name'  => $from_name ?: $settings['default_from_name'],
+            'reply_to'   => $reply_to, 'to_email' => $to_email, 'to_name' => $to_name,
+            'subject'    => $subject, 'body_html' => $body_html, 'body_text' => $alt_body,
+            'headers_json' => json_encode($headers),
+        ]);
+    } else {
+        $ok = send_email($to_email, $to_name, $subject, $body_html, $alt_body);
+    }
 
     // Record a datapoint in the queue regardless of success/failure
     $s_from_email = sanitize($from_email ?: $settings['default_from_email'], SQL);
@@ -342,6 +359,34 @@ function send_email_now($to_email, $to_name, $subject, $body_html, $opts = []) {
     }
 
     return $ok;
+}
+
+/**
+ * Extra headers a caller may set on an outgoing message. Only an allowlist (threading and
+ * list/auto-reply markers): From/To/Subject etc. stay owned by the mailer, and CR/LF is
+ * refused so a value can never inject a header.
+ *
+ * @param array $headers name => value
+ * @return array cleaned name => value
+ */
+function wn_email_clean_headers($headers) {
+    $allowed = ['message-id' => 'Message-ID', 'in-reply-to' => 'In-Reply-To', 'references' => 'References',
+                'auto-submitted' => 'Auto-Submitted', 'x-auto-response-suppress' => 'X-Auto-Response-Suppress',
+                'precedence' => 'Precedence'];
+    $out = [];
+    if (!is_array($headers)) { return $out; }
+    foreach ($headers as $name => $value) {
+        $key = strtolower(trim((string)$name));
+        $value = trim((string)$value);
+        if (!isset($allowed[$key]) || $value === '' || preg_match('/[\r\n]/', $value) || strlen($value) > 2000) {
+            continue;
+        }
+        if ($key === 'message-id' && !preg_match('/^<[^<>\s]+@[^<>\s]+>$/', $value)) {
+            continue;
+        }
+        $out[$allowed[$key]] = $value;
+    }
+    return $out;
 }
 
 /**
@@ -403,6 +448,15 @@ function send_queued_email($row) {
         $mail->Subject = $row['subject'];
         $mail->Body    = $row['body_html'];
         $mail->AltBody = $row['body_text'] ?: strip_tags($row['body_html']);
+
+        $headers = wn_email_clean_headers(json_decode($row['headers_json'] ?? '', true) ?: []);
+        foreach ($headers as $name => $value) {
+            if (strcasecmp($name, 'Message-ID') === 0) {
+                $mail->MessageID = $value;
+            } else {
+                $mail->addCustomHeader($name, $value);
+            }
+        }
 
         $mail->send();
         return true;

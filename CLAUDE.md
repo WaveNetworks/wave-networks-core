@@ -166,6 +166,9 @@ Main DB stores: email_settings (SMTP config, throttle limits, allowed senders)
 Sending: queue_email($to, $subject, $body, $opts) inserts into email_queue.
          cron/cron.php processes the queue respecting throttle limits.
          Child apps call queue_email() after including common.php — no SMTP config needed.
+         Threaded replies: opts 'headers' => ['Message-ID'=>…, 'In-Reply-To'=>…, 'References'=>…]
+         (queue_email stores them in email_queue.headers_json, main 6.1; send_email_now honours
+         them too). Allowlisted names only, CR/LF refused — wn_email_clean_headers().
 
 Admin UI: views/email.php — SMTP settings, throttle config, allowed senders, queue log.
 Helpers: include/common/emailFunctions.php, emailQueueFunctions.php
