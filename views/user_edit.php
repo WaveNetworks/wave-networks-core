@@ -32,7 +32,8 @@ $profile = get_user_profile($user_id, $user['shard_id']);
 $consent_history   = function_exists('get_consent_history') ? get_consent_history($user_id) : [];
 $consent_statuses  = function_exists('get_all_consent_statuses') ? get_all_consent_statuses($user_id) : [];
 $login_history     = function_exists('get_login_history') ? get_login_history($user_id, 20) : [];
-$active_devices    = function_exists('get_user_devices') ? get_user_devices($user_id) : [];
+$active_devices    = function_exists('get_user_devices') ? get_user_devices($user_id, 50) : [];
+$device_total      = function_exists('count_user_devices') ? count_user_devices($user_id) : count($active_devices);
 $pending_deletion  = function_exists('get_pending_deletion') ? get_pending_deletion($user_id) : null;
 $latest_export     = function_exists('get_latest_export') ? get_latest_export($user_id) : null;
 $email_schedule    = function_exists('get_user_email_schedule') ? get_user_email_schedule($user_id) : ['scheduled' => [], 'enrollments' => []];
@@ -72,7 +73,7 @@ $active_tab = $_GET['tab'] ?? 'profile';
         <a class="nav-link <?= $active_tab === 'sessions' ? 'active' : '' ?>" href="?page=user_edit&id=<?= h($user_id) ?>&tab=sessions">
             <i class="bi bi-laptop me-1"></i> Sessions
             <?php if (count($active_devices)) { ?>
-            <span class="badge bg-info"><?= count($active_devices) ?></span>
+            <span class="badge bg-info"><?= (int)$device_total ?></span>
             <?php } ?>
         </a>
     </li>
@@ -461,6 +462,11 @@ $active_tab = $_GET['tab'] ?? 'profile';
                 </tbody>
             </table>
         </div>
+        <?php if ($device_total > count($active_devices)) { ?>
+        <div class="small text-muted px-3 py-2 border-top">
+            Showing the <?= count($active_devices) ?> most recent of <?= (int)$device_total ?> sessions. "Revoke All Sessions" signs out every one.
+        </div>
+        <?php } ?>
         <?php } ?>
     </div>
 </div>

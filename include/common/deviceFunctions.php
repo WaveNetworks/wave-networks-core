@@ -114,18 +114,31 @@ function touch_device($device_id) {
 }
 
 /**
- * Get all devices for a user.
+ * Get a user's devices, most recently used first.
+ *
+ * @param int $limit  0 = all. Screens pass a cap: an account that logged in
+ *                    25,115 times rendered a 28 MB profile page (task #2422).
  */
-function get_user_devices($user_id) {
-    $uid = (int) $user_id;
+function get_user_devices($user_id, $limit = 0) {
+    $uid   = (int) $user_id;
+    $limit = (int) $limit;
     $r = db_query("SELECT d.*, ak.key_id AS api_key_id
                     FROM device d
                     LEFT JOIN api_key ak ON d.device_id = ak.device_id AND ak.remember_me = 'yes'
                     WHERE d.user_id = '$uid'
-                    ORDER BY d.last_used DESC");
+                    ORDER BY d.last_used DESC" . ($limit > 0 ? " LIMIT $limit" : ''));
     $devices = [];
     while ($row = db_fetch($r)) { $devices[] = $row; }
     return $devices;
+}
+
+/**
+ * Count a user's devices (for "showing N of M" under a capped list).
+ */
+function count_user_devices($user_id) {
+    $uid = (int) $user_id;
+    $row = db_fetch(db_query("SELECT COUNT(*) AS n FROM device WHERE user_id = '$uid'"));
+    return $row ? (int)$row['n'] : 0;
 }
 
 /**
