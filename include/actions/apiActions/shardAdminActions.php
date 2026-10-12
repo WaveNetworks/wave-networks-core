@@ -90,17 +90,30 @@ if (($action ?? null) == 'shardAdd') {
         $layer    = _shard_api_layer();
         $slug     = _shard_api_slug();
         $shard_id = trim((string)($_POST['shard_id'] ?? ''));
+        $pass     = array_key_exists('db_pass', $_POST) ? (string)$_POST['db_pass'] : '';
+
+        // copy_pass_from: a blank password may reuse another row's stored one in
+        // the same registry (moving a row to a new id), so the operator is never
+        // asked to retype a password the host will not show twice. It is
+        // decrypted in-process only and never returned.
+        $copy_from = trim((string)($_POST['copy_pass_from'] ?? ''));
+        $copy_err  = '';
+        if ($pass === '' && $copy_from !== '') {
+            $src  = _shard_api_find($layer, $slug, $copy_from);
+            $pass = $src ? (string)wn_secret_decrypt($src['db_pass_enc']) : '';
+            if ($pass === '') $copy_err = "No stored password on $copy_from to copy.";
+        }
 
         // The row is written BEFORE anything is tested. A failed connection test
         // must never discard credentials that were just typed in — the operator
         // would have to go back to the host control panel and reset the password
         // to recover them, since a panel does not show an existing one twice.
-        list($ok, $err) = shard_config_upsert(
+        list($ok, $err) = $copy_err !== '' ? [false, $copy_err] : shard_config_upsert(
             $layer, $slug, $shard_id,
             (string)($_POST['db_host'] ?? ''),
             (string)($_POST['db_name'] ?? ''),
             (string)($_POST['db_user'] ?? ''),
-            array_key_exists('db_pass', $_POST) ? (string)$_POST['db_pass'] : '',
+            $pass,
             array_key_exists('notes', $_POST) ? (string)$_POST['notes'] : null
         );
 
