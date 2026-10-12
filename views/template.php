@@ -104,6 +104,12 @@
                     </a>
                 </nav>
             </div>
+            <?php foreach (function_exists('subadmin_registry') ? subadmin_registry() : [] as $sub) { ?>
+            <a class="nav-link text-white" href="<?= h($sub['url']) ?>" data-subadmin="<?= h($sub['slug']) ?>">
+                <i class="bi <?= h($sub['icon']) ?> sidebar-icon"></i>
+                <span class="sidebar-text"><?= h($sub['name']) ?></span>
+            </a>
+            <?php } ?>
             <a class="nav-link text-white <?= ($page ?? '') === 'notification_admin' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=notification_admin">
                 <i class="bi bi-bell-fill sidebar-icon"></i>
                 <span class="sidebar-text">Notification Admin</span>
