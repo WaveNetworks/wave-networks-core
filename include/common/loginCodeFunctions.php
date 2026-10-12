@@ -144,7 +144,12 @@ function wn_login_code_send_email($email, $code) {
  * Never returns.
  */
 function wn_login_code_complete($user) {
-    if (!empty($user['totp_enabled'])) {
+    wn_login_finish($user, 'email_code', true);
+}
+
+/** Shared tail of the password-less sign-ins ($method = login_history.login_method). Never returns. */
+function wn_login_finish($user, $method, $two_factor = true) {
+    if ($two_factor && !empty($user['totp_enabled'])) {
         $_SESSION['2fa_pending'] = true;
         $_SESSION['2fa_user_id'] = $user['user_id'];
         header('Location: 2fa.php');
@@ -159,7 +164,7 @@ function wn_login_code_complete($user) {
 
     load_user_session($user);
     if (function_exists('get_or_create_device')) { get_or_create_device(); }
-    if (function_exists('record_login')) { record_login($user['user_id'], 'email_code', 'success'); }
+    if (function_exists('record_login')) { record_login($user['user_id'], $method, 'success'); }
 
     if (function_exists('check_reconsent_needed')) {
         $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
