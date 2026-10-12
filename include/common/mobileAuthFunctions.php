@@ -171,9 +171,8 @@ function wn_issue_device_token($user_id, $device_label = '') {
  * same thing "sign out this device" does in the profile UI.
  */
 function wn_revoke_device_token($token) {
-    $token = sanitize($token, SQL);
-    if ($token === '') { return false; }
-    db_query("DELETE FROM api_key WHERE api_key = '$token'");
+    if ((string)$token === '') { return false; }
+    delete_api_key($token);   // stored hashed (task #2398); delete_api_key() matches either form
     return true;
 }
 

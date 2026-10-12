@@ -27,7 +27,7 @@ The key is `$app_secret` — `config/config.php` or the `APP_SECRET` env, per ho
 | `service_api_key.key_hash` | compared | bcrypt | unchanged (good) |
 | `login_code` / `login_approval` / 3.1–3.2 `token_hash` | compared | hashed | unchanged (good) |
 | `user.password` | compared | password_hash | unchanged (good) |
-| `api_key.api_key` (session/device bearer keys) | compared | **plain text** | **NOT changed in #2397** — 18 call sites look keys up raw and some flows hand an existing key back; follow-up task filed |
+| `api_key.api_key` (session/device bearer keys) | compared only | **plain text** | `sha256:` hash (task #2398): `create_api_key()` stores `wn_token_hash()` and returns the raw key once; `validate_api_key()` / `delete_api_key()` match the hash or a legacy raw row, refuse hash-shaped input, and never return the stored value; migration main/6.0 hashed existing rows (cookies and device tokens stay signed in) |
 | `saml_provider.idp_x509_cert` | public IdP certificate | plain | not a secret; no SP private key is stored in the DB |
 | push subscription `auth_key` / `p256dh_key` (shard) | browser-issued subscription keys, must be used to send | plain | low sensitivity; left as is |
 | Stripe / IMAP / webhook secrets | — | none stored in core DB tables | — (config/env only) |

@@ -11,7 +11,11 @@
  *      plain row still reads correctly; the sweep seals it and a second sweep changes
  *      nothing (idempotent); afterwards no known column holds an unmarked value;
  *      rotation re-encrypts under a new key;
- *   4. migration main/5.9 is declared and hashes forgot/invite idempotently.
+ *   4. migration main/5.9 is declared and hashes forgot/invite idempotently;
+ *   5. api_key.api_key (remember-me / device bearer keys, task #2398): create_api_key() stores
+ *      wn_token_hash(), validate/delete accept the hash and a legacy raw row, the stored value
+ *      is never handed back, no other code compares the column raw, and main/6.0 hashes
+ *      existing rows idempotently (run on SQLite with the real functions).
  *
  * Usage: php scripts/stored-secrets-probe.php [--root=/path/to/admin]
  * Exit 0 clean, 1 on a problem. DB-free (needs pdo_sqlite + openssl).
@@ -111,9 +115,61 @@ $ok($mig !== '' && substr_count($mig, "NOT LIKE 'sha256:%'") === 2, 'main/5.9 mi
 $ok(preg_match('/\$db_version\s*=\s*\$db_version \?\? (\d+\.\d+)/', $src('include/bootstrap.php'), $vm) && (float) $vm[1] >= 5.9,
     '$db_version is below 5.9');
 
+// ── 5. api_key.api_key hashed at rest (task #2398) ───────────────────────────
+$ak = $src('include/common/apiKeyFunctions.php');
+$ok(strpos($ak, 'wn_token_hash($api_key)') !== false, 'create_api_key() stores the raw key (not wn_token_hash)');
+$ok(strpos($src('include/common/mobileAuthFunctions.php'), 'delete_api_key($token)') !== false,
+    'wn_revoke_device_token() no longer goes through delete_api_key() (raw lookup?)');
+// Outside apiKeyFunctions.php nothing may look a key up by value: that is the raw lookup
+// that would stop matching once rows are hashed.
+foreach ($it as $f) {
+    $p = $f->getPathname();
+    if (substr($p, -4) !== '.php' || strpos($p, '/vendor/') !== false || strpos($p, '/scripts/') !== false
+        || substr($p, -strlen('include/common/apiKeyFunctions.php')) === 'include/common/apiKeyFunctions.php') continue;
+    if (preg_match("/(?<![_\w])(ak\.)?api_key\s*(=|IN\s*\()\s*'/i", (string) file_get_contents($p))) {
+        $ok(false, substr($p, strlen($root) + 1) . ': looks up api_key.api_key by value — use validate_api_key()/delete_api_key()');
+    }
+}
+
+$pdo->sqliteCreateFunction('CURDATE', function () { return gmdate('Y-m-d'); }, 0);
+$pdo->sqliteCreateFunction('CONCAT', function ($a, $b) { return $a . $b; }, 2);
+$pdo->sqliteCreateFunction('SHA2', function ($v, $bits) { return hash('sha256', (string) $v); }, 2);
+$pdo->exec("CREATE TABLE api_key (key_id INTEGER PRIMARY KEY, device_id INT, user_id INT, api_key TEXT UNIQUE, key_born TEXT, remember_me TEXT)");
+if (!defined('SQL')) define('SQL', 'sql');
+if (!function_exists('sanitize'))         { function sanitize($v, $t = null) { return str_replace("'", "''", (string) $v); } }
+if (!function_exists('generateHashCode')) { function generateHashCode($n) { return substr(bin2hex(random_bytes($n)), 0, $n); } }
+if (!function_exists('db_query'))         { function db_query($sql) { global $pdo; return $pdo->query($sql); } }
+if (!function_exists('db_fetch'))         { function db_fetch($r) { return $r ? $r->fetch(PDO::FETCH_ASSOC) : false; } }
+require_once "$root/include/common/apiKeyFunctions.php";
+
+$key = create_api_key(1, 7, 'yes');
+$stored = $pdo->query("SELECT api_key FROM api_key WHERE device_id = 7")->fetchColumn();
+$ok($stored === wn_token_hash($key) && strpos($stored, $key) === false, 'create_api_key(): DB holds the raw key, not wn_token_hash()');
+$u = validate_api_key($key);
+$ok($u && (int) $u['user_id'] === 1, 'validate_api_key() does not accept a freshly issued key');
+$ok($u && !array_key_exists('api_key', $u), 'validate_api_key() hands the stored key value back to the caller');
+$ok(validate_api_key($stored) === false, 'validate_api_key() accepts the stored HASH as a key (hash is a credential)');
+$ok(validate_api_key('') === false && validate_api_key('nope') === false, 'validate_api_key() accepts an empty/unknown key');
+$pdo->exec("INSERT INTO api_key (device_id, user_id, api_key, key_born, remember_me) VALUES (8, 1, 'legacy-raw-key', '2026-10-01', 'yes')");
+$ok((bool) validate_api_key('legacy-raw-key'), 'a legacy raw api_key row stops working during rollout');
+delete_api_key($key);
+$ok((int) $pdo->query("SELECT COUNT(*) FROM api_key WHERE device_id = 7")->fetchColumn() === 0, 'delete_api_key() does not delete a hashed key');
+
+$mig6 = $src('db_migrations/main/6.0.sql');
+$ok($mig6 !== '' && strpos($mig6, "NOT LIKE 'sha256:%'") !== false, 'main/6.0 missing or not idempotent (NOT LIKE sha256: guard)');
+preg_match_all('/^UPDATE[^;]+;/ms', $mig6, $um);
+foreach ($um[0] as $stmt) { $pdo->exec(str_replace('`', '"', $stmt)); }
+$once = $pdo->query("SELECT api_key FROM api_key ORDER BY key_id")->fetchAll(PDO::FETCH_COLUMN);
+foreach ($um[0] as $stmt) { $pdo->exec(str_replace('`', '"', $stmt)); }
+$twice = $pdo->query("SELECT api_key FROM api_key ORDER BY key_id")->fetchAll(PDO::FETCH_COLUMN);
+$ok($once === [wn_token_hash('legacy-raw-key')], 'main/6.0 did not hash the legacy row: ' . json_encode($once));
+$ok($once === $twice, 'main/6.0 run twice changed data (not idempotent)');
+$ok((bool) validate_api_key('legacy-raw-key'), 'a client holding a legacy key is signed out by main/6.0');
+$ok((float) ($vm[1] ?? 0) >= 6.0, '$db_version is below 6.0 (main/6.0 would not run)');
+
 if ($fail) {
     fwrite(STDERR, "stored-secrets-probe: FAIL\n  - " . implode("\n  - ", $fail) . "\n");
     exit(1);
 }
-echo "stored-secrets-probe: ok (writes sealed/hashed, legacy reads, sweep idempotent, rotation)\n";
+echo "stored-secrets-probe: ok (writes sealed/hashed, legacy reads, sweep idempotent, rotation, api_key hashed)\n";
 exit(0);
