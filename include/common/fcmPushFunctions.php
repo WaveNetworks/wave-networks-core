@@ -120,20 +120,27 @@ function fcm_send_to_token($token, $title, $body, array $payload = []) {
         else { $data[(string)$k] = json_encode($v); }
     }
     $tag = $payload['tag'] ?? '';
+    // The number on the app icon: the user's unread count (send_push_to_user fills it).
+    $badge = isset($payload['badge']) && is_numeric($payload['badge']) ? max(0, (int)$payload['badge']) : null;
 
+    $android_n = array_filter([
+        'tag'                => $tag !== '' ? (string)$tag : null,
+        'notification_count' => $badge,
+    ], function ($v) { return $v !== null; });
     $message = [
         'token'        => $token,
         'notification' => ['title' => (string)$title, 'body' => (string)$body],
         'data'         => $data,
         'android'      => array_filter([
             'priority'     => 'HIGH',
-            'notification' => $tag !== '' ? ['tag' => (string)$tag] : null,
+            'notification' => $android_n ?: null,
         ]),
         'apns'         => [
             'payload' => ['aps' => array_filter([
                 'sound'     => 'default',
                 'thread-id' => $tag !== '' ? (string)$tag : null,
-            ])],
+                'badge'     => $badge,
+            ], function ($v) { return $v !== null; })],
         ],
     ];
 

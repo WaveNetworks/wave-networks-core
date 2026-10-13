@@ -82,6 +82,12 @@ function send_push_to_user($user_id, $shard_id, $title, $body, $payload = []) {
 
     $success_count = 0;
 
+    // A phone shows the unread count on the app icon (aps.badge / notification_count).
+    // The notification row is written before this push, so the count includes it.
+    if ($native && !isset($payload['badge']) && function_exists('get_unread_count')) {
+        $payload['badge'] = get_unread_count($user_id, $shard_id);
+    }
+
     foreach ($native as $sub) {
         $sub_id = (int)$sub['subscription_id'];
         $token  = substr($sub['endpoint'], strlen(FCM_NATIVE_PREFIX));
