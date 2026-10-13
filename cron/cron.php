@@ -92,4 +92,25 @@ foreach ($childCrons as $childCron) {
     }
 }
 
+// ── Sub-admin crons (docs/SubAdmins.md) ─────────────────────────────────
+// Each mounted sub-admin (help-desk, ...) declares its jobs in subadmin.json "cron";
+// they run here so no sub-admin needs a crontab line. Global scope, like child crons,
+// because a job's bootstrap sets globals. A per-job lock skips a run while the last
+// one is still going (an IMAP poll can outlast a minute).
+if (function_exists('subadmin_cron_due')) {
+    foreach (subadmin_cron_due((int)date('G') * 60 + $minute) as $subJob) {
+        $subLock = @fopen(sys_get_temp_dir() . '/wn_subadmin_' . md5($subJob['file']) . '.lock', 'c');
+        if ($subLock && !flock($subLock, LOCK_EX | LOCK_NB)) { echo "  Skipping sub/{$subJob['label']} (still running)\n"; fclose($subLock); continue; }
+        echo "  Running sub/{$subJob['label']}\n";
+        try {
+            include($subJob['file']);
+            log_cron('sub/' . $subJob['label'], 'OK');
+        } catch (Throwable $e) {
+            log_cron('sub/' . $subJob['label'], 'ERROR: ' . $e->getMessage());
+            echo "    ERROR: " . $e->getMessage() . "\n";
+        }
+        if ($subLock) { flock($subLock, LOCK_UN); fclose($subLock); }
+    }
+}
+
 echo "Cron finished: " . date('Y-m-d H:i:s') . "\n";

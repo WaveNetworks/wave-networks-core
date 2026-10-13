@@ -32,6 +32,13 @@ one-offs.
 `db`: `none` = stub/skeleton. `single` = one DB per app, never sharded (multi-lingual,
 social-media, beta-testing when built). `sharded` = main + shards (help-desk only).
 
+## Cron
+Core's `cron/cron.php` (the app's one crontab line) runs every mounted sub-admin's manifest
+`cron` jobs: `every` = `Nm`, `Nh` or `Nd` (hourly on :00, daily at 00:00). The path must be a
+`.php` file inside the sub-admin's own directory. Jobs run at global scope (like child-app
+crons) behind a per-job lock, so a run still going is skipped, not doubled
+(`subadmin_cron_due()` in `include/common/subadminFunctions.php`).
+
 ## Mounting (app deploy.yml)
 One generic block reads the repo variable `SUBADMINS="help-desk,social-media"` (repo names).
 For each it checks out `WaveNetworks/<repo>` at main, lints it, reads `mount` from its
