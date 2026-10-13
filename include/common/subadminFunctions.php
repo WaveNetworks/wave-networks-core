@@ -82,3 +82,54 @@ function subadmin_cron_due($minuteOfDay, $registry = null) {
     }
     return $out;
 }
+
+/**
+ * Notification categories mounted sub-admins declare ("notification_categories":
+ * [{"slug","name","description"?,"icon"?,"default_frequency"?}]). Slugs are [a-z0-9_]; the
+ * icon defaults to the sub-admin's own. created_by_app = the sub-admin's slug.
+ *
+ * @return array<int,array{slug:string,name:string,description:string,opts:array}>
+ */
+function subadmin_notification_categories($registry = null) {
+    $out = [];
+    foreach (($registry ?? subadmin_registry()) as $m) {
+        foreach ((array) ($m['notification_categories'] ?? []) as $c) {
+            $slug = is_array($c) ? (string) ($c['slug'] ?? '') : '';
+            if (!preg_match('/^[a-z0-9_]{1,50}$/', $slug)) continue;
+            $icon = (string) ($c['icon'] ?? $m['icon'] ?? '');
+            $freq = (string) ($c['default_frequency'] ?? 'realtime');
+            $out[] = [
+                'slug'        => $slug,
+                'name'        => (string) ($c['name'] ?? $slug),
+                'description' => (string) ($c['description'] ?? ''),
+                'opts'        => [
+                    'icon'              => preg_match('/^bi-[a-z0-9-]+$/', $icon) ? $icon : 'bi-bell',
+                    'default_frequency' => in_array($freq, ['realtime', 'daily', 'weekly', 'off'], true) ? $freq : 'realtime',
+                    'created_by_app'    => (string) $m['slug'],
+                ],
+            ];
+        }
+    }
+    return $out;
+}
+
+/**
+ * Register every mounted sub-admin's notification categories (idempotent; core's cron runs it
+ * each minute, so a newly mounted sub-admin's categories appear in users' notification prefs
+ * without a request-time write). A slug another app already owns is left alone, so a manifest
+ * can never rename a core or child-app category. Returns the slugs registered.
+ */
+function subadmin_register_notification_categories($registry = null) {
+    global $db;
+    if (!function_exists('register_notification_category') || !isset($db)) return [];
+    $done = [];
+    foreach (subadmin_notification_categories($registry) as $c) {
+        $s = sanitize($c['slug'], SQL);
+        $r = $db->query("SELECT created_by_app FROM notification_category WHERE slug = '$s'");
+        $row = $r ? $r->fetch(PDO::FETCH_ASSOC) : false;
+        if ($row && (string) $row['created_by_app'] !== $c['opts']['created_by_app']) continue;
+        register_notification_category($c['slug'], $c['name'], $c['description'], $c['opts']);
+        $done[] = $c['slug'];
+    }
+    return $done;
+}

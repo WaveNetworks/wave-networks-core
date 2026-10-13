@@ -39,6 +39,13 @@ Core's `cron/cron.php` (the app's one crontab line) runs every mounted sub-admin
 crons) behind a per-job lock, so a run still going is skipped, not doubled
 (`subadmin_cron_due()` in `include/common/subadminFunctions.php`).
 
+## Notification categories
+`notification_categories: [{"slug","name","description"?,"icon"?,"default_frequency"?}]` are
+registered by the same cron each minute (`subadmin_register_notification_categories()`,
+idempotent upsert, `created_by_app` = the sub-admin's slug), so they show in users'
+notification prefs once mounted. Slugs are `[a-z0-9_]`; the icon defaults to the sub-admin's.
+A slug another app already owns is never touched, so a manifest cannot rename a core category.
+
 ## Mounting (app deploy.yml)
 One generic block reads the repo variable `SUBADMINS="help-desk,social-media"` (repo names).
 For each it checks out `WaveNetworks/<repo>` at main, lints it, reads `mount` from its

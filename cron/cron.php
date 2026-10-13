@@ -97,6 +97,12 @@ foreach ($childCrons as $childCron) {
 // they run here so no sub-admin needs a crontab line. Global scope, like child crons,
 // because a job's bootstrap sets globals. A per-job lock skips a run while the last
 // one is still going (an IMAP poll can outlast a minute).
+// Their manifest "notification_categories" are registered first (idempotent upsert), so
+// e.g. help-desk's 'support' shows in users' notification prefs once it is mounted.
+if (function_exists('subadmin_register_notification_categories')) {
+    try { subadmin_register_notification_categories(); }
+    catch (Throwable $e) { echo "  ERROR registering sub-admin notification categories: " . $e->getMessage() . "\n"; }
+}
 if (function_exists('subadmin_cron_due')) {
     foreach (subadmin_cron_due((int)date('G') * 60 + $minute) as $subJob) {
         $subLock = @fopen(sys_get_temp_dir() . '/wn_subadmin_' . md5($subJob['file']) . '.lock', 'c');
