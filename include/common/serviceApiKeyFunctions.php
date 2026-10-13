@@ -16,7 +16,27 @@
  */
 function get_available_scopes() {
     // Core wins on a name collision: an app cannot redescribe a core scope.
-    return core_available_scopes() + child_declared_scopes();
+    return core_available_scopes() + child_declared_scopes() + subadmin_declared_scopes();
+}
+
+/**
+ * Scopes listed in a mounted sub-admin's subadmin.json "scopes" (docs/SubAdmins.md) that its
+ * api-scopes.json did not already describe. Disabling the sub-admin drops its manifest, so its
+ * scopes stop being offered for new keys.
+ *
+ * @return array [scope_string => description]
+ */
+function subadmin_declared_scopes() {
+    if (!function_exists('subadmin_scopes')) { return []; }
+    $reg = subadmin_registry();
+    $out = [];
+    foreach (subadmin_scopes() as $scope => $slug) {
+        if (!preg_match('/^[a-z0-9_]+:[a-z0-9_]+$/', $scope)) { continue; }
+        $name = $slug;
+        foreach ($reg as $m) { if ($m['slug'] === $slug) { $name = $m['name']; break; } }
+        $out[$scope] = $name . ' sub-admin';
+    }
+    return $out;
 }
 
 /**

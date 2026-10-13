@@ -43,4 +43,9 @@ left alone (offboarding data is a separate, explicit step).
 ## Registry (this repo)
 `subadmin_registry()` (`include/common/subadminFunctions.php`) lists sibling directories whose
 `subadmin.json` names that directory as its mount. The admin sidebar renders one entry per
-mounted sub-admin; `subadmin_scopes()` returns the scopes they declare.
+mounted sub-admin; `subadmin_scopes()` returns the scopes they declare, and
+`get_available_scopes()` offers them for API keys (an `api-scopes.json` description wins).
+
+## Following sub-admin changes
+`subadmin-follow.yml` in each app redeploys when a sub-admin listed in `SUBADMINS` has moved
+on main since the app's last deploy (same idea as `core-follow.yml`).
