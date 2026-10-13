@@ -111,6 +111,12 @@ function wn_migration_snippet($stmt, $len = 120) {
     return strlen($s) > $len ? substr($s, 0, $len) . '...' : $s;
 }
 
+/** A ledger table name: plain identifier only (it is interpolated into SQL). */
+function wn_migration_ledger_name($ledger) {
+    $ledger = (string)$ledger;
+    return preg_match('/^[a-z_][a-z0-9_]{0,63}$/', $ledger) ? $ledger : 'db_version';
+}
+
 /**
  * Run a single migration file on a PDO connection.
  *
@@ -120,7 +126,8 @@ function wn_migration_snippet($stmt, $len = 120) {
  * @param float  $version
  * @return bool
  */
-function run_migration($conn, $file, $type, $version) {
+function run_migration($conn, $file, $type, $version, $ledger = 'db_version') {
+    $ledger = wn_migration_ledger_name($ledger);
     $sql = file_get_contents($file);
     if ($sql === false) {
         $_SESSION['error'] = "Migration $type/$version: cannot read file.";
@@ -167,7 +174,7 @@ function run_migration($conn, $file, $type, $version) {
         }
 
         // Update db_version table
-        $conn->exec("UPDATE db_version SET version = $version WHERE version_id = 1");
+        $conn->exec("UPDATE `$ledger` SET version = $version WHERE version_id = 1");
 
         // DDL statements (CREATE TABLE, ALTER TABLE, DROP TABLE) cause an implicit
         // commit in MySQL, ending any active transaction. If that happened, commit()
@@ -210,9 +217,10 @@ function run_migration($conn, $file, $type, $version) {
  * @param PDO $conn
  * @return float
  */
-function get_current_db_version($conn) {
+function get_current_db_version($conn, $ledger = 'db_version') {
+    $ledger = wn_migration_ledger_name($ledger);
     try {
-        $stmt = $conn->query("SELECT version FROM db_version WHERE version_id = 1");
+        $stmt = $conn->query("SELECT version FROM `$ledger` WHERE version_id = 1");
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ? (float)$row['version'] : 0.0;
     } catch (PDOException $e) {
@@ -440,7 +448,7 @@ function wn_migration_run_prestep($conn, $pre_file, $label, $version) {
  *
  * @return array ['from','to','applied'=>[versions],'failed'=>record|null,'reached'=>bool]
  */
-function wn_migrate_pending($conn, $db_type, $current, $target_version, $base_dir, $label, $scope) {
+function wn_migrate_pending($conn, $db_type, $current, $target_version, $base_dir, $label, $scope, $ledger = 'db_version') {
     $out = ['from' => (float)$current, 'to' => (float)$current, 'applied' => [], 'failed' => null, 'reached' => false];
     foreach (get_available_migrations($db_type, $base_dir) as $ver) {
         if ($ver <= $current) continue;
@@ -455,7 +463,7 @@ function wn_migrate_pending($conn, $db_type, $current, $target_version, $base_di
             error_log("Migration loop $label: pre-step for " . number_format($ver, 1, '.', '') . " failed — stopped");
             return $out;
         }
-        if (!run_migration($conn, $file, $label, $ver)) {
+        if (!run_migration($conn, $file, $label, $ver, $ledger)) {
             $err  = $_SESSION['error'] ?? "Migration $label/$ver failed";
             $code = preg_match('/SQLSTATE\[\w+\]: [^:]*: (\d+)/', (string)$err, $m) ? $m[1] : '';
             $out['failed'] = wn_migration_record_failure($scope, $label, $ver, $file, $err, $code);
@@ -466,7 +474,7 @@ function wn_migrate_pending($conn, $db_type, $current, $target_version, $base_di
         $out['applied'][] = $ver;
         $out['to'] = $ver;
     }
-    $now = get_current_db_version($conn);
+    $now = get_current_db_version($conn, $ledger);
     $out['to'] = $now;
     if ($now >= $target_version) {
         $out['reached'] = true;
@@ -510,7 +518,7 @@ function wn_child_migration_scope($base_dir, $db_type, $shard_id = null) {
  * @param string $db_type         'main' or 'shard'
  * @param float  $target_version
  * @param string $base_dir        the app's db_migrations/ directory
- * @param array  $opts            shard_id (for shards), label
+ * @param array  $opts            shard_id (for shards), label, ledger (version table; default db_version)
  * @return array  wn_migrate_pending() result, or ['status' => 'current']
  */
 function wn_child_migrate($conn, $db_type, $target_version, $base_dir, $opts = []) {
@@ -518,7 +526,15 @@ function wn_child_migrate($conn, $db_type, $target_version, $base_dir, $opts = [
     $scope = wn_child_migration_scope($base_dir, $db_type, $shard_id);
     if (_wn_migration_flag_exists($scope, $target_version)) return ['status' => 'current', 'reached' => true, 'failed' => null];
 
-    $current = get_current_db_version($conn);
+    // opts 'ledger': a DB holding TWO schemas (e.g. a sub-admin whose main DB is also its first
+    // shard) keeps one version row per schema, so the two never read each other's version.
+    // A named ledger is created on first use; 'db_version' stays the migrations' own job.
+    $ledger = wn_migration_ledger_name($opts['ledger'] ?? 'db_version');
+    if ($ledger !== 'db_version') {
+        $conn->exec("CREATE TABLE IF NOT EXISTS `$ledger` (version_id INT NOT NULL PRIMARY KEY, version DECIMAL(10,1) NOT NULL DEFAULT 0.0) ENGINE=InnoDB");
+        $conn->exec("INSERT IGNORE INTO `$ledger` (version_id, version) VALUES (1, 0.0)");
+    }
+    $current = get_current_db_version($conn, $ledger);
     if ($current >= $target_version) {
         wn_migration_clear_failure($scope);
         _wn_migration_flag_set($scope, $target_version);
@@ -526,7 +542,7 @@ function wn_child_migrate($conn, $db_type, $target_version, $base_dir, $opts = [
     }
 
     $label = $opts['label'] ?? ($shard_id !== null ? "child-shard/$shard_id" : "child-$db_type");
-    $r = wn_migrate_pending($conn, $db_type, $current, $target_version, $base_dir, $label, $scope);
+    $r = wn_migrate_pending($conn, $db_type, $current, $target_version, $base_dir, $label, $scope, $ledger);
     if ($r['reached']) _wn_migration_flag_set($scope, $target_version);
     $r['status'] = $r['failed'] ? 'failed' : 'migrated';
     return $r;
