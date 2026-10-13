@@ -37,6 +37,33 @@ function subadmin_registry() {
     return $cache;
 }
 
+/**
+ * Links a mounted sub-admin offers to the APP's signed-in users (manifest "user_menu":
+ * [{label, path, icon?, sub?}]), e.g. help-desk's "Help & support". Apps render these rows
+ * in their own account/menu UI. url is root-relative (/<mount>/<path>): sub-admins sit at the
+ * webroot beside the app. A path that leaves the mount (.., //, scheme) is dropped.
+ * @return array<int,array{slug:string,label:string,sub:string,icon:string,url:string}>
+ */
+function subadmin_user_menu($registry = null) {
+    $out = [];
+    foreach ($registry ?? subadmin_registry() as $m) {
+        foreach ((array) ($m['user_menu'] ?? []) as $item) {
+            $label = trim((string) ($item['label'] ?? ''));
+            $path  = ltrim((string) ($item['path'] ?? ''), '/');
+            if ($label === '' || preg_match('#\.\.|//|:|\\\\#', $path)) continue;
+            $icon = (string) ($item['icon'] ?? '');
+            $out[] = [
+                'slug'  => (string) $m['slug'],
+                'label' => $label,
+                'sub'   => trim((string) ($item['sub'] ?? '')),
+                'icon'  => preg_match('/^bi-[a-z0-9-]+$/', $icon) ? $icon : (string) ($m['icon'] ?? 'bi-puzzle'),
+                'url'   => '/' . rawurlencode((string) $m['mount']) . '/' . $path,
+            ];
+        }
+    }
+    return $out;
+}
+
 /** Scopes declared by mounted sub-admins (manifest "scopes" list, or legacy "api_scope"). */
 function subadmin_scopes() {
     $out = [];

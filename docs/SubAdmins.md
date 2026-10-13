@@ -46,6 +46,13 @@ idempotent upsert, `created_by_app` = the sub-admin's slug), so they show in use
 notification prefs once mounted. Slugs are `[a-z0-9_]`; the icon defaults to the sub-admin's.
 A slug another app already owns is never touched, so a manifest cannot rename a core category.
 
+## User menu (links for the app's signed-in users)
+`user_menu: [{"label","path","icon"?,"sub"?}]` — pages a sub-admin serves to the APP's users (not
+staff), e.g. help-desk's `support/` ("Help & support"). `subadmin_user_menu()` returns them with a
+root-relative `url` (`/<mount>/<path>`; a path with `..`, `//`, `:` or `\` is dropped); each app
+renders the rows in its own account/menu UI, so a mounted sub-admin shows up without app code per
+sub-admin.
+
 ## Mounting (app deploy.yml)
 One generic block reads the repo variable `SUBADMINS="help-desk,social-media"` (repo names).
 For each it checks out `WaveNetworks/<repo>` at main, lints it, reads `mount` from its
