@@ -53,6 +53,8 @@ window.WnLogin = (function () {
             +     '</div>'
             +     '<button type="submit" class="btn btn-primary w-100" id="wnLoginBtn">Sign in</button>'
             +   '</form>'
+            // "Continue with Google" (task #2461): filled in by loadProviders() when the site has one.
+            +   '<div id="wnOAuth" class="d-none"></div>'
             +   '<p class="text-center text-muted small mt-4 mb-1">'
             +     '<a href="#" id="wnForgot">Forgot your password?</a>'
             +   '</p>'
@@ -333,6 +335,121 @@ window.WnLogin = (function () {
             });
     }
 
+    // ── Continue with Google (task #2461) ───────────────────────────────────────
+    // Google refuses sign-in inside an embedded WebView, so the app opens the site's
+    // auth/oauth_callback.php in the SYSTEM browser with device=1 and a challenge
+    // (sha256 hex of a verifier kept here). The site ends the sign-in by sending the
+    // browser to {APP_SCHEME}://open/auth?c=<one-time code>; oauthReturn() trades the
+    // code + verifier for a device token (deviceOAuthExchange). A code read by anything
+    // else on the phone is useless without the verifier.
+    var OAUTH_KEY = 'wn.oauth_verifier';
+    var GOOGLE_G = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style="vertical-align:-3px;margin-right:8px">'
+        + '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+        + '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+        + '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+        + '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+    /** SHA-256 hex of an ASCII string. Plain JS: crypto.subtle is missing on some app:// origins. */
+    function sha256hex(str) {
+        var K = [], H = [], i, j, isP = function (n) { for (var f = 2; f * f <= n; f++) if (n % f === 0) return false; return true; };
+        for (i = 2, j = 0; j < 64; i++) if (isP(i)) { if (j < 8) H[j] = (Math.pow(i, 1 / 2) * 4294967296) | 0; K[j++] = (Math.pow(i, 1 / 3) * 4294967296) | 0; }
+        var bytes = [], w = [];
+        for (i = 0; i < str.length; i++) bytes.push(str.charCodeAt(i) & 255);
+        var bitLen = bytes.length * 8;
+        bytes.push(128);
+        while (bytes.length % 64 !== 56) bytes.push(0);
+        for (i = 7; i >= 0; i--) bytes.push(i > 3 ? 0 : (bitLen >>> (i * 8)) & 255);
+        var rr = function (x, n) { return (x >>> n) | (x << (32 - n)); };
+        for (var o = 0; o < bytes.length; o += 64) {
+            for (i = 0; i < 64; i++) {
+                if (i < 16) w[i] = (bytes[o + i * 4] << 24) | (bytes[o + i * 4 + 1] << 16) | (bytes[o + i * 4 + 2] << 8) | bytes[o + i * 4 + 3];
+                else {
+                    var s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+                    w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+                }
+            }
+            var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+            for (i = 0; i < 64; i++) {
+                var t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+                var t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+                h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+            }
+            H = [(H[0] + a) | 0, (H[1] + b) | 0, (H[2] + c) | 0, (H[3] + d) | 0, (H[4] + e) | 0, (H[5] + f) | 0, (H[6] + g) | 0, (H[7] + h) | 0];
+        }
+        return H.map(function (x) { return ('00000000' + (x >>> 0).toString(16)).slice(-8); }).join('');
+    }
+
+    function newVerifier() {
+        var a = new Uint8Array(32), out = '', abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+        (window.crypto || window.msCrypto).getRandomValues(a);
+        for (var i = 0; i < a.length; i++) out += abc.charAt(a[i] & 63) + abc.charAt((a[i] >> 2) & 63);
+        return out;   // 64 chars
+    }
+
+    function loadProviders() {
+        var box = document.getElementById('wnOAuth');
+        if (!box || !window.WN_ENV.APP_SCHEME) return;   // an app that has not declared its scheme has no way back
+        var body = new FormData();
+        body.append('action', 'deviceOAuthProviders');
+        fetch(window.WN_ENV.API_BASE + 'index.php', { method: 'POST', body: body, credentials: window.WN_ENV.BUNDLED ? 'omit' : 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                var list = (json && json.results && json.results.providers) || [];
+                if (list.indexOf('google') < 0) return;
+                box.innerHTML = '<div class="d-flex align-items-center my-3 text-muted small"><hr class="flex-grow-1 my-0"><span class="px-2">or</span><hr class="flex-grow-1 my-0"></div>'
+                    + '<button type="button" class="btn w-100 wn-oauth-google" id="wnGoogle" data-oauth="google" '
+                    + 'style="background:#fff;color:#1f1f1f;border:1px solid #747775;font-weight:500">' + GOOGLE_G + 'Continue with Google</button>';
+                box.classList.remove('d-none');
+                document.getElementById('wnGoogle').addEventListener('click', function () { startOAuth('google'); });
+            })
+            .catch(function () {});
+    }
+
+    function startOAuth(provider) {
+        var v = newVerifier();
+        try { localStorage.setItem(OAUTH_KEY, v); } catch (e) { /* the exchange will say so */ }
+        Platform.openExternal(window.WN_ENV.AUTH_BASE + 'oauth_callback.php?provider=' + encodeURIComponent(provider)
+            + '&device=1&challenge=' + sha256hex(v));
+    }
+
+    var tradedCodes = {};
+    /** {APP_SCHEME}://open/auth?c=<code> came back from the browser. Returns true when it was ours. */
+    function oauthReturn(url) {
+        var scheme = window.WN_ENV.APP_SCHEME;
+        if (!scheme || String(url || '').indexOf(scheme + '://open/auth') !== 0) return false;
+        var m = /[?&]c=([0-9a-f]{48})/.exec(url);
+        if (!m || tradedCodes[m[1]]) return true;
+        tradedCodes[m[1]] = 1;
+        var v = '';
+        try { v = localStorage.getItem(OAUTH_KEY) || ''; } catch (e) {}
+        var body = new FormData();
+        body.append('action', 'deviceOAuthExchange');
+        body.append('code', m[1]);
+        body.append('verifier', v);
+        fetch(window.WN_ENV.API_BASE + 'index.php', {
+            method: 'POST', body: body, headers: { 'X-Wn-Device': deviceId() },
+            credentials: window.WN_ENV.BUNDLED ? 'omit' : 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                var res = (json && json.results) || {};
+                if (json.error || !res.token) { fail((json && json.error) || 'Sign-in failed. Please try again.'); return; }
+                try { localStorage.removeItem(OAUTH_KEY); } catch (e) {}
+                signedIn(res);
+            })
+            .catch(function () { fail('Could not reach the server. Please try again.'); });
+        return true;
+    }
+
+    // cordova-ios hands the app's own scheme to window.handleOpenURL; chained, never replaced.
+    (function () {
+        var prev = window.handleOpenURL;
+        window.handleOpenURL = function (url) {
+            if (typeof prev === 'function') { try { prev(url); } catch (e) { /* theirs */ } }
+            setTimeout(function () { oauthReturn(url); }, 0);
+        };
+    })();
+
     /** A stable id for THIS install, so the device list shows one row, not one per login. */
     function deviceId() {
         var KEY = 'wn.device_id';
@@ -351,11 +468,14 @@ window.WnLogin = (function () {
     return {
         markup: markup,
         deviceId: deviceId,
+        oauthReturn: oauthReturn,
+        sha256hex: sha256hex,
 
         /** Called by the router once the login markup is in the DOM. */
         bind: function () {
             var form = document.getElementById('wnLoginForm');
             if (form) form.addEventListener('submit', submit);
+            loadProviders();
 
             var forgot = document.getElementById('wnForgot');
             if (forgot) {

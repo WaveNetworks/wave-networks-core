@@ -150,9 +150,10 @@ function wn_login_code_complete($user) {
 /** Shared tail of the password-less sign-ins ($method = login_history.login_method). Never returns. */
 function wn_login_finish($user, $method, $two_factor = true) {
     // "Continue with Google" for an email that already had an account waits on this code (task #2461).
-    if (function_exists('oauth_apply_pending_link')) { oauth_apply_pending_link($user, $method); }
+    $linked = function_exists('oauth_apply_pending_link') && oauth_apply_pending_link($user, $method);
 
     if ($two_factor && !empty($user['totp_enabled'])) {
+        if ($linked || strpos((string)$method, 'oauth_') === 0) { $_SESSION['oauth_device_2fa'] = true; }
         $_SESSION['2fa_pending'] = true;
         $_SESSION['2fa_user_id'] = $user['user_id'];
         header('Location: 2fa.php');
@@ -163,6 +164,11 @@ function wn_login_finish($user, $method, $two_factor = true) {
     if (empty($user['is_confirmed'])) {
         $uid = (int)$user['user_id'];
         db_query("UPDATE user SET is_confirmed = 1, confirm_hash = NULL WHERE user_id = '$uid'");
+    }
+
+    // Started from the phone app (task #2461): the sign-in goes back to the app, not into this browser.
+    if (($linked || strpos((string)$method, 'oauth_') === 0) && function_exists('oauth_device_pending') && oauth_device_pending()) {
+        oauth_device_handoff($user, $method);
     }
 
     load_user_session($user);

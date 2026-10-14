@@ -164,10 +164,31 @@ function oauth_callback($provider_name, $code, $state) {
  *  3. the email belongs to an account → never link silently (task #2461): email a sign-in
  *     code; the link is made when that code is used (wn_login_finish → oauth_apply_pending_link);
  *  4. nobody → create the account, confirmed, and send it through the normal first sign-in.
+ *
+ * Phone app (task #2461): the app opens ?provider=google&device=1&challenge=<sha256 hex> in the
+ * SYSTEM browser (Google refuses embedded WebViews). The sign-in then ends in
+ * oauth_device_handoff() instead of a browser session: a one-time code goes back to the app's
+ * own scheme, declared by the app's page as $opts['device_scheme'] (never taken from the URL).
  * Never returns.
  */
-function oauth_handle_callback_page() {
+function oauth_handle_callback_page($opts = []) {
     if (isset($_GET['provider'])) {
+        unset($_SESSION['oauth_device']);
+        if (!empty($_GET['device'])) {
+            $scheme    = (string)($opts['device_scheme'] ?? '');
+            $challenge = strtolower((string)($_GET['challenge'] ?? ''));
+            if (!preg_match('/^[a-z][a-z0-9.+-]{2,40}$/', $scheme) || in_array($scheme, ['http', 'https', 'javascript', 'data', 'file', 'about', 'blob', 'intent'], true)) {
+                $_SESSION['error'] = 'This app cannot sign in with ' . ucfirst((string)$_GET['provider']) . ' yet.';
+                header('Location: login.php');
+                exit;
+            }
+            if (!preg_match('/^[0-9a-f]{64}$/', $challenge)) {
+                $_SESSION['error'] = 'That sign-in link is incomplete. Start again from the app.';
+                header('Location: login.php');
+                exit;
+            }
+            $_SESSION['oauth_device'] = ['scheme' => $scheme, 'challenge' => $challenge, 'expires' => time() + 1800];
+        }
         oauth_redirect(strtolower((string)$_GET['provider']));
         header('Location: login.php');
         exit;
@@ -201,8 +222,9 @@ function oauth_handle_callback_page() {
     $s_provider = sanitize($provider, SQL);
     $s_oid      = sanitize($userData['oauth_id'], SQL);
 
-    // 1. Already signed in: this is "link my account".
-    if (!empty($_SESSION['user_id'])) {
+    // 1. Already signed in: this is "link my account" (not for the phone: whoever this browser
+    //    happens to be signed in as is not who is signing in on the phone).
+    if (!empty($_SESSION['user_id']) && !oauth_device_pending()) {
         $uid = (int)$_SESSION['user_id'];
         $other = db_fetch(db_query("SELECT user_id FROM user WHERE oauth_provider = '$s_provider' AND oauth_id = '$s_oid' AND user_id <> '$uid' LIMIT 1"));
         if ($other) {
@@ -285,9 +307,9 @@ function oauth_handle_callback_page() {
  */
 function oauth_apply_pending_link($user, $method) {
     $p = $_SESSION['oauth_link_pending'] ?? null;
-    if (!$p) return;
-    if (($p['expires'] ?? 0) < time()) { unset($_SESSION['oauth_link_pending']); return; }
-    if ($method !== 'email_code' || (int)$p['user_id'] !== (int)$user['user_id']) return;
+    if (!$p) return false;
+    if (($p['expires'] ?? 0) < time()) { unset($_SESSION['oauth_link_pending']); return false; }
+    if ($method !== 'email_code' || (int)$p['user_id'] !== (int)$user['user_id']) return false;
 
     $uid = (int)$user['user_id'];
     $s_provider = sanitize($p['provider'], SQL);
@@ -297,6 +319,76 @@ function oauth_apply_pending_link($user, $method) {
         db_query("UPDATE user SET oauth_provider = '$s_provider', oauth_id = '$s_oid' WHERE user_id = '$uid'");
     }
     unset($_SESSION['oauth_link_pending']);
+    return true;
+}
+
+/** A phone sign-in started in this browser (and not expired): it ends in oauth_device_handoff(). */
+function oauth_device_pending() {
+    $d = $_SESSION['oauth_device'] ?? null;
+    if (!$d) return false;
+    if (($d['expires'] ?? 0) < time()) { unset($_SESSION['oauth_device']); return false; }
+    return true;
+}
+
+/**
+ * End a phone sign-in in the browser: mint a one-time code bound to the app's challenge, and hand
+ * it to the app's scheme ({scheme}://open/auth?c=…). The browser gets NO session. The app trades the
+ * code + its verifier for a device token (deviceOAuthExchange). Never returns.
+ */
+function oauth_device_handoff($user, $method) {
+    $d = $_SESSION['oauth_device'];
+    unset($_SESSION['oauth_device']);
+
+    $code = bin2hex(random_bytes(24));
+    $uid  = (int)$user['user_id'];
+    db_query("INSERT INTO oauth_handoff (code_hash, challenge, user_id, provider, created, expires_at)
+              VALUES ('" . hash('sha256', $code) . "', '" . sanitize($d['challenge'], SQL) . "', '$uid', '"
+              . sanitize(substr((string)$method, 0, 30), SQL) . "', NOW(), NOW() + INTERVAL 5 MINUTE)");
+    if (function_exists('record_login')) { record_login($uid, $method, 'success'); }
+
+    $url = $d['scheme'] . '://open/auth?c=' . $code;
+    $b   = function_exists('get_branding') ? get_branding() : [];
+    $app = $b['site_name'] ?? 'the app';
+    header('Cache-Control: no-store');
+    header('Referrer-Policy: no-referrer');
+    ?><!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signed in</title></head>
+<body style="font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:48px 24px;color:#1f1f1f">
+<h1 style="font-size:1.4rem">You're signed in</h1>
+<p>Going back to <?= h($app) ?>…</p>
+<p><a href="<?= h($url) ?>" id="wnBack" style="display:inline-block;padding:12px 24px;border-radius:8px;background:#1f1f1f;color:#fff;text-decoration:none">Open <?= h($app) ?></a></p>
+<p style="color:#666;font-size:.9rem">You can close this tab afterwards.</p>
+<script>setTimeout(function () { location.href = document.getElementById('wnBack').getAttribute('href'); }, 150);</script>
+</body></html><?php
+    exit;
+}
+
+/**
+ * Trade a phone sign-in code for its user (deviceOAuthExchange). The code is single use and the
+ * verifier must hash to the challenge the app sent when it started, so a code seen by anything
+ * else on the phone is worthless. Returns the user row or an error string.
+ */
+function oauth_device_exchange($code, $verifier) {
+    $code = (string)$code; $verifier = (string)$verifier;
+    if (!preg_match('/^[0-9a-f]{48}$/', $code) || !preg_match('/^[A-Za-z0-9_-]{43,128}$/', $verifier)) {
+        return 'That sign-in link is not valid. Start again from the app.';
+    }
+    $h   = hash('sha256', $code);
+    $row = db_fetch(db_query("SELECT * FROM oauth_handoff WHERE code_hash = '$h' LIMIT 1"));
+    if (!$row || $row['used_at'] !== null || strtotime($row['expires_at'] . ' UTC') < time()) {
+        return 'That sign-in has expired or was already used. Start again from the app.';
+    }
+    if (!hash_equals($row['challenge'], hash('sha256', $verifier))) {
+        return 'That sign-in was started on another device. Start again from the app.';
+    }
+    $r = db_query("UPDATE oauth_handoff SET used_at = NOW() WHERE code_hash = '$h' AND used_at IS NULL");
+    if (!$r || (method_exists($r, 'rowCount') && $r->rowCount() < 1)) {
+        return 'That sign-in has expired or was already used. Start again from the app.';
+    }
+    db_query("DELETE FROM oauth_handoff WHERE expires_at < NOW() - INTERVAL 1 DAY");
+    $user = get_user((int)$row['user_id']);
+    return $user ?: 'That account no longer exists.';
 }
 
 /**

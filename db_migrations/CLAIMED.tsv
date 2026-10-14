@@ -64,3 +64,4 @@ main/5.8	Migration 5.8 for Main Database (login_approval: sign in on a computer 
 main/5.9	Migration 5.9 for Main Database (forgot/invite tokens hashed at rest, sha256: marker; task #2397)
 main/6.0	Migration 6.0 for Main Database (api_key.api_key session/device bearer keys hashed at rest, sha256: marker; task #2398)
 main/6.1	Migration 6.1 for Main Database (email_queue.headers_json: threading headers for queued mail; task #2395)
+main/6.2	Migration 6.2 for Main Database (oauth_handoff: one-time phone sign-in codes for Continue with Google; task #2461)

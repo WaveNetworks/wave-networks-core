@@ -189,6 +189,38 @@ if (($_POST['action'] ?? '') == 'deviceRegister') {
     }
 }
 
+// ─── DEVICE OAUTH ("Continue with Google" in the app, task #2461) ────────────
+// The app asks which providers can run (to show their buttons), opens the app's
+// auth/oauth_callback.php?provider=…&device=1&challenge=… in the SYSTEM browser, and gets back
+// {scheme}://open/auth?c=<code> (oauthFunctions.php oauth_device_handoff). It trades the code
+// and its verifier here for the same answer deviceLogin gives.
+
+if (($_POST['action'] ?? '') == 'deviceOAuthProviders') {
+    $data['providers'] = function_exists('oauth_enabled_providers') ? oauth_enabled_providers() : [];
+}
+
+if (($_POST['action'] ?? '') == 'deviceOAuthExchange') {
+    $user = oauth_device_exchange($_POST['code'] ?? '', $_POST['verifier'] ?? '');
+    if (!is_array($user)) {
+        $_SESSION['error'] = $user;
+    } elseif (empty($user['is_confirmed'])) {
+        $_SESSION['error'] = 'Please confirm your email address before logging in.';
+    } else {
+        $token = wn_issue_device_token($user['user_id']);
+        load_user_session($user);
+
+        $data['token']   = $token;
+        $data['user_id'] = (int)$user['user_id'];
+        $data['email']   = $user['email'];
+        $data['name']    = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
+        if (function_exists('check_reconsent_needed')) {
+            $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
+            if (!empty($reconsent)) { $data['reconsent_needed'] = $reconsent; }
+        }
+        $_SESSION['success'] = 'Signed in.';
+    }
+}
+
 // ─── DEVICE LOGOUT ───────────────────────────────────────────────────────────
 // Revokes the token this request arrived with. Deleting the api_key row is precisely
 // what "sign out this device" does in the profile UI — one revocation path, not two.

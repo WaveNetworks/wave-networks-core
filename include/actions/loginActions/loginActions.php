@@ -402,6 +402,11 @@ if (($action ?? null) == 'verify2FA') {
 
     if (count($errs) <= 0) {
         unset($_SESSION['2fa_pending'], $_SESSION['2fa_user_id']);
+        // A "Continue with Google" from the phone app goes back to the app (task #2461).
+        if (function_exists('oauth_device_pending') && oauth_device_pending() && !empty($_SESSION['oauth_device_2fa'])) {
+            unset($_SESSION['oauth_device_2fa']);
+            oauth_device_handoff($user, '2fa');
+        }
         load_user_session($user);
         // Record login history
         if (function_exists('record_login')) {
