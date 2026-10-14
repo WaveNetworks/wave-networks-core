@@ -21,7 +21,12 @@ if (($action ?? null) == 'saveOAuthProvider') {
     if (!$client_id)     { $errs['client_id'] = 'Client ID required.'; }
 
     // Apple (task #2462): the secret is the Team ID + Key ID + .p8 key, kept together as sealed JSON.
-    if ($provider_name === 'apple') {
+    // Editing a saved Apple row with all three left blank keeps the stored key (write-only, like Client Secret).
+    $apple_keep = $provider_name === 'apple' && $provider_id
+        && trim($_POST['apple_team_id'] ?? '') === '' && trim($_POST['apple_key_id'] ?? '') === '' && trim($_POST['apple_private_key'] ?? '') === '';
+    if ($provider_name === 'apple' && $apple_keep) {
+        $client_secret = '';
+    } elseif ($provider_name === 'apple') {
         $team = strtoupper(trim($_POST['apple_team_id'] ?? ''));
         $kid  = strtoupper(trim($_POST['apple_key_id'] ?? ''));
         $p8   = trim($_POST['apple_private_key'] ?? '');
@@ -56,7 +61,7 @@ if (($action ?? null) == 'saveOAuthProvider') {
         $_SESSION['error'] = implode('<br>', $errs);
         // Never discard what was typed: the form refills from this after the redirect.
         $_SESSION['oauth_form'] = array_intersect_key($_POST, array_flip(array(
-            'provider_name', 'client_id', 'client_secret', 'apple_team_id', 'apple_key_id', 'apple_private_key')));
+            'provider_id', 'provider_name', 'client_id', 'client_secret', 'apple_team_id', 'apple_key_id', 'apple_private_key')));
     }
 }
 

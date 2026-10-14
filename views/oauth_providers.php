@@ -15,6 +15,13 @@ $providers = db_fetch_all(db_query("SELECT * FROM oauth_provider ORDER BY provid
 // A failed save hands back what was typed (oauthActions.php), so nothing has to be entered twice.
 $f = $_SESSION['oauth_form'] ?? array();
 unset($_SESSION['oauth_form']);
+// ?edit=N fills the form from a saved row; secrets stay blank (write-only: blank = keep the stored one).
+if (!$f && !empty($_GET['edit'])) {
+    $eid = (int)$_GET['edit'];
+    $er = db_fetch(db_query("SELECT provider_id, provider_name, client_id FROM oauth_provider WHERE provider_id = '$eid'"));
+    if ($er) { $f = $er; }
+}
+$editing = !empty($f['provider_id']);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -51,6 +58,7 @@ unset($_SESSION['oauth_form']);
                         <?php } ?>
                     </td>
                     <td>
+                        <a href="index.php?page=oauth_providers&amp;edit=<?= h($p['provider_id']) ?>#providerForm" class="btn btn-sm btn-outline-secondary">Edit</a>
                         <form method="post" class="d-inline">
                             <input type="hidden" name="action" value="toggleOAuthProvider">
                             <input type="hidden" name="provider_id" value="<?= h($p['provider_id']) ?>">
@@ -68,11 +76,15 @@ unset($_SESSION['oauth_form']);
 </div>
 
 <!-- Add/Edit provider form -->
-<div class="card">
-    <div class="card-header"><strong>Add Provider</strong></div>
+<div class="card" id="providerForm">
+    <div class="card-header"><strong><?= $editing ? 'Edit Provider' : 'Add Provider' ?></strong></div>
     <div class="card-body">
         <form method="post">
             <input type="hidden" name="action" value="saveOAuthProvider">
+            <?php if ($editing) { ?>
+            <input type="hidden" name="provider_id" value="<?= h($f['provider_id']) ?>">
+            <p class="form-text">Leave the secret fields blank to keep the ones already saved.</p>
+            <?php } ?>
 
             <div class="row mb-3">
                 <div class="col-md-4">
@@ -112,7 +124,8 @@ unset($_SESSION['oauth_form']);
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary">Add Provider</button>
+            <button type="submit" class="btn btn-primary"><?= $editing ? 'Save' : 'Add Provider' ?></button>
+            <?php if ($editing) { ?><a href="index.php?page=oauth_providers" class="btn btn-link">Cancel</a><?php } ?>
         </form>
     </div>
 </div>
