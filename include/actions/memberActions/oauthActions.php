@@ -54,6 +54,9 @@ if (($action ?? null) == 'saveOAuthProvider') {
         $_SESSION['success'] = 'OAuth provider saved.';
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
+        // Never discard what was typed: the form refills from this after the redirect.
+        $_SESSION['oauth_form'] = array_intersect_key($_POST, array_flip(array(
+            'provider_name', 'client_id', 'client_secret', 'apple_team_id', 'apple_key_id', 'apple_private_key')));
     }
 }
 
