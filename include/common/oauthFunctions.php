@@ -29,8 +29,7 @@ function oauth_provider($provider_name) {
         if ($provider_name === 'facebook') { $facebook_app_id  = $row['client_id'];   $facebook_app_secret  = $secret; }
     }
 
-    $base_url = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-    $redirect = $base_url . dirname(dirname($_SERVER['SCRIPT_NAME'])) . '/auth/oauth_callback.php';
+    $redirect = oauth_redirect_uri();
 
     switch ($provider_name) {
         case 'google':
@@ -57,6 +56,10 @@ function oauth_provider($provider_name) {
                 'redirectUri'  => $redirect,
                 'graphApiVersion' => 'v18.0',
             ]);
+
+        case 'apple':
+            // Not a League provider: the Apple flow is oauth_apple_*() below.
+            return oauth_apple_config() ?: false;
 
         default:
             return false;
@@ -94,6 +97,22 @@ function oauth_redirect($provider_name) {
         return;
     }
 
+    if ($provider_name === 'apple') {
+        $cfg   = $provider;
+        $state = bin2hex(random_bytes(16));
+        $_SESSION['oauth2state']    = $state;
+        $_SESSION['oauth_provider'] = 'apple';
+        header('Location: https://appleid.apple.com/auth/authorize?' . http_build_query([
+            'response_type' => 'code',
+            'response_mode' => 'form_post',      // required when asking for name/email
+            'client_id'     => $cfg['client_id'],
+            'redirect_uri'  => oauth_redirect_uri(),
+            'scope'         => 'name email',
+            'state'         => $state,
+        ], '', '&', PHP_QUERY_RFC3986));
+        exit;
+    }
+
     $options = [];
     if ($provider_name === 'google') {
         $options['scope'] = ['email', 'profile'];
@@ -122,6 +141,9 @@ function oauth_callback($provider_name, $code, $state) {
         unset($_SESSION['oauth2state']);
         $_SESSION['error'] = 'Invalid OAuth state. Please try again.';
         return false;
+    }
+    if ($provider_name === 'apple') {
+        return oauth_apple_callback($code);
     }
 
     $provider = oauth_provider($provider_name);
@@ -194,12 +216,18 @@ function oauth_handle_callback_page($opts = []) {
         exit;
     }
 
+    // Apple answers with a cross-site POST (response_mode=form_post), which carries no Lax session
+    // cookie. Post it once more from this origin, where the cookie does go.
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['state']) && empty($_POST['wn_rt'])) {
+        oauth_repost_page();
+    }
+
     $provider = $_SESSION['oauth_provider'] ?? '';
-    $code     = $_GET['code'] ?? '';
-    $state    = $_GET['state'] ?? '';
+    $code     = $_GET['code'] ?? ($_POST['code'] ?? '');
+    $state    = $_GET['state'] ?? ($_POST['state'] ?? '');
 
     if (!$provider || !$code) {
-        $_SESSION['error'] = isset($_GET['error']) ? 'Sign-in was cancelled.' : 'Invalid OAuth callback.';
+        $_SESSION['error'] = (isset($_GET['error']) || isset($_POST['error'])) ? 'Sign-in was cancelled.' : 'Invalid OAuth callback.';
         header('Location: login.php');
         exit;
     }
@@ -231,6 +259,7 @@ function oauth_handle_callback_page($opts = []) {
             $_SESSION['error'] = 'That ' . $label . ' account is already linked to a different account.';
         } else {
             db_query("UPDATE user SET oauth_provider = '$s_provider', oauth_id = '$s_oid' WHERE user_id = '$uid'");
+            oauth_save_refresh_token($uid, $provider, $userData['refresh_token'] ?? '');
             $_SESSION['success'] = $label . ' sign-in is linked to your account.';
         }
         header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
@@ -241,6 +270,7 @@ function oauth_handle_callback_page($opts = []) {
     $user = db_fetch(db_query("SELECT * FROM user WHERE oauth_provider = '$s_provider' AND oauth_id = '$s_oid' LIMIT 1"));
     if ($user) {
         $user = get_user((int)$user['user_id']);
+        oauth_save_refresh_token((int)$user['user_id'], $provider, $userData['refresh_token'] ?? '');
         wn_login_finish($user, 'oauth_' . $provider, true);
     }
 
@@ -257,6 +287,7 @@ function oauth_handle_callback_page($opts = []) {
             'user_id'  => (int)$user['user_id'],
             'provider' => $provider,
             'oauth_id' => $userData['oauth_id'],
+            'refresh'  => function_exists('wn_secret_seal') ? wn_secret_seal((string)($userData['refresh_token'] ?? '')) : '',
             'expires'  => time() + 60 * (defined('WN_LOGIN_CODE_TTL_MIN') ? WN_LOGIN_CODE_TTL_MIN : 15),
         ];
         $err = wn_login_code_request($userData['email']);
@@ -291,6 +322,7 @@ function oauth_handle_callback_page($opts = []) {
     }
 
     $new_id    = db_insert_id();
+    oauth_save_refresh_token((int)$new_id, $provider, $userData['refresh_token'] ?? '');
     $nameParts = explode(' ', trim((string)$userData['name']), 2);
     prime_shard($shard_id);
     db_query_shard($shard_id, "INSERT INTO user_profile (user_id, first_name, last_name, created)
@@ -317,6 +349,9 @@ function oauth_apply_pending_link($user, $method) {
     $taken = db_fetch(db_query("SELECT user_id FROM user WHERE oauth_provider = '$s_provider' AND oauth_id = '$s_oid' AND user_id <> '$uid' LIMIT 1"));
     if (!$taken) {
         db_query("UPDATE user SET oauth_provider = '$s_provider', oauth_id = '$s_oid' WHERE user_id = '$uid'");
+        if (!empty($p['refresh']) && function_exists('wn_secret_open')) {
+            oauth_save_refresh_token($uid, $p['provider'], wn_secret_open($p['refresh']));
+        }
     }
     unset($_SESSION['oauth_link_pending']);
     return true;
@@ -406,6 +441,12 @@ function oauth_buttons_html($verb = 'Continue') {
     $out = '<div class="d-grid gap-2 mb-3 wn-oauth-buttons">';
     foreach ($names as $n) {
         $href = 'oauth_callback.php?provider=' . rawurlencode($n);
+        if ($n === 'apple') {
+            // Apple's rules: black (or white) button, Apple logo, "Continue with Apple".
+            $out .= '<a href="' . h($href) . '" class="btn wn-oauth-apple" data-oauth="apple" '
+                  . 'style="background:#000;color:#fff;border:1px solid #000;font-weight:500">' . oauth_apple_logo() . h($verb) . ' with Apple</a>';
+            continue;
+        }
         if ($n === 'google') {
             $out .= '<a href="' . h($href) . '" class="btn wn-oauth-google" data-oauth="google" '
                   . 'style="background:#fff;color:#1f1f1f;border:1px solid #747775;font-weight:500">'
@@ -416,4 +457,145 @@ function oauth_buttons_html($verb = 'Continue') {
         }
     }
     return $out . '</div>';
+}
+
+/** Where every provider sends the browser back: this app's auth/oauth_callback.php. */
+function oauth_redirect_uri() {
+    $base_url = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    return $base_url . dirname(dirname($_SERVER['SCRIPT_NAME'])) . '/auth/oauth_callback.php';
+}
+
+// ── Sign in with Apple (nokemo task #2462) ───────────────────────────────────
+// Admin › OAuth providers › Apple: Client ID = the Services ID; the secret is sealed JSON
+// {team_id, key_id, private_key (.p8)} (oauthActions.php builds it from three fields).
+// The client secret Apple wants is a short-lived ES256 JWT signed with that key.
+
+/** ['client_id','team_id','key_id','private_key'] for an enabled Apple row, or null. */
+function oauth_apple_config() {
+    $row = oauth_provider_row('apple');
+    if (!$row || empty($row['client_id'])) return null;
+    $raw = function_exists('wn_secret_open') ? wn_secret_open($row['client_secret']) : $row['client_secret'];
+    $j = json_decode((string)$raw, true);
+    if (!is_array($j) || empty($j['team_id']) || empty($j['key_id']) || empty($j['private_key'])) return null;
+    return ['client_id' => $row['client_id'], 'team_id' => $j['team_id'], 'key_id' => $j['key_id'], 'private_key' => $j['private_key']];
+}
+
+function oauth_apple_client_secret($cfg) {
+    return \Firebase\JWT\JWT::encode([
+        'iss' => $cfg['team_id'],
+        'iat' => time(),
+        'exp' => time() + 300,
+        'aud' => 'https://appleid.apple.com',
+        'sub' => $cfg['client_id'],
+    ], $cfg['private_key'], 'ES256', $cfg['key_id']);
+}
+
+/** POST to an appleid.apple.com endpoint; returns [http_status, decoded body]. */
+function oauth_apple_post($url, $fields) {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true, CURLOPT_POSTFIELDS => http_build_query($fields),
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ['Accept: application/json'],
+    ]);
+    $body = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$code, json_decode((string)$body, true)];
+}
+
+/**
+ * Trade Apple's code for an id_token, verify it against Apple's published keys, and return what
+ * oauth_callback() returns for every provider (+ refresh_token, kept to revoke on account deletion).
+ * Apple sends the person's name ONCE, on the first sign-in, as the posted `user` field.
+ */
+function oauth_apple_callback($code) {
+    $cfg = oauth_apple_config();
+    if (!$cfg) { $_SESSION['error'] = 'OAuth provider not configured.'; return false; }
+    try {
+        [$status, $tok] = oauth_apple_post('https://appleid.apple.com/auth/token', [
+            'client_id' => $cfg['client_id'], 'client_secret' => oauth_apple_client_secret($cfg),
+            'code' => $code, 'grant_type' => 'authorization_code', 'redirect_uri' => oauth_redirect_uri(),
+        ]);
+        if ($status !== 200 || empty($tok['id_token'])) {
+            throw new \Exception('token endpoint ' . $status . ' ' . ($tok['error'] ?? ''));
+        }
+        $keys = json_decode((string)@file_get_contents('https://appleid.apple.com/auth/keys'), true);
+        $claims = (array)\Firebase\JWT\JWT::decode($tok['id_token'], \Firebase\JWT\JWK::parseKeySet($keys ?: []));
+        if (($claims['iss'] ?? '') !== 'https://appleid.apple.com' || ($claims['aud'] ?? '') !== $cfg['client_id']) {
+            throw new \Exception('id_token issuer/audience mismatch');
+        }
+        $u = json_decode((string)($_POST['user'] ?? ''), true);
+        $name = trim(($u['name']['firstName'] ?? '') . ' ' . ($u['name']['lastName'] ?? ''));
+        return [
+            'email'          => strtolower(trim((string)($claims['email'] ?? ''))),
+            // Apple only hands out addresses it has verified (a Hide My Email relay address included).
+            'email_verified' => filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'name'           => $name,
+            'oauth_id'       => (string)($claims['sub'] ?? ''),
+            'refresh_token'  => (string)($tok['refresh_token'] ?? ''),
+        ];
+    } catch (\Throwable $e) {
+        error_log('OAuth callback error (apple): ' . $e->getMessage());
+        $_SESSION['error'] = 'OAuth authentication failed. Please try again.';
+        return false;
+    }
+}
+
+/** Re-post a provider's cross-site form_post from this origin so the session cookie rides along. Never returns. */
+function oauth_repost_page() {
+    header('Cache-Control: no-store');
+    header('Referrer-Policy: no-referrer');
+    ?><!doctype html><html><head><meta charset="utf-8"><title>Signing in…</title></head><body>
+<form id="f" method="post" action="oauth_callback.php">
+<?php foreach (['code', 'state', 'user', 'error'] as $k) { if (isset($_POST[$k])) { ?>
+<input type="hidden" name="<?= $k ?>" value="<?= h((string)$_POST[$k]) ?>">
+<?php } } ?>
+<input type="hidden" name="wn_rt" value="1"><noscript><button type="submit">Continue</button></noscript>
+</form>
+<script>document.getElementById('f').submit();</script>
+</body></html><?php
+    exit;
+}
+
+/** Keep a provider refresh token (sealed) so deleting the account can revoke it. Apple only. */
+function oauth_save_refresh_token($user_id, $provider, $token) {
+    if ($provider !== 'apple' || (string)$token === '' || (int)$user_id <= 0) return;
+    $sealed = function_exists('wn_secret_seal') ? wn_secret_seal((string)$token) : (string)$token;
+    db_query_prepared("INSERT INTO oauth_token (user_id, provider, refresh_token, created) VALUES (?, ?, ?, NOW())
+                       ON DUPLICATE KEY UPDATE refresh_token = VALUES(refresh_token), created = NOW()",
+                      [(int)$user_id, $provider, $sealed]);
+}
+
+/**
+ * Account deletion: revoke the user's Apple tokens (App Store rule for apps offering Sign in with
+ * Apple), then forget them. Runs as a delete_user_data() hook. Failures are logged, never fatal.
+ */
+function oauth_revoke_user_tokens($user_id, $shard_id = null) {
+    $uid = (int)$user_id;
+    $r = db_query("SELECT provider, refresh_token FROM oauth_token WHERE user_id = '$uid'");
+    $rows = $r ? db_fetch_all($r) : [];
+    foreach (($rows ?: []) as $row) {
+        if ($row['provider'] !== 'apple') continue;
+        $cfg = oauth_apple_config();
+        if (!$cfg) { error_log("apple revoke user=$uid: provider not configured"); continue; }
+        try {
+            $tok = function_exists('wn_secret_open') ? wn_secret_open($row['refresh_token']) : $row['refresh_token'];
+            [$status] = oauth_apple_post('https://appleid.apple.com/auth/revoke', [
+                'client_id' => $cfg['client_id'], 'client_secret' => oauth_apple_client_secret($cfg),
+                'token' => $tok, 'token_type_hint' => 'refresh_token',
+            ]);
+            if ($status !== 200) error_log("apple revoke user=$uid: HTTP $status");
+        } catch (\Throwable $e) {
+            error_log("apple revoke user=$uid: " . $e->getMessage());
+        }
+    }
+    db_query("DELETE FROM oauth_token WHERE user_id = '$uid'");
+}
+if (function_exists('register_delete_user_data_hook')) {
+    register_delete_user_data_hook('oauth_revoke_user_tokens');
+}
+
+function oauth_apple_logo() {
+    return '<svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true" style="vertical-align:-3px;margin-right:8px"><path fill="currentColor" d="M788 341c-6 4-108 62-108 190 0 149 131 202 135 203-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C45 792 0 667 0 549 0 359 124 258 245 258c65 0 119 42 159 42 39 0 99-45 172-45 28 0 129 3 196 86zM554 164c31-37 53-88 53-139 0-7-1-14-2-20-50 2-110 34-146 76-28 32-55 83-55 135 0 8 1 16 2 18 3 1 8 1 13 1 45 0 102-30 135-71z"/></svg>';
 }

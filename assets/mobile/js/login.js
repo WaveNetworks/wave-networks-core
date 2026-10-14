@@ -335,7 +335,7 @@ window.WnLogin = (function () {
             });
     }
 
-    // ── Continue with Google (task #2461) ───────────────────────────────────────
+    // ── Continue with Google (task #2461) / Apple (task #2462) ─────────────────
     // Google refuses sign-in inside an embedded WebView, so the app opens the site's
     // auth/oauth_callback.php in the SYSTEM browser with device=1 and a challenge
     // (sha256 hex of a verifier kept here). The site ends the sign-in by sending the
@@ -348,6 +348,8 @@ window.WnLogin = (function () {
         + '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
         + '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
         + '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+    var APPLE_LOGO = '<svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true" style="vertical-align:-3px;margin-right:8px"><path fill="currentColor" d="M788 341c-6 4-108 62-108 190 0 149 131 202 135 203-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-164-40c-77 0-104 41-167 41s-106-57-156-127C45 792 0 667 0 549 0 359 124 258 245 258c65 0 119 42 159 42 39 0 99-45 172-45 28 0 129 3 196 86zM554 164c31-37 53-88 53-139 0-7-1-14-2-20-50 2-110 34-146 76-28 32-55 83-55 135 0 8 1 16 2 18 3 1 8 1 13 1 45 0 102-30 135-71z"/></svg>';
 
     /** SHA-256 hex of an ASCII string. Plain JS: crypto.subtle is missing on some app:// origins. */
     function sha256hex(str) {
@@ -395,12 +397,23 @@ window.WnLogin = (function () {
             .then(function (r) { return r.json(); })
             .then(function (json) {
                 var list = (json && json.results && json.results.providers) || [];
-                if (list.indexOf('google') < 0) return;
-                box.innerHTML = '<div class="d-flex align-items-center my-3 text-muted small"><hr class="flex-grow-1 my-0"><span class="px-2">or</span><hr class="flex-grow-1 my-0"></div>'
-                    + '<button type="button" class="btn w-100 wn-oauth-google" id="wnGoogle" data-oauth="google" '
-                    + 'style="background:#fff;color:#1f1f1f;border:1px solid #747775;font-weight:500">' + GOOGLE_G + 'Continue with Google</button>';
+                var html = '';
+                // Sign in with Apple (task #2462) goes first: Apple asks for it to be at least as prominent.
+                if (list.indexOf('apple') >= 0) {
+                    html += '<button type="button" class="btn w-100 mb-2 wn-oauth-apple" id="wnApple" data-oauth="apple" '
+                        + 'style="background:#000;color:#fff;border:1px solid #000;font-weight:500">' + APPLE_LOGO + 'Continue with Apple</button>';
+                }
+                if (list.indexOf('google') >= 0) {
+                    html += '<button type="button" class="btn w-100 wn-oauth-google" id="wnGoogle" data-oauth="google" '
+                        + 'style="background:#fff;color:#1f1f1f;border:1px solid #747775;font-weight:500">' + GOOGLE_G + 'Continue with Google</button>';
+                }
+                if (!html) return;
+                box.innerHTML = '<div class="d-flex align-items-center my-3 text-muted small"><hr class="flex-grow-1 my-0"><span class="px-2">or</span><hr class="flex-grow-1 my-0"></div>' + html;
                 box.classList.remove('d-none');
-                document.getElementById('wnGoogle').addEventListener('click', function () { startOAuth('google'); });
+                ['apple', 'google'].forEach(function (n) {
+                    var b = document.getElementById(n === 'apple' ? 'wnApple' : 'wnGoogle');
+                    if (b) b.addEventListener('click', function () { startOAuth(n); });
+                });
             })
             .catch(function () {});
     }

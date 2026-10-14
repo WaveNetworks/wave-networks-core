@@ -79,6 +79,7 @@ $providers = db_fetch_all(db_query("SELECT * FROM oauth_provider ORDER BY provid
                         <option value="google">Google</option>
                         <option value="github">GitHub</option>
                         <option value="facebook">Facebook</option>
+                        <option value="apple">Apple</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -88,6 +89,23 @@ $providers = db_fetch_all(db_query("SELECT * FROM oauth_provider ORDER BY provid
                 <div class="col-md-4">
                     <label for="client_secret" class="form-label">Client Secret</label>
                     <input type="text" class="form-control" id="client_secret" name="client_secret">
+                </div>
+            </div>
+
+            <!-- Apple only: Client ID above = the Services ID; these three replace the Client Secret. -->
+            <div class="row mb-3" id="appleFields">
+                <div class="col-12"><p class="form-text mb-2">Apple: Client ID = your <strong>Services ID</strong> (e.g. com.example.web). Leave Client Secret empty and fill these:</p></div>
+                <div class="col-md-3">
+                    <label for="apple_team_id" class="form-label">Apple Team ID</label>
+                    <input type="text" class="form-control" id="apple_team_id" name="apple_team_id" maxlength="10" autocomplete="off">
+                </div>
+                <div class="col-md-3">
+                    <label for="apple_key_id" class="form-label">Key ID</label>
+                    <input type="text" class="form-control" id="apple_key_id" name="apple_key_id" maxlength="10" autocomplete="off">
+                </div>
+                <div class="col-md-6">
+                    <label for="apple_private_key" class="form-label">Private key (.p8 contents)</label>
+                    <textarea class="form-control font-monospace" id="apple_private_key" name="apple_private_key" rows="4" autocomplete="off"></textarea>
                 </div>
             </div>
 

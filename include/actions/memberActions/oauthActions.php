@@ -20,6 +20,19 @@ if (($action ?? null) == 'saveOAuthProvider') {
     if (!$provider_name) { $errs['name'] = 'Provider name required.'; }
     if (!$client_id)     { $errs['client_id'] = 'Client ID required.'; }
 
+    // Apple (task #2462): the secret is the Team ID + Key ID + .p8 key, kept together as sealed JSON.
+    if ($provider_name === 'apple') {
+        $team = strtoupper(trim($_POST['apple_team_id'] ?? ''));
+        $kid  = strtoupper(trim($_POST['apple_key_id'] ?? ''));
+        $p8   = trim($_POST['apple_private_key'] ?? '');
+        if (!preg_match('/^[A-Z0-9]{10}$/', $team)) { $errs['team'] = 'Apple Team ID is the 10-character id at the top right of developer.apple.com.'; }
+        if (!preg_match('/^[A-Z0-9]{10}$/', $kid))  { $errs['kid']  = 'Apple Key ID is the 10-character id of the Sign in with Apple key.'; }
+        if (strpos($p8, 'BEGIN PRIVATE KEY') === false || !openssl_pkey_get_private($p8)) {
+            $errs['p8'] = 'Paste the whole .p8 file, including the BEGIN/END PRIVATE KEY lines.';
+        }
+        $client_secret = json_encode(['team_id' => $team, 'key_id' => $kid, 'private_key' => $p8]);
+    }
+
     if (count($errs) <= 0) {
         $safe_name   = sanitize($provider_name, SQL);
         $safe_cid    = sanitize($client_id, SQL);
