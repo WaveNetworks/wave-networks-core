@@ -418,7 +418,11 @@ window.WnLogin = (function () {
             .catch(function () {});
     }
 
+    var oauthStartedAt = 0;
     function startOAuth(provider) {
+        // A double tap would open two browser tabs, and the second verifier voids the first tab's code.
+        if (Date.now() - oauthStartedAt < 2000) return;
+        oauthStartedAt = Date.now();
         var v = newVerifier();
         try { localStorage.setItem(OAUTH_KEY, v); } catch (e) { /* the exchange will say so */ }
         Platform.openExternal(window.WN_ENV.AUTH_BASE + 'oauth_callback.php?provider=' + encodeURIComponent(provider)
