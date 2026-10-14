@@ -234,7 +234,7 @@ function queue_email($to_email, $to_name, $subject, $body_html, $opts = []) {
     }
 
     // Body text fallback
-    $body_text = $opts['body_text'] ?? strip_tags($body_html);
+    $body_text = $opts['body_text'] ?? wn_email_html_to_text($body_html);
 
     // Source app
     $source_app = $opts['source_app'] ?? 'core';
@@ -313,7 +313,7 @@ function send_email_now($to_email, $to_name, $subject, $body_html, $opts = []) {
         $reply_to = $settings['default_reply_to'];
     }
 
-    $alt_body   = $opts['alt_body']   ?? strip_tags($body_html);
+    $alt_body   = $opts['alt_body']   ?? wn_email_html_to_text($body_html);
     $source_app = $opts['source_app'] ?? 'core';
 
     // Send immediately via the low-level send_email(). With extra headers (a threaded reply) send
@@ -447,7 +447,7 @@ function send_queued_email($row) {
         $mail->isHTML(true);
         $mail->Subject = $row['subject'];
         $mail->Body    = $row['body_html'];
-        $mail->AltBody = $row['body_text'] ?: strip_tags($row['body_html']);
+        $mail->AltBody = $row['body_text'] ?: wn_email_html_to_text($row['body_html']);
 
         $headers = wn_email_clean_headers(json_decode($row['headers_json'] ?? '', true) ?: []);
         foreach ($headers as $name => $value) {

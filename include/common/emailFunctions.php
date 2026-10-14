@@ -8,6 +8,34 @@
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+if (!function_exists('wn_email_html_to_text')) {
+    /**
+     * The plain-text alternative of an HTML email. A bare strip_tags() ran every block together,
+     * so a link was glued to the next sentence ("…reset.php?token=abcThis link expires…") and a
+     * plain-text client opened a broken URL (ContactSwipe task #2467). Blocks become blank lines,
+     * <br> a newline, and a link whose text is not its URL keeps the URL in brackets.
+     */
+    function wn_email_html_to_text($html) {
+        $t = (string) $html;
+        $t = preg_replace('#<(script|style|head)\b[^>]*>.*?</\1>#is', '', $t);
+        $t = preg_replace_callback('#<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>#is', static function ($m) {
+            $href = html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text = trim(html_entity_decode(strip_tags($m[3]), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($text === '' || $text === $href || stripos($href, 'mailto:') === 0) return $text !== '' ? $text : $href;
+            return $text . ' (' . $href . ')';
+        }, $t);
+        $t = preg_replace('#<br\s*/?>#i', "\n", $t);
+        $t = preg_replace('#<li\b[^>]*>#i', "\n- ", $t);
+        $t = preg_replace('#</?(p|div|h[1-6]|ul|ol|table|tr|blockquote|section|header|footer|hr)\b[^>]*>#i', "\n\n", $t);
+        $t = preg_replace('#</t[dh]>#i', ' ', $t);
+        $t = html_entity_decode(strip_tags($t), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $t = preg_replace('/[ \t]+/', ' ', $t);
+        $t = preg_replace('/ *\n */', "\n", $t);
+        $t = preg_replace("/\n{3,}/", "\n\n", $t);
+        return trim($t);
+    }
+}
+
 /**
  * Send an email using the configured SMTP settings.
  * Reads from DB first, falls back to config.php globals.
@@ -83,7 +111,7 @@ function send_email($to_email, $to_name, $subject, $body, $alt_body = '') {
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $body;
-        $mail->AltBody = $alt_body ?: strip_tags($body);
+        $mail->AltBody = $alt_body ?: wn_email_html_to_text($body);
 
         $mail->send();
         return true;
