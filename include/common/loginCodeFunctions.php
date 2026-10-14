@@ -149,6 +149,9 @@ function wn_login_code_complete($user) {
 
 /** Shared tail of the password-less sign-ins ($method = login_history.login_method). Never returns. */
 function wn_login_finish($user, $method, $two_factor = true) {
+    // "Continue with Google" for an email that already had an account waits on this code (task #2461).
+    if (function_exists('oauth_apply_pending_link')) { oauth_apply_pending_link($user, $method); }
+
     if ($two_factor && !empty($user['totp_enabled'])) {
         $_SESSION['2fa_pending'] = true;
         $_SESSION['2fa_user_id'] = $user['user_id'];

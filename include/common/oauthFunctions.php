@@ -19,6 +19,16 @@ function oauth_provider($provider_name) {
     global $github_client_id, $github_client_secret;
     global $facebook_app_id, $facebook_app_secret;
 
+    // Admin › OAuth providers is where an owner pastes the client (secret sealed at rest);
+    // config/env globals stay as the fallback. Before this the saved row was never read.
+    $row = oauth_provider_row($provider_name);
+    if ($row && !empty($row['client_id'])) {
+        $secret = function_exists('wn_secret_open') ? wn_secret_open($row['client_secret']) : $row['client_secret'];
+        if ($provider_name === 'google')   { $google_client_id = $row['client_id'];   $google_client_secret = $secret; }
+        if ($provider_name === 'github')   { $github_client_id = $row['client_id'];   $github_client_secret = $secret; }
+        if ($provider_name === 'facebook') { $facebook_app_id  = $row['client_id'];   $facebook_app_secret  = $secret; }
+    }
+
     $base_url = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
     $redirect = $base_url . dirname(dirname($_SERVER['SCRIPT_NAME'])) . '/auth/oauth_callback.php';
 
@@ -51,6 +61,25 @@ function oauth_provider($provider_name) {
         default:
             return false;
     }
+}
+
+/** The enabled oauth_provider row for $provider_name, or null. */
+function oauth_provider_row($provider_name) {
+    $n = sanitize((string)$provider_name, SQL);
+    $r = db_query("SELECT * FROM oauth_provider WHERE provider_name = '$n' AND is_enabled = 1 ORDER BY provider_id DESC LIMIT 1");
+    $row = $r ? db_fetch($r) : null;
+    return $row ?: null;
+}
+
+/** Enabled providers that can actually run (a client id from the row or config). */
+function oauth_enabled_providers() {
+    $out = [];
+    $rows = db_fetch_all(db_query("SELECT provider_name FROM oauth_provider WHERE is_enabled = 1"));
+    foreach (($rows ?: []) as $r) {
+        $n = strtolower((string)$r['provider_name']);
+        if (!in_array($n, $out, true) && oauth_provider($n)) { $out[] = $n; }
+    }
+    return $out;
 }
 
 /**
@@ -107,10 +136,16 @@ function oauth_callback($provider_name, $code, $state) {
 
         $data = $user->toArray();
 
+        // Only Google states it; GitHub/Facebook hand back their primary (verified) address.
+        $verified = $provider_name === 'google'
+            ? filter_var($data['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            : true;
+
         return [
-            'email'    => $data['email'] ?? '',
-            'name'     => $data['name'] ?? ($data['login'] ?? ''),
-            'oauth_id' => (string)($data['id'] ?? $data['sub'] ?? ''),
+            'email'          => strtolower(trim($data['email'] ?? '')),
+            'email_verified' => $verified,
+            'name'           => $data['name'] ?? ($data['login'] ?? ''),
+            'oauth_id'       => (string)($data['id'] ?? $data['sub'] ?? ''),
         ];
 
     } catch (\Exception $e) {
@@ -118,4 +153,175 @@ function oauth_callback($provider_name, $code, $state) {
         $_SESSION['error'] = 'OAuth authentication failed. Please try again.';
         return false;
     }
+}
+
+/**
+ * The whole callback page (core's and every child app's auth/oauth_callback.php).
+ *
+ * Who the provider says you are decides, in this order:
+ *  1. signed in already  → link the provider to THIS account (account_security's buttons);
+ *  2. the provider id is linked to an account → sign that account in;
+ *  3. the email belongs to an account → never link silently (task #2461): email a sign-in
+ *     code; the link is made when that code is used (wn_login_finish → oauth_apply_pending_link);
+ *  4. nobody → create the account, confirmed, and send it through the normal first sign-in.
+ * Never returns.
+ */
+function oauth_handle_callback_page() {
+    if (isset($_GET['provider'])) {
+        oauth_redirect(strtolower((string)$_GET['provider']));
+        header('Location: login.php');
+        exit;
+    }
+
+    $provider = $_SESSION['oauth_provider'] ?? '';
+    $code     = $_GET['code'] ?? '';
+    $state    = $_GET['state'] ?? '';
+
+    if (!$provider || !$code) {
+        $_SESSION['error'] = isset($_GET['error']) ? 'Sign-in was cancelled.' : 'Invalid OAuth callback.';
+        header('Location: login.php');
+        exit;
+    }
+
+    $userData = oauth_callback($provider, $code, $state);
+    unset($_SESSION['oauth_provider'], $_SESSION['oauth2state']);
+    $label = ucfirst($provider);
+
+    if (!$userData || empty($userData['email']) || $userData['oauth_id'] === '') {
+        $_SESSION['error'] = $_SESSION['error'] ?? 'Could not retrieve your email from ' . $label . '.';
+        header('Location: login.php');
+        exit;
+    }
+    if (empty($userData['email_verified'])) {
+        $_SESSION['error'] = $label . ' has not verified that email address yet, so it cannot sign you in.';
+        header('Location: login.php');
+        exit;
+    }
+
+    $s_provider = sanitize($provider, SQL);
+    $s_oid      = sanitize($userData['oauth_id'], SQL);
+
+    // 1. Already signed in: this is "link my account".
+    if (!empty($_SESSION['user_id'])) {
+        $uid = (int)$_SESSION['user_id'];
+        $other = db_fetch(db_query("SELECT user_id FROM user WHERE oauth_provider = '$s_provider' AND oauth_id = '$s_oid' AND user_id <> '$uid' LIMIT 1"));
+        if ($other) {
+            $_SESSION['error'] = 'That ' . $label . ' account is already linked to a different account.';
+        } else {
+            db_query("UPDATE user SET oauth_provider = '$s_provider', oauth_id = '$s_oid' WHERE user_id = '$uid'");
+            $_SESSION['success'] = $label . ' sign-in is linked to your account.';
+        }
+        header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
+        exit;
+    }
+
+    // 2. Linked before.
+    $user = db_fetch(db_query("SELECT * FROM user WHERE oauth_provider = '$s_provider' AND oauth_id = '$s_oid' LIMIT 1"));
+    if ($user) {
+        $user = get_user((int)$user['user_id']);
+        wn_login_finish($user, 'oauth_' . $provider, true);
+    }
+
+    // 3. The email has an account that is not linked to this provider id: prove the inbox first.
+    $user = get_user_by_email($userData['email']);
+    if ($user) {
+        if (!function_exists('wn_login_code_enabled') || !wn_login_code_enabled()) {
+            $_SESSION['error'] = 'An account already uses ' . $userData['email'] . '. Sign in with your password, then link '
+                               . $label . ' from your account security page.';
+            header('Location: login.php');
+            exit;
+        }
+        $_SESSION['oauth_link_pending'] = [
+            'user_id'  => (int)$user['user_id'],
+            'provider' => $provider,
+            'oauth_id' => $userData['oauth_id'],
+            'expires'  => time() + 60 * (defined('WN_LOGIN_CODE_TTL_MIN') ? WN_LOGIN_CODE_TTL_MIN : 15),
+        ];
+        $err = wn_login_code_request($userData['email']);
+        $_SESSION['login_code_email'] = $userData['email'];
+        if ($err) {
+            $_SESSION['error'] = $err;
+        } else {
+            $_SESSION['success'] = 'You already have an account with ' . $userData['email'] . '. To connect ' . $label
+                                 . ', enter the code we just emailed you. You only do this once.';
+        }
+        header('Location: code.php');
+        exit;
+    }
+
+    // 4. New account.
+    $settings = db_fetch(db_query("SELECT registration_mode FROM auth_settings WHERE setting_id = 1"));
+    if (($settings['registration_mode'] ?? 'open') === 'closed') {
+        $_SESSION['error'] = 'Registration is currently closed.';
+        header('Location: login.php');
+        exit;
+    }
+
+    $shard_id   = get_least_loaded_shard();
+    $safe_email = sanitize($userData['email'], SQL);
+    $r = db_query("INSERT INTO user (email, shard_id, is_confirmed, oauth_provider, oauth_id, created_date)
+                   VALUES ('$safe_email', '$shard_id', 1, '$s_provider', '$s_oid', NOW())");
+    if (!$r) {
+        error_log('oauth register failed: ' . db_error());
+        $_SESSION['error'] = 'Could not create your account. Please try again.';
+        header('Location: login.php');
+        exit;
+    }
+
+    $new_id    = db_insert_id();
+    $nameParts = explode(' ', trim((string)$userData['name']), 2);
+    prime_shard($shard_id);
+    db_query_shard($shard_id, "INSERT INTO user_profile (user_id, first_name, last_name, created)
+                    VALUES ('$new_id', '" . sanitize($nameParts[0] ?? '', SQL) . "', '" . sanitize($nameParts[1] ?? '', SQL) . "', NOW())");
+    $_SESSION['shard_id'] = $shard_id;
+    create_home_dir_id($new_id);
+
+    wn_login_finish(get_user($new_id), 'oauth_' . $provider, false);
+}
+
+/**
+ * Called when a sign-in finishes: a provider link waiting on THIS user proving their inbox
+ * (an email-code sign-in) is made now. Anything else leaves it waiting until it expires.
+ */
+function oauth_apply_pending_link($user, $method) {
+    $p = $_SESSION['oauth_link_pending'] ?? null;
+    if (!$p) return;
+    if (($p['expires'] ?? 0) < time()) { unset($_SESSION['oauth_link_pending']); return; }
+    if ($method !== 'email_code' || (int)$p['user_id'] !== (int)$user['user_id']) return;
+
+    $uid = (int)$user['user_id'];
+    $s_provider = sanitize($p['provider'], SQL);
+    $s_oid      = sanitize($p['oauth_id'], SQL);
+    $taken = db_fetch(db_query("SELECT user_id FROM user WHERE oauth_provider = '$s_provider' AND oauth_id = '$s_oid' AND user_id <> '$uid' LIMIT 1"));
+    if (!$taken) {
+        db_query("UPDATE user SET oauth_provider = '$s_provider', oauth_id = '$s_oid' WHERE user_id = '$uid'");
+    }
+    unset($_SESSION['oauth_link_pending']);
+}
+
+/**
+ * The sign-in buttons for every runnable provider ($verb: 'Continue' / 'Sign up').
+ * Google gets its own mark and white button (Google's branding rules); others stay plain.
+ */
+function oauth_buttons_html($verb = 'Continue') {
+    $names = oauth_enabled_providers();
+    if (!$names) return '';
+    $g = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style="vertical-align:-3px;margin-right:8px">'
+       . '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>'
+       . '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>'
+       . '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>'
+       . '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+    $out = '<div class="d-grid gap-2 mb-3 wn-oauth-buttons">';
+    foreach ($names as $n) {
+        $href = 'oauth_callback.php?provider=' . rawurlencode($n);
+        if ($n === 'google') {
+            $out .= '<a href="' . h($href) . '" class="btn wn-oauth-google" data-oauth="google" '
+                  . 'style="background:#fff;color:#1f1f1f;border:1px solid #747775;font-weight:500">'
+                  . $g . h($verb) . ' with Google</a>';
+        } else {
+            $out .= '<a href="' . h($href) . '" class="btn btn-outline-secondary" data-oauth="' . h($n) . '">'
+                  . h($verb) . ' with ' . h(ucfirst($n)) . '</a>';
+        }
+    }
+    return $out . '</div>';
 }

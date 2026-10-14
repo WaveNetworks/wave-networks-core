@@ -57,18 +57,7 @@ ob_start();
 
 <hr>
 
-<?php
-// Show OAuth buttons for enabled providers
-$providers = db_fetch_all(db_query("SELECT * FROM oauth_provider WHERE is_enabled = 1"));
-if ($providers) { ?>
-<div class="d-grid gap-2 mb-3">
-    <?php foreach ($providers as $p) { ?>
-    <a href="oauth_callback.php?provider=<?= h($p['provider_name']) ?>" class="btn btn-outline-secondary">
-        Sign in with <?= h(ucfirst($p['provider_name'])) ?>
-    </a>
-    <?php } ?>
-</div>
-<?php } ?>
+<?= function_exists('oauth_buttons_html') ? oauth_buttons_html('Continue') : '' ?>
 
 <?php
 // Show SAML login buttons for enabled providers
