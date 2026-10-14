@@ -544,6 +544,11 @@ function oauth_apple_callback($code) {
 
 /** Re-post a provider's cross-site form_post from this origin so the session cookie rides along. Never returns. */
 function oauth_repost_page() {
+    // This request came without the session cookie, so PHP has just started a new, empty session.
+    // Its Set-Cookie (and wn_device's) would replace the browser's real cookies, and the re-post
+    // would then arrive with the empty session: "Invalid OAuth callback." Send no cookies here.
+    header_remove('Set-Cookie');
+    if (session_status() === PHP_SESSION_ACTIVE) { session_abort(); }
     header('Cache-Control: no-store');
     header('Referrer-Policy: no-referrer');
     ?><!doctype html><html><head><meta charset="utf-8"><title>Signing in…</title></head><body>
