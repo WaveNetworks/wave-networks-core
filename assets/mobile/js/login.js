@@ -172,6 +172,9 @@ window.WnLogin = (function () {
         if (!box) return;
         box.textContent = msg;
         box.classList.remove('d-none');
+        // The box sits above the form: on a phone the sign-up button is a screen below it, so a
+        // refusal ("An account with this email already exists.") was shown where nobody looked.
+        if (box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
     }
 
     function submit(e) {
