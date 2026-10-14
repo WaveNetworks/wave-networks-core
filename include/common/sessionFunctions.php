@@ -126,11 +126,20 @@ function get_post_login_home($fallback = '../app/') {
     if ($cached !== null) return $cached;
 
     // sessionFunctions.php sits at admin/include/common/, so three up is the web root.
+    // Mounted sub-admins (beta/, helpdesk/, ... with a subadmin.json) also have an app/ but are
+    // never anyone's home: an Apple sign-in landed on /beta/app/ "Admins only" (owner 2026-10-14).
     $webroot = dirname(__DIR__, 3);
+    $is_home = function ($slug) use ($webroot) {
+        return $slug !== '' && $slug !== 'admin' && $slug !== '.' && $slug !== '..'
+            && is_file($webroot . '/' . $slug . '/app/index.php')
+            && !is_file($webroot . '/' . $slug . '/subadmin.json');
+    };
+    // The child app this request came through (/<slug>/auth/login.php) wins.
+    $first = explode('/', trim((string)($_SERVER['SCRIPT_NAME'] ?? ''), '/'))[0] ?? '';
+    if ($is_home($first)) return $cached = '../../' . $first . '/app/';
     foreach (glob($webroot . '/*/app/index.php') ?: [] as $file) {
         $slug = basename(dirname($file, 2));
-        if ($slug === 'admin' || $slug === '') continue;
-        return $cached = '../../' . $slug . '/app/';
+        if ($is_home($slug)) return $cached = '../../' . $slug . '/app/';
     }
     return $cached = $fallback;
 }
