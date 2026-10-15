@@ -23,20 +23,45 @@ document.addEventListener('DOMContentLoaded', function() {
  * @param {string} action  The action name
  * @param {object} data    Key-value pairs to send
  * @param {function} callback  Called with (response) on success
+ * @param {function} [onError] Called with (message, detail) when no usable answer came back:
+ *        the request failed, timed out (45 s), or the answer was not JSON (a PHP error, a login
+ *        page, a proxy page). Without it a page's loader waited for ever, because the callback
+ *        never ran. Pass it from anything that shows a spinner and replace the spinner with the
+ *        message. detail = {status, body} (body: the first 240 characters, tags stripped).
  */
-function apiPost(action, data, callback) {
+function apiPost(action, data, callback, onError) {
     var formData = new FormData();
     formData.append('action', action);
     for (var key in data) {
         formData.append(key, data[key]);
     }
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function() { if (ctl) ctl.abort(); }, 45000);
+
+    function fail(message, detail) {
+        if (typeof onError === 'function') onError(message, detail || {});
+        else showAlert('danger', message);
+    }
 
     fetch('../api/index.php', {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'same-origin',
+        signal: ctl ? ctl.signal : undefined
     })
-    .then(function(r) { return r.json(); })
-    .then(function(json) {
+    .then(function(r) {
+        return r.text().then(function(txt) { return { status: r.status, txt: txt }; });
+    })
+    .then(function(x) {
+        clearTimeout(timer);
+        var json = null;
+        try { json = JSON.parse(x.txt); } catch (e) { /* not JSON */ }
+        if (!json || typeof json !== 'object') {
+            var body = x.txt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+            fail('The server answered HTTP ' + x.status + ' with something that is not JSON' + (body ? ': ' + body : '.'),
+                 { status: x.status, body: body });
+            return;
+        }
         // Auth failure — session lost, redirect to login page
         // Uses relative path so it works for both admin and child apps
         if (json.error && /^Login required\.?$/.test(json.error)) {
@@ -49,9 +74,10 @@ function apiPost(action, data, callback) {
             showAlert('success', json.success);
         }
         if (callback) callback(json);
-    })
-    .catch(function(err) {
-        showAlert('danger', 'Request failed: ' + err.message);
+    }, function(err) {
+        clearTimeout(timer);
+        fail((err && err.name === 'AbortError') ? 'The server took more than 45 seconds to answer.'
+                                                : 'Request failed: ' + ((err && err.message) || err));
     });
 }
 
