@@ -341,7 +341,8 @@ if (($action ?? null) == 'apiMarkFeedbackShipped') {
                 _notify_feedback_user((int) $feedback['user_id'], 'feedback_update',
                     'Something you asked for just shipped',
                     'Feedback you sent has been delivered in: "' . ($cr['title'] ?? 'a change request') . '". Thanks for helping improve the platform!',
-                    ['source_app' => $feedback['source_app'] ?? ($cr['source_app'] ?? null)]
+                    // Same CR row as "being acted on"/"completed": one notification per item (task #2502).
+                    ['source_app' => $feedback['source_app'] ?? ($cr['source_app'] ?? null), 'thread' => $cr['title'] ?? '']
                 );
             }
 

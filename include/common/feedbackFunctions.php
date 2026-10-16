@@ -204,7 +204,8 @@ function submit_feedback($message, $type = 'general', $opts = []) {
         _notify_feedback_user($user_id, 'feedback_received',
             'Thanks for your ' . $type_label . '!',
             'Your ' . $type_label . ' has been received and will be reviewed. We appreciate you taking the time to help improve the platform.',
-            ['source_app' => $source_app]
+            // A receipt: kept in the list, never badges (the form already said thanks). Task #2502.
+            ['source_app' => $source_app, 'quiet' => true]
         );
     }
 
@@ -685,7 +686,7 @@ function group_feedback_with_request($feedback_id, $change_request_id) {
             _notify_feedback_user((int)$feedback['user_id'], 'feedback_update',
                 'Your feedback is being acted on',
                 'Your feedback has been grouped into a change request: "' . $cr['title'] . '". We\'ll keep you updated on its progress.',
-                ['source_app' => $feedback['source_app'] ?? null]
+                ['source_app' => $feedback['source_app'] ?? null, 'quiet' => true, 'thread' => $cr['title']]
             );
         }
     }
@@ -724,8 +725,45 @@ function _notify_feedback_user($user_id, $category_slug, $title, $body, $opts = 
     $r = $db->query("SELECT shard_id FROM user WHERE user_id = '$uid'");
     $user = $r ? $r->fetch(PDO::FETCH_ASSOC) : null;
     if (!$user || empty($user['shard_id'])) return;
+    $shard_id = $user['shard_id'];
 
-    send_notification($uid, $user['shard_id'], $category_slug, $title, $body, $opts);
+    // One notification per change request (task #2502). Every step of a CR's life
+    // ("being acted on", approved, in progress, shipped) used to add its own row, so one
+    // piece of feedback left three unread notifications on the app icon badge. Every
+    // body names the CR as "<title>", so later steps rewrite that row in place instead.
+    $thread = $opts['thread'] ?? '';
+    unset($opts['thread']);
+    if ($thread !== '' && function_exists('db_query_shard')) {
+        prime_shard($shard_id);
+        // Escape LIKE wildcards first, then quote for SQL (sanitize doubles the backslashes).
+        $like = sanitize(str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], '"' . $thread . '"'), SQL);
+        $s_cat = sanitize($category_slug, SQL);
+        $row = db_fetch(db_query_shard($shard_id, "SELECT notification_id FROM notification
+            WHERE user_id = '$uid' AND category_slug = '$s_cat' AND body LIKE '%$like%'
+            ORDER BY notification_id DESC LIMIT 1"));
+        if ($row) {
+            $nid     = (int) $row['notification_id'];
+            $quiet   = !empty($opts['quiet']);
+            $is_read = $quiet ? 1 : 0;
+            $s_title = sanitize($title, SQL);
+            $s_body  = sanitize($body, SQL);
+            db_query_shard($shard_id, "UPDATE notification SET title = '$s_title', body = '$s_body',
+                is_read = '$is_read', push_sent = 1, created = NOW() WHERE notification_id = '$nid'");
+            if (!$quiet && function_exists('send_push_to_user')) {
+                $pref = _get_user_pref($uid, $shard_id, $category_slug);
+                if (($pref['frequency'] ?? 'realtime') === 'realtime' && ($pref['push_enabled'] ?? 1)) {
+                    send_push_to_user($uid, $shard_id, $title, $body, [
+                        'title' => $title, 'body' => $body, 'action_url' => '',
+                        'tag' => 'wn-' . $category_slug, 'category' => $category_slug,
+                        'notification_id' => $nid,
+                    ]);
+                }
+            }
+            return;
+        }
+    }
+
+    send_notification($uid, $shard_id, $category_slug, $title, $body, $opts);
 }
 
 /**
@@ -772,7 +810,9 @@ function _notify_cr_status_change($cr_id, $old_cr, $new_status) {
         }
     }
 
-    $opts = [];
+    // Status updates are receipts and fold into the CR's one row; only an outcome the
+    // person can see (shipped, or answered with a no) raises the badge. Task #2502.
+    $opts = ['thread' => $title, 'quiet' => !in_array($new_status, ['completed', 'rejected'], true)];
     if ($source_app) {
         $opts['source_app'] = $source_app;
     }

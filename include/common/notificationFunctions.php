@@ -17,7 +17,12 @@
  * @param string $category_slug Category slug (e.g. 'security', 'admin_broadcast')
  * @param string $title         Notification title
  * @param string $body          Notification body text
- * @param array  $opts          Optional: action_url, action_label, source_app
+ * @param array  $opts          Optional: action_url, action_label, source_app,
+ *                              quiet (bool) — a receipt/status update: stored already read
+ *                              and never pushed, so it never raises the bell or the app icon
+ *                              badge (which is get_unread_count). Only things that need the
+ *                              person (reminders due, shares, errors for admins, something
+ *                              shipped) should badge — task #2502.
  * @return int|false            notification_id on success, false on failure
  */
 function send_notification($user_id, $shard_id, $category_slug, $title, $body, $opts = []) {
@@ -25,6 +30,7 @@ function send_notification($user_id, $shard_id, $category_slug, $title, $body, $
     $action_url   = $opts['action_url']   ?? null;
     $action_label = $opts['action_label'] ?? null;
     $source_app   = $opts['source_app']   ?? null;
+    $quiet        = !empty($opts['quiet']);
 
     prime_shard($shard_id);
 
@@ -37,7 +43,8 @@ function send_notification($user_id, $shard_id, $category_slug, $title, $body, $
     // - 'off' or push disabled → mark as already sent (skip push entirely)
     // - 'daily'/'weekly' → leave as 0 (cron will batch later)
     // - 'realtime' → will be set to 1 after immediate push attempt
-    $push_sent = ($frequency === 'off' || !$push_enabled) ? 1 : 0;
+    $push_sent = ($frequency === 'off' || !$push_enabled || $quiet) ? 1 : 0;
+    $is_read   = $quiet ? 1 : 0;
 
     $s_slug   = sanitize($category_slug, SQL);
     $s_title  = sanitize($title, SQL);
@@ -48,7 +55,7 @@ function send_notification($user_id, $shard_id, $category_slug, $title, $body, $
 
     $r = db_query_shard($shard_id, "INSERT INTO notification
         (user_id, category_slug, title, body, action_url, action_label, is_read, push_sent, source_app, created)
-        VALUES ('$user_id', '$s_slug', '$s_title', '$s_body', $s_url, $s_label, 0, '$push_sent', $s_app, NOW())");
+        VALUES ('$user_id', '$s_slug', '$s_title', '$s_body', $s_url, $s_label, '$is_read', '$push_sent', $s_app, NOW())");
 
     if (!$r) {
         return false;
@@ -57,7 +64,7 @@ function send_notification($user_id, $shard_id, $category_slug, $title, $body, $
     $notification_id = shard_insert_id($shard_id);
 
     // Realtime push: send immediately
-    if ($frequency === 'realtime' && $push_enabled && function_exists('send_push_to_user')) {
+    if (!$quiet && $frequency === 'realtime' && $push_enabled && function_exists('send_push_to_user')) {
         $payload = [
             'title'      => $title,
             'body'       => $body,
