@@ -518,6 +518,15 @@ function oauth_apple_callback($code) {
             'code' => $code, 'grant_type' => 'authorization_code', 'redirect_uri' => oauth_redirect_uri(),
         ]);
         if ($status !== 200 || empty($tok['id_token'])) {
+            if (($tok['error'] ?? '') === 'invalid_client') {
+                // Apple refused OUR credentials (Services ID / Team ID / Key ID / .p8), not the person's code:
+                // no retry will help, so say so and put it in the admin error log where it gets fixed.
+                $msg = 'Apple rejected the app credentials (invalid_client): check Client ID (Services ID), Team ID, Key ID and the .p8 on Admin > OAuth providers.';
+                if (function_exists('log_error_to_db')) { log_error_to_db('ERROR', 'Sign in with Apple: ' . $msg, __FILE__, __LINE__); }
+                error_log('OAuth callback error (apple): ' . $msg);
+                $_SESSION['error'] = 'Sign in with Apple is not set up correctly on this site yet. Please use another sign-in method.';
+                return false;
+            }
             throw new \Exception('token endpoint ' . $status . ' ' . ($tok['error'] ?? ''));
         }
         $keys = json_decode((string)@file_get_contents('https://appleid.apple.com/auth/keys'), true);
