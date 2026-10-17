@@ -66,4 +66,5 @@ main/6.0	Migration 6.0 for Main Database (api_key.api_key session/device bearer 
 main/6.1	Migration 6.1 for Main Database (email_queue.headers_json: threading headers for queued mail; task #2395)
 main/6.2	Migration 6.2 for Main Database (oauth_handoff: one-time phone sign-in codes for Continue with Google; task #2461)
 main/6.3	Migration 6.3 for Main Database (oauth_token: sealed Apple refresh tokens, revoked on account deletion; task #2462)
+main/6.4	Migration 6.4 for Main Database (login_history.login_method ENUM -> VARCHAR(30) so oauth_google/oauth_apple are kept; task #2461)
 shard/1.4	Migration 1.4 for Shard Database (mark existing feedback receipts read; receipts no longer badge; task #2502)

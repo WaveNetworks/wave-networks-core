@@ -380,7 +380,7 @@ $active_tab = $_GET['tab'] ?? 'profile';
                         <td class="small">
                             <?php
                             $method_icons = ['password' => 'bi-key', 'oauth' => 'bi-cloud', 'remember_me' => 'bi-cookie', 'saml' => 'bi-building', '2fa' => 'bi-shield-lock'];
-                            $icon = $method_icons[$entry['login_method']] ?? 'bi-box-arrow-in-right';
+                            $icon = $method_icons[$entry['login_method']] ?? (strpos((string)$entry['login_method'], 'oauth_') === 0 ? 'bi-cloud' : 'bi-box-arrow-in-right');
                             ?>
                             <i class="bi <?= $icon ?>" title="<?= h($entry['login_method']) ?>"></i>
                             <?= h($entry['login_method']) ?>
