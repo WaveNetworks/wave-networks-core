@@ -3,6 +3,7 @@ config/config.php
 config/config.php.prod
 config/_notes/
 config/notifications_config.php
+config/p3sig.php
 
 # Deploy credentials (sample is committed)
 deploy_config.py

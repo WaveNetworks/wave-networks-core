@@ -49,6 +49,10 @@ if (!empty($files_location)) {
 // 2c. THE CLOCK: UTC here and on every connection (include/common/clockFunctions.php).
 date_default_timezone_set('UTC');
 
+// 2d. Service keys from the environment / p3sig cache, as in bootstrap.php.
+include_once __DIR__ . '/common/runtimeSecretFunctions.php';
+wn_apply_runtime_secrets();
+
 // 3. PDO connection. NOT persistent — common_readonly.php is the bootstrap
 // for CLI cron scripts which run as one-shot processes and exit. Persistent
 // would do nothing here since there's no FPM worker to reuse the socket.

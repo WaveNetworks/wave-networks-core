@@ -57,6 +57,13 @@ jobs:
         run: php scripts/stored-secrets-probe.php
         working-directory: admin
 
+      # Service keys from the environment / p3sig sealed cache (include/common/runtimeSecretFunctions.php):
+      # opt-in, env > cache > config.php, never DB credentials / $app_secret / $hiddenhash, and a
+      # signed refresh against a mock p3sig. DB-free.
+      - name: Check runtime secrets
+        run: php scripts/runtime-secrets-probe.php
+        working-directory: admin
+
       - name: Prepare deploy staging
         run: |
           mkdir -p staging/admin

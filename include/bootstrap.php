@@ -105,6 +105,14 @@ if (!empty($files_location)) {
 // file is globbed later, so this line does not call it.
 date_default_timezone_set('UTC');
 
+// 2d. Service keys from outside config.php: the environment (WN_SECRETS_FROM_ENV=1, e.g.
+// `p3sig run -- php-fpm`) or the p3sig sealed cache (config/p3sig.php). Both opt-in; a host
+// with neither is unchanged. After 2a so they also win over notifications_config.php.
+// No DB, no other helper (include/common/runtimeSecretFunctions.php; globbed again below,
+// include_once makes that a no-op).
+include_once __DIR__ . '/common/runtimeSecretFunctions.php';
+wn_apply_runtime_secrets();
+
 // 3. PDO connection. Persistent so PHP-FPM workers reuse the socket across
 // requests instead of opening a fresh one per AJAX call. Especially matters
 // for child apps (each one opens its own $child_db on top of this $db).
