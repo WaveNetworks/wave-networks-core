@@ -1,7 +1,9 @@
 # Core secrets: `$app_secret` key ring and `$hiddenhash` pepper v2
 
-Status: design, agreed with the owner 2026-10-18. Built in interactive sessions, not by the
-builder. Companion: `p3sig/docs/machine-identity-and-secret-delivery.md` (§4 covers how the
+Status: BUILT 2026-10-18 (interactive session, not the builder): `include/common/keyRingFunctions.php`,
+`secretFunctions.php` (v2 format, registry, sweep), `jwtFunctions.php` (kid), `passwordFunctions.php`
+(pepper v2), `scripts/rotate-secret-key.php` (new-key / status / sweep / retire), deploy gate
+`scripts/key-ring-probe.php` + `stored-secrets-probe.php`. No host has a second key yet. Companion: `p3sig/docs/machine-identity-and-secret-delivery.md` (§4 covers how the
 service keys leave `config.php`; these two secrets stay in `config.php` for now).
 
 ## 1. Today
@@ -48,6 +50,9 @@ $app_secret_current = 'k2';
 Back-compat: a host with only `$app_secret` is treated as `['k1' => $app_secret]`, current
 `k1`. Nothing changes for an app until someone adds a second key. Env equivalent:
 `APP_SECRETS='k2:…,k1:…'`, `APP_SECRET_CURRENT=k2`.
+
+Values that predate the ring belong to `k1` only. Once `k1` is retired they fail to open
+(never tried with another key: CBC has no MAC, so a wrong key can yield garbage).
 
 ### 2.2 Purpose keys
 
@@ -129,8 +134,24 @@ login with no new code there.
 
 ## 4. Missing-config guard
 
-When `config/config.php` is absent and the env has no `APP_SECRET`/`HIDDEN_HASH`, refuse to
-boot (HTTP 500 + error log) unless `WN_ENV=dev`. Docker and CI set `WN_ENV=dev`.
+When `config/config.php` is absent and the env has no `APP_SECRET`/`HIDDEN_HASH`, a **web**
+request gets HTTP 500 (+ error log) unless `WN_ENV=dev`. CLI keeps the dev fallback (tests,
+local scripts). Docker compose files already set both env values.
+
+## 4b. Child apps
+
+- Columns a child fills with `wn_secret_encrypt()` / `wn_secret_seal()` in its own DB
+  (contactswipe `cs_integration_test.credential_encrypted`, help-desk `hd_mailbox.imap_pass_enc`)
+  keep opening after any rotation as long as their key is in the ring. To be counted by
+  `status` / `retire` and moved by the sweep, the child registers them:
+  `wn_register_sealed_column('cs_integration_test', 'request_id', 'credential_encrypted')`
+  (kind `cbc` = pre-ring values are `wn_secret_encrypt()` output) and runs the sweep from its
+  own cron with its `$child_db`.
+- brand-compiler `bc_encrypt()` uses its own AES off the raw `$app_secret`. `$app_secret` is
+  the CURRENT key, so its stored values break the moment a new key is made current: move it
+  to `wn_secret_encrypt()` before the first promotion.
+- contactswipe `cs_list_key()` HMACs list cursors with `$app_secret`: a promotion only
+  invalidates open cursors (harmless).
 
 ## 5. Tests (deploy gate, SQLite like `stored-secrets-probe.php`)
 

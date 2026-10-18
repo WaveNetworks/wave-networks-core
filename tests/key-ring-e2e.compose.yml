@@ -1,0 +1,7 @@
+services:
+  app:
+    ports: !override
+      - "127.0.0.1:18080:80"
+  mailhog:
+    ports: !override
+      - "127.0.0.1:18025:8025"

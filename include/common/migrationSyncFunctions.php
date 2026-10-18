@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/secretFunctions.php';
 /**
  * migrationSyncFunctions.php
  * Parallel auth migration — sync external users into core, legacy password rehash,
@@ -14,31 +15,29 @@
  * @return string Base64-encoded ciphertext
  */
 function encrypt_source_password($plain) {
-    global $app_secret;
-    $key    = substr(hash('sha256', $app_secret), 0, 32);
-    $iv     = openssl_random_pseudo_bytes(16);
-    $cipher = openssl_encrypt($plain, 'AES-256-CBC', $key, 0, $iv);
-    return base64_encode($iv . '::' . base64_decode($cipher));
+    // Key ring format since keyRingFunctions.php; the old '::' framing still opens below.
+    return wn_secret_seal_now((string) $plain);
 }
 
 /**
  * Decrypt a stored migration_source.db_password_enc value.
  *
- * @param string $enc Base64-encoded ciphertext
+ * @param string $enc Stored value (enc:v2:… or the pre-ring base64(IV '::' CBC) framing)
  * @return string|false Plaintext password or false on failure
  */
 function decrypt_source_password($enc) {
-    global $app_secret;
-    $key  = substr(hash('sha256', $app_secret), 0, 32);
-    $data = base64_decode($enc);
-    $parts = explode('::', $data, 2);
-    if (count($parts) !== 2) return false;
-    $iv     = $parts[0];
-    $cipher = base64_encode($parts[1]);
-    return openssl_decrypt($cipher, 'AES-256-CBC', $key, 0, $iv);
+    if (wn_secret_is_sealed($enc)) return wn_secret_open_marked($enc);
+    return decrypt_source_password_legacy($enc);
 }
 
-// ─── MIGRATION SOURCE ────────────────────────────────────────────────────────
+/** Pre-ring framing: base64(IV . '::' . raw CBC), legacy key. */
+function decrypt_source_password_legacy($enc) {
+    $key = wn_legacy_cbc_key();
+    $data = base64_decode((string) $enc);
+    $parts = explode('::', $data, 2);
+    if ($key === null || count($parts) !== 2) return false;
+    return openssl_decrypt(base64_encode($parts[1]), 'AES-256-CBC', $key, 0, $parts[0]);
+}
 
 /**
  * Get the configured migration source (single-source design).

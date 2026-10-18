@@ -64,6 +64,13 @@ jobs:
         run: php scripts/runtime-secrets-probe.php
         working-directory: admin
 
+      # $app_secret / $hiddenhash key rings (include/common/keyRingFunctions.php): pre-ring
+      # password hashes and JWTs still verify, v2 hashes fix bcrypt's 72-byte truncation,
+      # rotation keeps everything valid until a key is retired. DB-free.
+      - name: Check key rings
+        run: php scripts/key-ring-probe.php
+        working-directory: admin
+
       - name: Prepare deploy staging
         run: |
           mkdir -p staging/admin

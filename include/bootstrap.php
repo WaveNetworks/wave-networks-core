@@ -113,6 +113,12 @@ date_default_timezone_set('UTC');
 include_once __DIR__ . '/common/runtimeSecretFunctions.php';
 wn_apply_runtime_secrets();
 
+// 2e. Key rings for $app_secret and $hiddenhash (include/common/keyRingFunctions.php):
+// refuses to run on the dev defaults when there is neither a config.php nor env secrets,
+// and points $app_secret / $hiddenhash at the current keys. No DB, no other helper.
+include_once __DIR__ . '/common/keyRingFunctions.php';
+wn_key_ring_init(file_exists($configFile));
+
 // 3. PDO connection. Persistent so PHP-FPM workers reuse the socket across
 // requests instead of opening a fresh one per AJAX call. Especially matters
 // for child apps (each one opens its own $child_db on top of this $db).

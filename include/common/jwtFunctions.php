@@ -5,30 +5,37 @@
  * Supports access tokens (short-lived) and refresh tokens (long-lived).
  */
 
+require_once __DIR__ . '/keyRingFunctions.php';
+
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
 /**
- * The HMAC key access tokens are signed with.
- *
- * firebase/php-jwt 7 refuses an HS256 key shorter than 256 bits (32 bytes). The
- * installer has always generated 64 hex chars, but a hand-written or older
- * config can be shorter, and upgrading the library must not lock that app's
- * users out. A short secret is stretched with SHA-256 (32 bytes); a secret that
- * is already long enough is used unchanged, so its existing tokens stay valid.
- * On a stretched deployment, access tokens issued before the upgrade stop
- * verifying and clients renew them with their refresh token (random, stored
- * hashed — not a JWT, so unaffected).
+ * The HMAC key new access tokens are signed with: wn_key('jwt') of the CURRENT key in the
+ * $app_secret ring (keyRingFunctions.php), named in the token header as `kid`.
  *
  * @return string|null  null when no secret is configured at all
  */
 function jwt_signing_key() {
-    global $app_secret;
-    $secret = (string)($app_secret ?? '');
-    if ($secret === '') {
+    $ring = wn_app_key_ring();
+    if ((string) ($ring['keys'][$ring['current']] ?? '') === '') {
         error_log('JWT: $app_secret is not configured');
         return null;
     }
+    return wn_key('jwt', $ring['current']);
+}
+
+/**
+ * The key tokens WITHOUT a kid were signed with (everything issued before the key ring):
+ * the raw k1 secret, or its SHA-256 when shorter than 32 bytes (firebase/php-jwt 7 refuses
+ * an HS256 key under 256 bits; the installer always generated 64 chars, so most hosts use
+ * the value unchanged). Null once k1 has been retired from the ring: such tokens then fail
+ * and clients renew with their refresh token (random, stored hashed, not a JWT).
+ */
+function jwt_legacy_key() {
+    $ring = wn_app_key_ring();
+    $secret = (string) ($ring['keys']['k1'] ?? '');
+    if ($secret === '') return null;
     return strlen($secret) >= 32 ? $secret : hash('sha256', 'wn-jwt:' . $secret, true);
 }
 
@@ -58,7 +65,7 @@ function jwt_issue($user_id, $ttl = 3600, $shard_id = null) {
         $payload['shard_id'] = $shard_id;
     }
 
-    return JWT::encode($payload, $key, 'HS256');
+    return JWT::encode($payload, $key, 'HS256', wn_app_key_ring()['current']);
 }
 
 /**
@@ -68,14 +75,16 @@ function jwt_issue($user_id, $ttl = 3600, $shard_id = null) {
  * @return object|false  Decoded payload or false on failure
  */
 function jwt_verify($token) {
-    $key = jwt_signing_key();
-    if ($key === null) {
-        return false;
-    }
-
     try {
-        return JWT::decode($token, new Key($key, 'HS256'));
-    } catch (\Exception $e) {
+        // Pick the key by the header's kid; a token with no kid predates the ring (legacy key).
+        $head = json_decode((string) JWT::urlsafeB64Decode(explode('.', (string) $token)[0]), true);
+        $kid  = is_array($head) ? ($head['kid'] ?? null) : null;
+        $key  = $kid === null ? jwt_legacy_key() : (is_string($kid) ? wn_key('jwt', $kid) : null);
+        if ($key === null) {
+            return false;
+        }
+        return JWT::decode($token, $kid === null ? new Key($key, 'HS256') : [$kid => new Key($key, 'HS256')]);
+    } catch (\Throwable $e) {
         error_log('JWT verify failed: ' . $e->getMessage());
         return false;
     }

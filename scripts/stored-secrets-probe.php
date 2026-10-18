@@ -65,7 +65,7 @@ foreach ($it as $f) {
 $app_secret = 'probe-key-one';
 require_once "$root/include/common/shardConfigFunctions.php";
 require_once "$root/include/common/secretFunctions.php";
-require_once "$root/scripts/rotate-secret-key.php";
+require_once "$root/include/common/migrationSyncFunctions.php";
 
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -77,7 +77,7 @@ $pw = 'hunter2-smtp-Ü';
 $pdo->prepare("INSERT INTO email_settings VALUES (1, ?)")->execute([wn_secret_seal($pw)]);
 $raw = $pdo->query("SELECT smtp_pass FROM email_settings")->fetchColumn();
 $ok($raw !== $pw && strpos($raw, $pw) === false, 'saved smtp_pass: raw DB value contains the password');
-$ok(wn_secret_is_sealed($raw), 'saved smtp_pass: raw DB value has no enc:v1: marker');
+$ok(wn_secret_is_sealed($raw), 'saved smtp_pass: raw DB value has no enc: marker');
 $ok(wn_secret_open($raw) === $pw, 'saved smtp_pass does not open back to the password');
 $ok(wn_secret_seal($raw) === $raw, 'sealing a sealed value changed it (double encryption)');
 $ok(wn_secret_seal('') === '' && wn_secret_open('') === '', 'empty value is not left empty');
@@ -99,12 +99,54 @@ $ok(wn_secret_open($pdo->query("SELECT totp_secret FROM user WHERE user_id=1")->
     'swept totp_secret does not open to the original');
 $ok($pdo->query("SELECT COUNT(*) FROM user WHERE totp_secret IS NULL OR totp_secret = ''")->fetchColumn() == 2, 'sweep touched empty values');
 
-// rotation: old key → new key, values still open, and under the new key only
-$n = wn_secret_rotate($pdo, 'probe-key-one', 'probe-key-two');
-$ok($n === 3, "rotation should re-encrypt 3 values, did $n");
-$app_secret = 'probe-key-two';
-$ok(wn_secret_open($pdo->query("SELECT smtp_pass FROM email_settings")->fetchColumn()) === $pw, 'after rotation smtp_pass does not open under the new key');
-$ok(wn_secret_open($pdo->query("SELECT client_secret FROM oauth_provider")->fetchColumn()) === 'legacy-client-secret', 'after rotation client_secret does not open');
+// pre-ring v1 values (AES-256-CBC off the k1 secret) still open, and say which key they're on
+$legacyKey = substr(hash('sha256', 'probe-key-one'), 0, 32);
+$iv = random_bytes(16);
+$v1 = 'enc:v1:' . base64_encode($iv . openssl_encrypt('v1-smtp', 'AES-256-CBC', $legacyKey, OPENSSL_RAW_DATA, $iv));
+$ok(wn_secret_open($v1) === 'v1-smtp', 'a pre-ring enc:v1: value does not open');
+$ok(wn_secret_kid($v1) === 'k1' && wn_secret_kid($raw) === 'k1', 'v1 and fresh values should both be on k1 before any rotation');
+$ok(strncmp($raw, 'enc:v2:k1:', 10) === 0, 'new seals are not enc:v2:k1: (authenticated, kid-tagged)');
+$tb = base64_decode(substr($raw, 10)); $tb[strlen($tb) - 1] = $tb[strlen($tb) - 1] ^ "\x01"; $t = substr($raw, 0, 10) . base64_encode($tb);
+$ok(wn_secret_open($t) === '', 'a tampered enc:v2: value opened (no authentication)');
+
+// pre-marker shard_config / migration_source framings are swept too
+$pdo->exec("CREATE TABLE shard_config (layer TEXT, app_slug TEXT, shard_id TEXT, db_pass_enc TEXT)");
+$pdo->exec("CREATE TABLE migration_source (source_id INTEGER PRIMARY KEY, db_password_enc TEXT)");
+$pdo->prepare("INSERT INTO shard_config VALUES ('admin', '', 'shard1', ?)")->execute([base64_encode($iv . openssl_encrypt('shard-pw', 'AES-256-CBC', $legacyKey, OPENSSL_RAW_DATA, $iv))]);
+$pdo->prepare("INSERT INTO migration_source VALUES (1, ?)")->execute([base64_encode($iv . '::' . base64_decode(openssl_encrypt('src-pw', 'AES-256-CBC', $legacyKey, 0, $iv)))]);
+$pdo->prepare("UPDATE email_settings SET smtp_pass = ?")->execute([$v1]);
+$ok(wn_secret_decrypt($pdo->query("SELECT db_pass_enc FROM shard_config")->fetchColumn()) === 'shard-pw', 'a pre-ring shard_config password does not open');
+$ok(decrypt_source_password($pdo->query("SELECT db_password_enc FROM migration_source")->fetchColumn()) === 'src-pw', 'a pre-ring migration_source password does not open');
+$s3 = wn_secret_seal_sweep($pdo);
+$ok(($s3['email_settings.smtp_pass'] ?? 0) === 1 && ($s3['shard_config.db_pass_enc'] ?? 0) === 1 && ($s3['migration_source.db_password_enc'] ?? 0) === 1,
+    'sweep should move the v1 smtp_pass and both pre-marker passwords onto the current key: ' . json_encode($s3));
+$ok(wn_secret_decrypt($pdo->query("SELECT db_pass_enc FROM shard_config")->fetchColumn()) === 'shard-pw'
+    && decrypt_source_password($pdo->query("SELECT db_password_enc FROM migration_source")->fetchColumn()) === 'src-pw',
+    'swept shard / source passwords do not open');
+
+// rotation with the ring: add k2, make it current, sweep, retire k1 — readable at every step
+$app_secrets = ['k2' => 'probe-key-two', 'k1' => 'probe-key-one'];
+$app_secret_current = 'k2';
+$readAll = function () use ($pdo) {
+    return wn_secret_open($pdo->query("SELECT smtp_pass FROM email_settings")->fetchColumn()) . '|'
+         . wn_secret_open($pdo->query("SELECT client_secret FROM oauth_provider")->fetchColumn()) . '|'
+         . wn_secret_decrypt($pdo->query("SELECT db_pass_enc FROM shard_config")->fetchColumn()) . '|'
+         . decrypt_source_password($pdo->query("SELECT db_password_enc FROM migration_source")->fetchColumn());
+};
+$want = 'v1-smtp|legacy-client-secret|shard-pw|src-pw';
+$ok($readAll() === $want, 'after making k2 current, k1 values stopped opening');
+$ok(strncmp(wn_secret_seal('fresh'), 'enc:v2:k2:', 10) === 0, 'new seals are not on the current key k2');
+$s4 = wn_secret_seal_sweep($pdo);
+$ok(array_sum($s4) === 5, 'sweep should move all 5 values onto k2: ' . json_encode($s4));
+$kc = wn_secret_key_counts($pdo);
+$onK1 = 0;
+foreach ($kc as $c) { $onK1 += ($c['k1'] ?? 0) + ($c['v1:k1'] ?? 0) + ($c['unmarked'] ?? 0); }
+$ok($onK1 === 0, 'values left on k1 after the sweep: ' . json_encode($kc));
+$ok(array_sum(wn_secret_seal_sweep($pdo)) === 0, 'second sweep after rotation changed data');
+$app_secrets = ['k2' => 'probe-key-two'];
+$ok($readAll() === $want, 'after retiring k1, swept values do not open');
+$ok(wn_secret_open($v1) === '' && wn_secret_open($t) === '', 'a k1 value still opens after k1 was retired');
+unset($app_secrets, $app_secret_current);
 
 // hashing
 $ok(wn_token_hash('abc') === 'sha256:' . hash('sha256', 'abc'), 'wn_token_hash format changed (breaks migration main/5.9 rows)');
@@ -171,5 +213,5 @@ if ($fail) {
     fwrite(STDERR, "stored-secrets-probe: FAIL\n  - " . implode("\n  - ", $fail) . "\n");
     exit(1);
 }
-echo "stored-secrets-probe: ok (writes sealed/hashed, legacy reads, sweep idempotent, rotation, api_key hashed)\n";
+echo "stored-secrets-probe: ok (writes sealed/hashed, legacy reads, sweep idempotent, key-ring rotation, api_key hashed)\n";
 exit(0);

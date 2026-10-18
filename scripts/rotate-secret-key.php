@@ -1,78 +1,97 @@
 <?php
 /**
- * scripts/rotate-secret-key.php — re-encrypt every sealed DB credential under a new key.
- * Task #2397. The key is $app_secret (config/config.php or APP_SECRET env), never the DB.
+ * scripts/rotate-secret-key.php — rotate $app_secret / $hiddenhash with the key rings
+ * (include/common/keyRingFunctions.php, docs/core-secret-rotation.md). Per host:
  *
- * Rotation, per host:
- *   1. php scripts/rotate-secret-key.php --old='<current app_secret>' --new='<new app_secret>' [--dry-run]
- *   2. put the new value in config/config.php ($app_secret) / APP_SECRET straight after.
- * Between 1 and 2 sealed values will not open (mail send fails, TOTP fails) — do both in
- * one sitting. Covers WN_SEALED_COLUMNS plus shard_config.db_pass_enc and
- * migration_source.db_password_enc (their own framings, same key). Re-running with the
- * same --old/--new is safe: a value that does not open under --old is skipped and named.
- * ⚠️ $app_secret also keys other things (e.g. HMACs); check docs/stored-credentials.md first.
+ *   php scripts/rotate-secret-key.php new-key          print a fresh random key value
+ *   1. config.php: add it to $app_secrets (or $peppers) under a new id, e.g. 'k2'; keep
+ *      the old one (a host with only $app_secret starts the ring as 'k1' => that value).
+ *   2. config.php: $app_secret_current = 'k2' (or $pepper_current = 'p2'). New writes,
+ *      new JWTs and new password hashes use it; everything old still opens.
+ *   php scripts/rotate-secret-key.php sweep            re-seal stored values onto the
+ *                                                       current key now (the daily cron does it too)
+ *   php scripts/rotate-secret-key.php status           values per key, users per pepper
+ *   php scripts/rotate-secret-key.php retire k1        refuses while anything is on k1
+ *   3. config.php: remove the old id. Access tokens signed with it fail and renew.
+ *
+ * Peppers can't be swept (there are no passwords to re-hash); users move as they sign
+ * in. Retiring a pepper with users left on it means those users must reset their password:
+ * `retire p1 --force` lists them, it never changes anything itself.
+ *
+ * Child apps: values they keep in their own DB count only if they register the column
+ * (wn_register_sealed_column()). Code with its own crypto off $app_secret (brand-compiler
+ * bc_encrypt) must move to wn_secret_encrypt() before a new key is made current.
  */
 
-/**
- * @return int values re-encrypted
- */
-function wn_secret_rotate($pdo, $old, $new, $dry = false) {
-    global $app_secret;
-    $keep = $app_secret;
-    $n = 0;
-    $cols = WN_SEALED_COLUMNS;
-    foreach ($cols as [$table, $pk, $col]) {
-        try {
-            $rows = $pdo->query("SELECT $pk AS id, $col AS v FROM $table WHERE $col LIKE 'enc:v1:%'")->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $e) { continue; }
-        $up = $pdo->prepare("UPDATE $table SET $col = ? WHERE $pk = ? AND $col = ?");
-        foreach ($rows as $r) {
-            $app_secret = $old;
-            $plain = wn_secret_decrypt(substr($r['v'], strlen(WN_SECRET_MARKER)));
-            if ($plain === false) { fwrite(STDERR, "skip $table.$col #{$r['id']}: does not open under --old\n"); continue; }
-            $app_secret = $new;
-            $sealed = wn_secret_seal($plain);
-            if (!$dry) $up->execute([$sealed, $r['id'], $r['v']]);
-            $n++;
-        }
-    }
-    // Older encrypted columns: shard_config (wn_secret_*), migration_source (*_source_password).
-    $extra = [
-        ['shard_config', "layer, app_slug, shard_id", 'db_pass_enc', 'wn_secret_decrypt', 'wn_secret_encrypt'],
-        ['migration_source', 'source_id', 'db_password_enc', 'decrypt_source_password', 'encrypt_source_password'],
-    ];
-    foreach ($extra as [$table, $pkList, $col, $dec, $enc]) {
-        if (!function_exists($dec) || !function_exists($enc)) continue;
-        try { $rows = $pdo->query("SELECT *, $col AS v FROM $table WHERE $col IS NOT NULL AND $col <> ''")->fetchAll(PDO::FETCH_ASSOC); }
-        catch (Throwable $e) { continue; }
-        $pks = array_map('trim', explode(',', $pkList));
-        $where = implode(' AND ', array_map(function ($k) { return "$k = ?"; }, $pks));
-        $up = $pdo->prepare("UPDATE $table SET $col = ? WHERE $where AND $col = ?");
-        foreach ($rows as $r) {
-            $app_secret = $old;
-            $plain = $dec($r['v']);
-            if ($plain === false) { fwrite(STDERR, "skip $table.$col: does not open under --old\n"); continue; }
-            $app_secret = $new;
-            $re = $enc($plain);
-            if (!$dry) $up->execute(array_merge([$re], array_map(function ($k) use ($r) { return $r[$k]; }, $pks), [$r['v']]));
-            $n++;
-        }
-    }
-    $app_secret = $keep;
-    return $n;
+if (php_sapi_name() !== 'cli') { http_response_code(403); exit('CLI only.'); }
+
+$cmd = $argv[1] ?? '';
+if ($cmd === 'new-key') {
+    echo bin2hex(random_bytes(32)) . "\n";
+    exit(0);
+}
+if (!in_array($cmd, ['status', 'sweep', 'retire'], true)) {
+    fwrite(STDERR, "usage: php scripts/rotate-secret-key.php new-key | status | sweep | retire <id> [--force]\n");
+    exit(2);
 }
 
-if (php_sapi_name() === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
-    $opts = [];
-    foreach (array_slice($argv, 1) as $a) {
-        if (preg_match('/^--([a-z-]+)(?:=(.*))?$/s', $a, $m)) $opts[$m[1]] = $m[2] ?? true;
-    }
-    if (empty($opts['old']) || empty($opts['new'])) {
-        fwrite(STDERR, "usage: php scripts/rotate-secret-key.php --old=SECRET --new=SECRET [--dry-run]\n");
-        exit(2);
-    }
-    include __DIR__ . '/../include/common_readonly.php';
+include __DIR__ . '/../include/common_readonly.php';
+global $db, $child_db;
+
+/** Users per pepper (the user table lives in the main DB). */
+function rotate_pepper_counts() {
     global $db;
-    $n = wn_secret_rotate($db, $opts['old'], $opts['new'], !empty($opts['dry-run']));
-    echo (!empty($opts['dry-run']) ? '[dry-run] would re-encrypt' : 're-encrypted') . " $n value(s). Now set \$app_secret to the new value.\n";
+    try { return wn_password_pepper_counts($db); } catch (Throwable $e) { return []; }
 }
+
+$ring = wn_app_key_ring();
+$pep  = wn_pepper_ring();
+
+if ($cmd === 'sweep') {
+    echo 'resealed onto ' . $ring['current'] . ': ' . json_encode(wn_secret_seal_sweep($db, $child_db ?? null)) . "\n";
+    $cmd = 'status';
+}
+
+$counts = wn_secret_key_counts($db, $child_db ?? null);
+$users  = rotate_pepper_counts();
+
+if ($cmd === 'status') {
+    echo "app secret ring: " . implode(', ', array_keys($ring['keys'])) . " (current {$ring['current']})\n";
+    foreach ($counts as $col => $c) { echo "  $col: " . ($c ? json_encode($c) : 'empty') . "\n"; }
+    echo "pepper ring: " . implode(', ', array_keys($pep['keys'])) . " (current {$pep['current']})\n";
+    echo "  users: " . json_encode($users) . "  ('v1' = original format, pepper p1)\n";
+    exit(0);
+}
+
+// retire <id>
+$id = $argv[2] ?? '';
+if ($id === '') { fwrite(STDERR, "retire needs a key id\n"); exit(2); }
+if (isset($ring['keys'][$id])) {
+    if ($id === $ring['current']) { fwrite(STDERR, "$id is the current key; make another key current first\n"); exit(1); }
+    $left = [];
+    foreach ($counts as $col => $c) {
+        $n = ($c[$id] ?? 0) + ($c["v1:$id"] ?? 0) + ($id === 'k1' ? ($c['unmarked'] ?? 0) : 0);
+        if ($n > 0) $left[$col] = $n;
+    }
+    if ($left) {
+        fwrite(STDERR, "NOT safe to retire $id — values still on it: " . json_encode($left) . "\nRun `sweep` (and check child apps registered their columns).\n");
+        exit(1);
+    }
+    echo "OK: no stored value is on $id. Remove it from \$app_secrets in config.php" .
+         ($id === 'k1' ? " (access tokens issued before the ring stop verifying and renew)" : '') . ".\n";
+    exit(0);
+}
+if (isset($pep['keys'][$id])) {
+    if ($id === $pep['current']) { fwrite(STDERR, "$id is the current pepper; make another current first\n"); exit(1); }
+    $n = ($users[$id] ?? 0) + ($id === 'p1' ? ($users['v1'] ?? 0) : 0);
+    if ($n > 0 && !in_array('--force', $argv, true)) {
+        fwrite(STDERR, "NOT safe to retire $id — $n user(s) still on it (they must sign in, or reset their password).\n");
+        exit(1);
+    }
+    echo $n > 0
+        ? "$n user(s) are on $id: removing it from \$peppers means they must reset their password. Nothing was changed.\n"
+        : "OK: no user is on $id. Remove it from \$peppers in config.php.\n";
+    exit(0);
+}
+fwrite(STDERR, "$id is not in either ring\n");
+exit(1);

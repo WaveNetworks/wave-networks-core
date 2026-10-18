@@ -5,9 +5,11 @@ Nothing secret is ever echoed into a form, returned from an API action, or logge
 (`actionLogPolicy.php` is default-deny for params).
 
 Helpers: `include/common/secretFunctions.php`
-- `wn_secret_seal($plain)` → `enc:v1:` + `wn_secret_encrypt()` (AES-256-CBC, random IV,
-  key = sha256 of `$app_secret`). `wn_secret_open($stored)` reverses it; an UNMARKED value is
-  legacy plain text and is returned unchanged (rollout: old rows keep working).
+- `wn_secret_seal($plain)` → `enc:v2:<kid>:` + XChaCha20-Poly1305 (authenticated) under
+  `wn_key('seal', kid)` from the `$app_secret` key ring (`keyRingFunctions.php`).
+  `wn_secret_open($stored)` reverses it; `enc:v1:` (pre-ring AES-256-CBC off the k1 secret)
+  still opens; an UNMARKED value is legacy plain text and is returned unchanged.
+  `wn_secret_encrypt()` / `encrypt_source_password()` write the same v2 format.
 - `wn_token_hash($token)` → `sha256:` + hex.
 - `WN_SEALED_COLUMNS` is the list of sealed columns. Add new credential columns there.
 
@@ -43,7 +45,9 @@ OAuth/Facebook/Google client secrets, SMTP fallback and `APP_SECRET` itself live
   for every host's main DB; also catches rows from older child code).
 
 ## Rotating the key
-`php scripts/rotate-secret-key.php --old='<current>' --new='<new>' [--dry-run]`, then set
-`$app_secret` / `APP_SECRET` to the new value immediately. Re-encrypts `WN_SEALED_COLUMNS`,
-`shard_config.db_pass_enc` and `migration_source.db_password_enc`. `$app_secret` may also key
-HMACs elsewhere (grep `app_secret` before rotating) — those are not re-derivable and will reset.
+Key ring, no downtime: docs/core-secret-rotation.md. In short: add `'k2' => …` to
+`$app_secrets` (a host with only `$app_secret` is `'k1'`), set `$app_secret_current = 'k2'`,
+`php scripts/rotate-secret-key.php sweep`, then `retire k1` (refuses while anything is left on
+it) and remove k1 from config. Child apps with their own sealed columns register them with
+`wn_register_sealed_column()` so the counts include them; code with its own crypto off
+`$app_secret` (brand-compiler `bc_encrypt`) must move to `wn_secret_encrypt()` first.

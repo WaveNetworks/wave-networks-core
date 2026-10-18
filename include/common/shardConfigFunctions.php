@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/secretFunctions.php';
 /**
  * shardConfigFunctions.php
  * Shard registry — the source of truth for which shards exist.
@@ -49,19 +50,21 @@
 // searching for a delimiter that can occur inside the data.
 
 function wn_secret_encrypt($plain) {
-    global $app_secret;
-    $key = substr(hash('sha256', (string)$app_secret), 0, 32);
-    $iv  = openssl_random_pseudo_bytes(16);
-    $ct  = openssl_encrypt((string)$plain, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-    if ($ct === false) return false;
-    return base64_encode($iv . $ct);
+    // Since the key ring (keyRingFunctions.php) this writes the authenticated, kid-tagged
+    // format; the pre-ring base64(IV ‖ CBC) values still open below.
+    return wn_secret_seal_now((string) $plain);
 }
 
 function wn_secret_decrypt($enc) {
-    global $app_secret;
+    if (wn_secret_is_sealed($enc)) return wn_secret_open_marked($enc);
+    return wn_secret_decrypt_legacy_cbc($enc);
+}
+
+/** Pre-ring wn_secret_encrypt() output: base64(16-byte IV ‖ AES-256-CBC), legacy key. */
+function wn_secret_decrypt_legacy_cbc($enc) {
+    $key = wn_legacy_cbc_key();
     $raw = base64_decode((string)$enc, true);
-    if ($raw === false || strlen($raw) <= 16) return false;
-    $key = substr(hash('sha256', (string)$app_secret), 0, 32);
+    if ($key === null || $raw === false || strlen($raw) <= 16) return false;
     return openssl_decrypt(substr($raw, 16), 'AES-256-CBC', $key, OPENSSL_RAW_DATA, substr($raw, 0, 16));
 }
 
