@@ -384,7 +384,7 @@ function wn_p3sig_shm_write($shm_key, array $state) {
  * Returns name => value, or throws. The request is signed with the app key; the
  * reply is sealed to a one-time key, so only this worker can open it.
  */
-function wn_p3sig_ks_unlock($cfg, array $ks, array $bundle, $sk) {
+function wn_p3sig_ks_unlock($cfg, array $ks, array $bundle, $sk, $why = 'cold') {
     $wrap = $bundle['wraps'][$ks['id']] ?? null;
     if (!is_string($wrap)) { throw new RuntimeException('cache.enc has no wrap for key server ' . $ks['id']); }
     $kp    = sodium_crypto_box_keypair();
@@ -395,7 +395,8 @@ function wn_p3sig_ks_unlock($cfg, array $ks, array $bundle, $sk) {
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => json_encode(['app' => (string) $cfg['app_id'], 'ts' => $ts, 'wrap' => $wrap, 'reply' => $reply,
-                                               'sig' => base64_encode(sodium_crypto_sign_detached($msg, $sk))]),
+                                               'sig' => base64_encode(sodium_crypto_sign_detached($msg, $sk)),
+                                               'why' => $why]),   // unsigned telemetry: `keyserver stats`
         CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 3,
@@ -446,9 +447,12 @@ function wn_p3sig_ks_values($cfg) {
         $sk = is_array($bundle) ? wn_p3sig_machine_key($cfg) : null;
         if (!is_array($bundle)) { error_log('p3sig: ' . $cfg['cache_file'] . ' is missing or unreadable'); }
         $vals = null;
+        // Why we ask, for the key server's stats: cold = memory was gone (we could not run
+        // without a key server), refresh = routine re-check with values still in memory.
+        $why = ($st ? 'refresh' : 'cold') . (php_sapi_name() === 'cli' ? '-cli' : '');
         foreach ($sk !== null ? $cfg['keyservers'] : [] as $ks) {
             try {
-                $vals = wn_p3sig_ks_unlock($cfg, $ks, $bundle, $sk);
+                $vals = wn_p3sig_ks_unlock($cfg, $ks, $bundle, $sk, $why);
                 break;
             } catch (Throwable $e) {
                 error_log('p3sig: ' . $e->getMessage());
