@@ -5,6 +5,7 @@
  *
  *   php admin/scripts/p3sig-keyserver-seal.php --pub <b64 P-256 point> [--pub …]
  *       --out ~/p3sig-ks/cache.enc [--child public_html/<app>/config/config.php …] [--dry-run]
+ *       [--replace]   (overwrite an existing cache.enc; refused when config.php has no DB password)
  *
  * Reads admin/config/config.php (and notifications_config.php) and each --child config,
  * collects every non-empty service key (WN_RUNTIME_SECRET_GLOBALS), the roots
@@ -19,7 +20,7 @@ require_once __DIR__ . '/../include/common/runtimeSecretFunctions.php';
 
 function seal_fail($msg) { fwrite(STDERR, "error: $msg\n"); exit(1); }
 
-$pubs = []; $children = []; $out = null; $dry = false;
+$pubs = []; $children = []; $out = null; $dry = false; $replace = false;
 for ($i = 1; $i < $argc; $i++) {
     switch ($argv[$i]) {
         case '--pub':     $pubs[] = $argv[++$i] ?? ''; break;
@@ -27,6 +28,7 @@ for ($i = 1; $i < $argc; $i++) {
         case '--out':     $out = $argv[++$i] ?? null; break;
         case '--dry-run': $dry = true; break;
         case '--names':   break;
+        case '--replace': $replace = true; break;
         default: seal_fail("unknown argument {$argv[$i]}");
     }
 }
@@ -73,6 +75,11 @@ foreach ($children as $file) {
 ksort($vals);
 echo count($vals) . " secret(s)" . (in_array("--names", $argv, true) ? ": " . implode(", ", array_keys($vals)) : "") . "\n";
 if ($dry) { exit(0); }
+
+// After migration step 3 config.php is empty, so sealing it again would replace a working
+// bundle with an empty one and take the app down. Replacing needs saying so.
+if (is_file($out) && !$replace) { seal_fail("$out already exists; pass --replace to overwrite it (after strip, config.php no longer holds the values)"); }
+if ($replace && !array_intersect(array_keys($vals), ['DB_PASSWORD', 'CHILD_DB_PASS'])) { seal_fail('refusing to --replace with a bundle that has no DB password: is config.php already stripped?'); }
 
 $webroot = realpath(__DIR__ . '/../..');
 $outDir  = realpath(dirname($out));
