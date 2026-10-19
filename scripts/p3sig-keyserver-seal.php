@@ -26,6 +26,7 @@ for ($i = 1; $i < $argc; $i++) {
         case '--child':   $children[] = $argv[++$i] ?? ''; break;
         case '--out':     $out = $argv[++$i] ?? null; break;
         case '--dry-run': $dry = true; break;
+        case '--names':   break;
         default: seal_fail("unknown argument {$argv[$i]}");
     }
 }
@@ -70,7 +71,7 @@ foreach ($children as $file) {
     }
 }
 ksort($vals);
-echo count($vals) . " secret(s): " . implode(', ', array_keys($vals)) . "\n";
+echo count($vals) . " secret(s)" . (in_array("--names", $argv, true) ? ": " . implode(", ", array_keys($vals)) : "") . "\n";
 if ($dry) { exit(0); }
 
 $webroot = realpath(__DIR__ . '/../..');
