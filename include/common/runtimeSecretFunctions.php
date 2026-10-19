@@ -35,6 +35,11 @@
  * keeps the values in a shmop segment (mode 0600) encrypted with p3sig-shm.key from the
  * key_file directory. When no key server answers, the last values in memory stay in use;
  * only a web-node reboot during a key-server outage leaves the app without its secrets.
+ *
+ * Where the p3sig config lives: app deploys rsync with --delete and exclude only
+ * config/config.php, so a config/p3sig.php inside the deployed tree is deleted by the next
+ * deploy. Put it next to the key, outside public_html, and point at it from config.php:
+ *   define('WN_P3SIG_CONFIG', '/home/…/p3sig/p3sig.php');
  */
 
 /** global variable => secret name (same names as the Docker env fallback in bootstrap.php). */
