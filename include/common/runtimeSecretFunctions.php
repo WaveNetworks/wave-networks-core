@@ -23,6 +23,18 @@
  *    'bundle' => '']   // bundle optional; cache_file defaults to <key_file dir>/p3sig-cache.json
  * The key file is the base64 Ed25519 private key `p3sig init` writes. It and the cache
  * must live outside public_html; a key inside it is refused.
+ *
+ * Key-server mode (p3sig doc §4.4, shared hosting with no key of its own that opens
+ * anything): config/p3sig.php returns instead
+ *   ['app_id' => 'pilot', 'key_file' => '/home/…/p3sig/app.key',
+ *    'cache_file' => '/home/…/p3sig/cache.enc',      // `p3sig keyserver seal` output
+ *    'keyservers' => [['id' => '…', 'url' => 'https://…/v1/unwrap'], …],
+ *    'refresh_after' => 3600]
+ * cache.enc is encrypted to the key servers' TPM keys, so the files on this host open
+ * nothing alone. On a cold start one worker asks a key server for the bundle key, then
+ * keeps the values in a shmop segment (mode 0600) encrypted with p3sig-shm.key from the
+ * key_file directory. When no key server answers, the last values in memory stay in use;
+ * only a web-node reboot during a key-server outage leaves the app without its secrets.
  */
 
 /** global variable => secret name (same names as the Docker env fallback in bootstrap.php). */
@@ -60,10 +72,22 @@ function wn_p3sig_config($reset = false) {
     $file = defined('WN_P3SIG_CONFIG') ? WN_P3SIG_CONFIG : __DIR__ . '/../../config/p3sig.php';
     if (!is_file($file)) { return $cfg; }
     $c = include $file;
-    if (!is_array($c) || empty($c['machine_id']) || empty($c['key_file'])) {
-        error_log('p3sig: config/p3sig.php needs machine_id and key_file; ignoring it');
+    $ks = is_array($c) && !empty($c['keyservers']);
+    if (!is_array($c) || empty($c['key_file']) || ($ks ? empty($c['app_id']) : empty($c['machine_id']))) {
+        error_log('p3sig: config/p3sig.php needs key_file and ' . ($ks ? 'app_id' : 'machine_id') . '; ignoring it');
         return $cfg;
     }
+    if ($ks) {
+        foreach ($c['keyservers'] as $k) {
+            $loopback = preg_match('#^http://(127\.0\.0\.1|\[::1\]|localhost)[:/]#', (string) ($k['url'] ?? ''));
+            if (empty($k['id']) || empty($k['url']) || (strpos($k['url'], 'https://') !== 0 && !$loopback)) {
+                error_log('p3sig: every keyservers entry needs an id and an https url (http only on loopback); ignoring config/p3sig.php');
+                return $cfg;
+            }
+        }
+        $c['refresh_after'] = max(60, (int) ($c['refresh_after'] ?? 3600));
+    }
+    $c['keyserver_mode'] = $ks;
     $c['url']        = $c['url'] ?? 'https://p3sig.com/p3sig/api/index.php';
     $c['bundle']     = $c['bundle'] ?? '';
     $c['cache_file'] = $c['cache_file'] ?? (dirname($c['key_file']) . '/p3sig-cache.json');
@@ -117,6 +141,10 @@ function wn_p3sig_cache_values($reset = false) {
     if ($vals !== null) { return $vals; }
     $vals = [];
     $cfg = wn_p3sig_config();
+    if ($cfg && $cfg['keyserver_mode']) {
+        $vals = wn_p3sig_ks_values($cfg);
+        return $vals;
+    }
     if (!$cfg || !is_file($cfg['cache_file'])) { return $vals; }
     $cache = json_decode((string) file_get_contents($cfg['cache_file']), true);
     if (!is_array($cache) || !isset($cache['secrets']) || !is_array($cache['secrets'])) {
@@ -168,6 +196,10 @@ function wn_apply_runtime_secrets() {
 function wn_p3sig_refresh() {
     $cfg = wn_p3sig_config();
     if (!$cfg) { return ['ok' => false, 'count' => 0, 'error' => 'p3sig is not configured (config/p3sig.php)']; }
+    if ($cfg['keyserver_mode']) {
+        // cache.enc is placed by `p3sig keyserver seal` until p3sig serves app bundles.
+        return ['ok' => true, 'count' => 0, 'error' => ''];
+    }
     $sk = wn_p3sig_machine_key($cfg);
     if ($sk === null) { return ['ok' => false, 'count' => 0, 'error' => 'machine key unusable (see error log)']; }
 
@@ -217,4 +249,155 @@ function wn_p3sig_refresh() {
     }
     wn_p3sig_cache_values(true);
     return ['ok' => true, 'count' => count($keep), 'error' => ''];
+}
+
+// ─── key-server mode ─────────────────────────────────────────────────────────
+
+/** The 32-byte key that encrypts the memory copy; made on first use next to key_file. */
+function wn_p3sig_shm_key($cfg) {
+    $path = dirname($cfg['key_file']) . '/p3sig-shm.key';
+    if (!is_file($path)) {
+        $tmp = $path . '.tmp' . getmypid();
+        if (@file_put_contents($tmp, base64_encode(random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_KEYBYTES))) === false
+            || !@chmod($tmp, 0600) || !@rename($tmp, $path)) {
+            @unlink($tmp);
+            if (!is_file($path)) { error_log('p3sig: cannot create ' . $path); return null; }
+        }
+    }
+    $k = base64_decode(trim((string) @file_get_contents($path)), true);
+    return ($k !== false && strlen($k) === SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_KEYBYTES) ? $k : null;
+}
+
+/** System V segment id for this app: derived from the shm key, so stable and not guessable. */
+function wn_p3sig_shm_id($shm_key) {
+    return hexdec(substr(hash('sha256', 'p3sig-shm-id|' . $shm_key), 0, 7)) + 1;
+}
+
+/** ['vals' => [...], 'refresh_after' => ts] from memory, or null. */
+function wn_p3sig_shm_read($shm_key) {
+    if (!function_exists('shmop_open')) { return null; }
+    $seg = @shmop_open(wn_p3sig_shm_id($shm_key), 'a', 0, 0);
+    if ($seg === false) { return null; }
+    $raw = shmop_read($seg, 0, shmop_size($seg));
+    $len = unpack('N', substr($raw, 0, 4))[1] ?? 0;
+    if ($len < SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES + 16 || $len > strlen($raw) - 4) { return null; }
+    $blob  = substr($raw, 4, $len);
+    $nonce = substr($blob, 0, SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES);
+    $plain = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+        substr($blob, SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES), 'p3sig-shm-v1', $nonce, $shm_key);
+    if ($plain === false) { return null; }
+    $st = json_decode($plain, true);
+    return (is_array($st) && isset($st['vals']) && is_array($st['vals'])) ? $st : null;
+}
+
+function wn_p3sig_shm_write($shm_key, array $state) {
+    if (!function_exists('shmop_open')) { return false; }
+    $nonce = random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES);
+    $blob  = $nonce . sodium_crypto_aead_xchacha20poly1305_ietf_encrypt(json_encode($state), 'p3sig-shm-v1', $nonce, $shm_key);
+    $data  = pack('N', strlen($blob)) . $blob;
+    $size  = (int) (ceil(strlen($data) / 4096) * 4096);
+    $id    = wn_p3sig_shm_id($shm_key);
+    $seg   = @shmop_open($id, 'w', 0, 0);
+    if ($seg !== false && shmop_size($seg) < strlen($data)) {
+        shmop_delete($seg);
+        $seg = false;
+    }
+    if ($seg === false) { $seg = @shmop_open($id, 'c', 0600, $size); }
+    if ($seg === false) { error_log('p3sig: cannot write the shared memory cache'); return false; }
+    shmop_write($seg, str_pad($data, shmop_size($seg), "\0"), 0);
+    return true;
+}
+
+/**
+ * Ask one key server for cache.enc's bundle key and decrypt the bundle.
+ * Returns name => value, or throws. The request is signed with the app key; the
+ * reply is sealed to a one-time key, so only this worker can open it.
+ */
+function wn_p3sig_ks_unlock($cfg, array $ks, array $bundle, $sk) {
+    $wrap = $bundle['wraps'][$ks['id']] ?? null;
+    if (!is_string($wrap)) { throw new RuntimeException('cache.enc has no wrap for key server ' . $ks['id']); }
+    $kp    = sodium_crypto_box_keypair();
+    $reply = base64_encode(sodium_crypto_box_publickey($kp));
+    $ts    = time();
+    $msg   = 'p3sig-ks-v1|' . $cfg['app_id'] . '|' . $ts . '|' . hash('sha256', (string) base64_decode($wrap)) . '|' . $reply;
+    $ch = curl_init($ks['url']);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode(['app' => (string) $cfg['app_id'], 'ts' => $ts, 'wrap' => $wrap, 'reply' => $reply,
+                                               'sig' => base64_encode(sodium_crypto_sign_detached($msg, $sk))]),
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_USERAGENT      => 'wn-core-p3sig/1',
+    ]);
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($body === false || $code !== 200) {
+        sodium_memzero($kp);
+        throw new RuntimeException("key server {$ks['id']} refused or unreachable (HTTP $code)");
+    }
+    $sealed = base64_decode((string) (json_decode($body, true)['sealed'] ?? ''), true);
+    $key = $sealed === false ? false : sodium_crypto_box_seal_open($sealed, $kp);
+    sodium_memzero($kp);
+    if ($key === false) { throw new RuntimeException("key server {$ks['id']}: reply did not open"); }
+    $plain = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+        (string) base64_decode($bundle['ct'] ?? ''), 'p3sig-bundle-v1', (string) base64_decode($bundle['nonce'] ?? ''), $key);
+    sodium_memzero($key);
+    $vals = $plain === false ? null : json_decode($plain, true);
+    if (!is_array($vals)) { throw new RuntimeException('cache.enc did not decrypt with the key server\'s key'); }
+    return array_map('strval', $vals);
+}
+
+/**
+ * Key-server mode: values from memory; on a cold or stale cache, one worker (under a
+ * lock) asks the key servers in order. Stale values are kept when none answers.
+ */
+function wn_p3sig_ks_values($cfg) {
+    $shm_key = wn_p3sig_shm_key($cfg);
+    if ($shm_key === null) { return []; }
+    $st = wn_p3sig_shm_read($shm_key);
+    if ($st && time() < (int) ($st['refresh_after'] ?? 0)) { return $st['vals']; }
+
+    $lock = @fopen(dirname($cfg['key_file']) . '/p3sig-shm.lock', 'c');
+    if ($lock === false) { return $st['vals'] ?? []; }
+    // With stale values in hand, never wait: someone else is already refreshing.
+    // With none, wait (bounded by the key server timeouts) for that refresh.
+    if (!flock($lock, $st ? (LOCK_EX | LOCK_NB) : LOCK_EX)) { fclose($lock); return $st['vals']; }
+    try {
+        $again = wn_p3sig_shm_read($shm_key);
+        if ($again && time() < (int) ($again['refresh_after'] ?? 0)) { return $again['vals']; }
+        $st = $again ?: $st;
+
+        $bundle = is_file($cfg['cache_file']) ? json_decode((string) file_get_contents($cfg['cache_file']), true) : null;
+        $sk = is_array($bundle) ? wn_p3sig_machine_key($cfg) : null;
+        if (!is_array($bundle)) { error_log('p3sig: ' . $cfg['cache_file'] . ' is missing or unreadable'); }
+        $vals = null;
+        foreach ($sk !== null ? $cfg['keyservers'] : [] as $ks) {
+            try {
+                $vals = wn_p3sig_ks_unlock($cfg, $ks, $bundle, $sk);
+                break;
+            } catch (Throwable $e) {
+                error_log('p3sig: ' . $e->getMessage());
+            }
+        }
+        if ($sk !== null) { sodium_memzero($sk); }
+        if ($vals !== null) {
+            wn_p3sig_shm_write($shm_key, ['vals' => $vals, 'refresh_after' => time() + $cfg['refresh_after']]);
+            return $vals;
+        }
+        if ($st) {
+            // Keep serving what memory holds; try again in a minute.
+            wn_p3sig_shm_write($shm_key, ['vals' => $st['vals'], 'refresh_after' => time() + 60]);
+            error_log('p3sig: no key server answered; using the values already in memory');
+            return $st['vals'];
+        }
+        error_log('p3sig: no key server answered and memory is empty; config.php values stand');
+        return [];
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
 }
