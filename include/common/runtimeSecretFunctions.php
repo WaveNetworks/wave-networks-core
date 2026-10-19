@@ -13,9 +13,10 @@
  *      outage never takes the site down, it only delays rotation.
  * Precedence: environment > p3sig cache > config.php.
  *
- * Scope: SERVICE keys only (WN_RUNTIME_SECRET_GLOBALS). DB credentials, $hiddenhash and
- * $app_secret stay in config.php (docs/core-secret-rotation.md). Child apps read their
- * own names with wn_secret('NAME').
+ * Scope: SERVICE keys (WN_RUNTIME_SECRET_GLOBALS). DB credentials, $hiddenhash and
+ * $app_secret stay in config.php (docs/core-secret-rotation.md), EXCEPT in key-server mode
+ * below, which also sets them (WN_ROOT_SECRET_GLOBALS). Child apps read their own names
+ * with wn_secret('NAME') and their DB password with wn_apply_child_root_secrets().
  *
  * config/p3sig.php (gitignored) returns:
  *   ['url' => 'https://p3sig.com/p3sig/api/index.php', 'machine_id' => '…',
@@ -190,6 +191,71 @@ function wn_apply_runtime_secrets() {
         $v = wn_secret($name);
         if ($v === null) { continue; }
         $GLOBALS[$var] = ($var === 'smtp_port' && ctype_digit($v)) ? (int) $v : $v;
+    }
+    wn_apply_root_secrets();
+}
+
+/**
+ * Root secrets: the DB password, the $app_secret and $hiddenhash rings, and seed-shard
+ * passwords. Key-server mode ONLY (p3sig doc §4.4, owner 2026-10-19): there the files on
+ * the host open nothing alone, so taking these out of config.php gains something. The
+ * environment and the plain sealed cache never set them. Shards registered in the
+ * shard_config table need nothing here: their passwords are sealed with the $app_secret
+ * ring, which this provides.
+ */
+const WN_ROOT_SECRET_GLOBALS = [
+    'dbUserName'         => 'DB_USER',
+    'dbPassword'         => 'DB_PASSWORD',
+    'app_secret'         => 'APP_SECRET',
+    'app_secret_current' => 'APP_SECRET_CURRENT',
+    'hiddenhash'         => 'HIDDEN_HASH',
+    'pepper_current'     => 'PEPPER_CURRENT',
+];
+/** JSON-encoded {id: key} rings. */
+const WN_ROOT_SECRET_RINGS = ['app_secrets' => 'APP_SECRETS', 'peppers' => 'PEPPERS'];
+/** Seed shards in config.php's $shardConfigs: DB_SHARD_PASS_<shard key>. */
+const WN_ROOT_SHARD_PREFIX = 'DB_SHARD_PASS_';
+
+function wn_p3sig_keyserver_mode() {
+    $cfg = wn_p3sig_config();
+    return $cfg && $cfg['keyserver_mode'];
+}
+
+function wn_apply_root_secrets() {
+    if (!wn_p3sig_keyserver_mode()) { return; }
+    $vals = wn_p3sig_cache_values();
+    foreach (WN_ROOT_SECRET_GLOBALS as $var => $name) {
+        if (array_key_exists($name, $vals)) { $GLOBALS[$var] = $vals[$name]; }
+    }
+    foreach (WN_ROOT_SECRET_RINGS as $var => $name) {
+        if (!array_key_exists($name, $vals)) { continue; }
+        $ring = json_decode($vals[$name], true);
+        if (is_array($ring) && $ring) { $GLOBALS[$var] = array_map('strval', $ring); }
+        else { error_log("p3sig: $name is not a JSON object of keys; config.php value stands"); }
+    }
+    if (!empty($GLOBALS['shardConfigs']) && is_array($GLOBALS['shardConfigs'])) {
+        foreach ($GLOBALS['shardConfigs'] as $k => $sc) {
+            $name = WN_ROOT_SHARD_PREFIX . strtoupper(preg_replace('/[^A-Za-z0-9]/', '_', (string) $k));
+            if (array_key_exists($name, $vals)) { $GLOBALS['shardConfigs'][$k]['pass'] = $vals[$name]; }
+        }
+    }
+}
+
+/**
+ * Child apps: call after loading their own config/config.php, before connecting.
+ * CHILD_DB_USER / CHILD_DB_PASS, and CHILD_DB_SHARD_PASS_<shard key> for each seed shard
+ * in $childShardConfigs. Key-server mode only, like the core roots.
+ */
+function wn_apply_child_root_secrets(&$child_db_user, &$child_db_pass, &$childShardConfigs) {
+    if (!wn_p3sig_keyserver_mode()) { return; }
+    $vals = wn_p3sig_cache_values();
+    if (array_key_exists('CHILD_DB_USER', $vals)) { $child_db_user = $vals['CHILD_DB_USER']; }
+    if (array_key_exists('CHILD_DB_PASS', $vals)) { $child_db_pass = $vals['CHILD_DB_PASS']; }
+    if (is_array($childShardConfigs)) {
+        foreach ($childShardConfigs as $k => $sc) {
+            $name = 'CHILD_' . WN_ROOT_SHARD_PREFIX . strtoupper(preg_replace('/[^A-Za-z0-9]/', '_', (string) $k));
+            if (array_key_exists($name, $vals)) { $childShardConfigs[$k]['pass'] = $vals[$name]; }
+        }
     }
 }
 
