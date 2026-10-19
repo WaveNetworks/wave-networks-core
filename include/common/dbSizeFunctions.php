@@ -74,6 +74,12 @@ function db_size_read_child_config($file) {
         return [];
     }
 
+    // Key-server mode: credentials emptied from config.php come from the p3sig bundle.
+    if (function_exists('wn_apply_child_root_secrets') && ($child_db_pass ?? '') === '') {
+        $child_db_user = $child_db_user ?? ''; $child_db_pass = ''; $childShardConfigs = $childShardConfigs ?? [];
+        wn_apply_child_root_secrets($child_db_user, $child_db_pass, $childShardConfigs);
+    }
+
     $found = [];
     $user  = $child_db_user ?? '';
     $pass  = $child_db_pass ?? '';

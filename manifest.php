@@ -17,6 +17,9 @@ if (file_exists($configFile)) {
     $dbUserName = getenv('DB_USER')     ?: 'root';
     $dbPassword = getenv('DB_PASSWORD') ?: '';
 }
+// Key-server mode / env secrets, as bootstrap step 2d (DB password may live in a p3sig bundle).
+include_once __DIR__ . '/include/common/runtimeSecretFunctions.php';
+wn_apply_runtime_secrets();
 
 // Connect
 try {
