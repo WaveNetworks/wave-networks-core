@@ -1,6 +1,7 @@
 {
   "name": "wave-networks/wave-networks-core",
   "description": "Auth and user admin layer for Wave Networks applications",
+  "license": "Apache-2.0",
   "type": "project",
   "require": {
     "php": "^8.2",

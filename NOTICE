@@ -1,0 +1,14 @@
+Wave Networks Core
+Copyright 2026 Wave Networks
+
+This product includes software developed at Wave Networks
+(https://github.com/WaveNetworks).
+
+This product bundles Bootstrap and Bootswatch (assets/bootstrap/css/bootstrap.min.css).
+  Bootstrap v5.3.2: Copyright 2011-2023 The Bootstrap Authors, MIT License
+    https://github.com/twbs/bootstrap/blob/main/LICENSE
+  Bootswatch v5.3.2: Copyright 2012-2023 Thomas Park, MIT License
+    https://github.com/thomaspark/bootswatch/blob/master/LICENSE
+
+PHP dependencies are installed with Composer and are not bundled here; each
+keeps its own license (see composer.json / composer.lock).

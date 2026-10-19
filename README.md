@@ -250,6 +250,10 @@ See [CHILD_APP_SPEC.md](CHILD_APP_SPEC.md) for the full integration specificatio
 | `db_migrations/CLAUDE.md` | Database migration version rules |
 | `include/actions/CLAUDE.md` | Action file patterns and rules |
 
+## Security
+
+Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
+
 ## License
 
-Proprietary. All rights reserved.
+Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
