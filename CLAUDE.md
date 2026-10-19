@@ -849,7 +849,8 @@ DO NOT:
 - Skip h() or sanitize() for any output
 - Add business domain logic (plans, billing, coaching) to this repo
 - Create a new $db PDO connection — use the global $db set in common.php
-- Store credentials anywhere except admin/config/config.php (gitignored)
+- Store credentials anywhere except admin/config/config.php (gitignored), or a p3sig
+  bundle in key-server mode (include/common/runtimeSecretFunctions.php; owner 2026-10-19)
 - Create new API endpoint files — use action files instead
 - Edit existing migration files — always create a new version
 - Manually update the db_version table — the migration system handles it
