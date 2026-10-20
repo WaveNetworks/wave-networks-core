@@ -208,7 +208,16 @@ Scripts:
   cron/cleanup_notifications.php — monthly: prune old notifications + stale subscriptions
 
 Subdirectories (cron/minutes/, days/, weeks/, months/) hold task scripts
-executed by cron.php on their respective intervals.
+executed by cron.php on their respective intervals:
+  minutes/{N}  every N minutes        days/{N}  ONCE every N days (days/1 = daily)
+  weeks/{dow}  ONCE on that weekday   months/{m} ONCE on the 1st of month m
+Each day/week/month period runs once (cron_once(): a marker per schedule in
+$files_location/cron_state/, taken under a lock so overlapping minute runs never double up).
+Until 2026-10-20 days/{N} meant "day N of the month" and re-ran on every minute that day: the
+"daily" cleanups ran ~1440 times on the 1st and never otherwise, and the action-log roll-up
+inserted the same day 1440 times (ContactSwipe: 8.6M user_action_summary rows for 321 facts,
+removed by cron/minutes/60/repair_action_summary.php). A job that must not double-count still
+guards itself; the runner's guarantee is "once per period", not "exactly at midnight".
 
 Daily (cron/days/1/):
   cleanup_error_log.php        — deletes error_log entries older than 30 days
@@ -439,6 +448,8 @@ Scopes: JSON array of scope strings. get_available_scopes() = core_available_sco
 
 Authentication: Bearer token in Authorization header. common_api.php extracts
   the token, calls validate_service_api_key(), populates global $_SERVICE_API_KEY.
+  A service-key call with no device cookie / X-Wn-Device header creates NO device row (a
+  server is not a device; nokemo's monitor minted ~18k anonymous devices a day before 2026-10-20).
 
 Admin view: views/api_keys.php (admin-only, page=api_keys).
   Lists keys with name, prefix, scopes, created/last-used timestamps, status.
