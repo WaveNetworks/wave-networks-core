@@ -322,6 +322,11 @@ function build_feedback_context_block($fb) {
     if (!empty($fb['capture_url']))   $page = $fb['capture_url'];
     elseif (!empty($fb['page_url']))  $page = $fb['page_url'];
     if ($page !== '') $lines[] = 'Page: ' . $page;
+    // Where on that page (context_json.where/route, set by an app's feedback widget): in a single-page app
+    // the URL is often just the shell ("index.html", "#/map") and says nothing about what was open.
+    $wctx = !empty($fb['context_json']) ? json_decode($fb['context_json'], true) : null;
+    if (is_array($wctx) && !empty($wctx['where'])) $lines[] = 'Where: ' . $wctx['where'];
+    if (is_array($wctx) && !empty($wctx['route'])) $lines[] = 'Route: ' . $wctx['route'];
 
     // Viewport — skip when both dimensions are absent/zero.
     $vw = isset($fb['viewport_w']) ? (int) $fb['viewport_w'] : 0;

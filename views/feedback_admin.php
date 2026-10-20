@@ -403,7 +403,7 @@ $stats = get_feedback_stats();
 
                         return '<tr>' +
                             '<td>' + (typeBadges[row.feedback_type] || '') + '</td>' +
-                            '<td>' + thumb + '<small>' + msg + '</small>' + (row.page_url ? '<br><a href="' + esc(row.page_url) + '" class="text-muted small" target="_blank">' + esc(row.page_url).substring(0, 50) + '</a>' : '') + '</td>' +
+                            '<td>' + thumb + '<small>' + msg + '</small>' + fbWhere(row) + (row.page_url ? '<br><a href="' + esc(row.page_url) + '" class="text-muted small" target="_blank">' + esc(row.page_url).substring(0, 50) + '</a>' : '') + '</td>' +
                             '<td><small>' + esc(row.user_email || '—') + '<br><span class="text-muted">' + esc(row.user_role || '') + '</span></small></td>' +
                             '<td class="text-center"><span class="badge bg-light text-dark">' + (row.upvotes || 0) + '</span></td>' +
                             '<td>' + (statusBadges[row.status] || '') + (row.change_request_id ? ' <button class="badge bg-warning text-dark border-0 ms-1 p-1" style="cursor:pointer" onclick="viewCRDetail(' + row.change_request_id + ')" title="View change request">CR #' + row.change_request_id + '</button>' : '') + '</td>' +
@@ -477,6 +477,13 @@ $stats = get_feedback_stats();
             .then(function (r) { return r.json(); })
             .then(function (j) { if (!j.error) loadFeedback(fbPage); });
     };
+
+    // Where the person was (context_json.where from the app's feedback widget), above the raw URL.
+    function fbWhere(row) {
+        var ctx = null;
+        try { ctx = row && row.context_json ? JSON.parse(row.context_json) : null; } catch (e) { ctx = null; }
+        return ctx && ctx.where ? '<br><span class="badge text-bg-light border"><i class="bi bi-geo-alt"></i> ' + esc(String(ctx.where)) + '</span>' : '';
+    }
 
     // Build a plaintext chat transcript from feedback.context_json if present.
     // Returns '' when no chat context is attached.
