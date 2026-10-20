@@ -272,17 +272,20 @@ foreach ($shardConfigs as $shard_name => $cfg) {
         "DELETE FROM user_action_log WHERE expires_at IS NOT NULL AND expires_at < NOW()", []);
     if ($stmt) { $total_deleted += $stmt->rowCount(); }
 
-    // Roll up yesterday's activity into user_action_summary
+    // Roll up yesterday's activity into user_action_summary. page/action go in as '' never
+    // NULL: uq_user_action_day contains both, and NULLs never collide in a unique key, so a
+    // NULL row was never merged and every re-run inserted a fresh copy (2026-10-20).
+    // repair_action_summary.php (minutes/60) removes the copies already there.
     $stmt = db_query_shard_prepared($shard_name,
         "INSERT INTO user_action_summary
             (user_id, device_id, source_app, page, action, day,
              event_count, avg_duration_ms, first_seen, last_seen, terminal_action_count)
-         SELECT user_id, device_id, source_app, page, action, DATE(created),
+         SELECT user_id, device_id, source_app, IFNULL(page, ''), IFNULL(action, ''), DATE(created),
                 COUNT(*), AVG(duration_ms), MIN(created), MAX(created),
                 SUM(CASE WHEN result = 'success' THEN 1 ELSE 0 END)
          FROM user_action_log
          WHERE created >= ? AND created < ?
-         GROUP BY user_id, device_id, source_app, page, action, DATE(created)
+         GROUP BY user_id, device_id, source_app, IFNULL(page, ''), IFNULL(action, ''), DATE(created)
          ON DUPLICATE KEY UPDATE
             event_count = event_count + VALUES(event_count),
             last_seen = GREATEST(last_seen, VALUES(last_seen)),

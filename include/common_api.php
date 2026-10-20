@@ -50,8 +50,11 @@ if (preg_match('/^Bearer\s+(wn_sk_.+)$/i', $authHeader, $m)) {
     }
 }
 
-// 6c. Device tracking — identify API callers via cookie or X-Wn-Device header
-if (function_exists('get_or_create_device')) {
+// 6c. Device tracking — identify API callers via cookie or X-Wn-Device header.
+// A server calling with a service key and no device id is not a device: until 2026-10-20 each
+// such call minted a new device row (nokemo's monitor: ~18k a day on ContactSwipe).
+$__wn_service_only = $_SERVICE_API_KEY && empty($_SERVER['HTTP_X_WN_DEVICE']) && empty($_COOKIE['wn_device']);
+if (function_exists('get_or_create_device') && !$__wn_service_only) {
     try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }
 }
 

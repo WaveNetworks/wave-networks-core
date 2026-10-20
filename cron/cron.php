@@ -6,9 +6,16 @@
  *
  * Scans folder-based schedule directories and runs matching jobs:
  *   minutes/{N}/*.php  — every N minutes (1, 5, 10, 15, 30, etc.)
- *   days/{day}/*.php   — on that day of the month (1-31)
- *   weeks/{dow}/*.php  — on that ISO day of week (1=Mon..7=Sun)
- *   months/{month}/*.php — on the 1st of that month (1-12)
+ *   days/{N}/*.php     — ONCE every N days (days/1 = once a day, the first run after 00:00 UTC)
+ *   weeks/{dow}/*.php  — ONCE on that ISO day of week (1=Mon..7=Sun)
+ *   months/{month}/*.php — ONCE on the 1st of that month (1-12)
+ *
+ * Until 2026-10-20 days/{N} meant "day N of the month" and ran on EVERY minute's run that
+ * day: the "daily" cleanups in days/1 ran ~1440 times on the 1st and never otherwise, so
+ * logs were trimmed once a month, and the action-log roll-up inserted the same day 1440
+ * times (ContactSwipe: 8.6M summary rows holding 321 facts). Every job in days/1 was
+ * written as daily, so days/{N} now means "every N days", like minutes/{N}, and each
+ * period runs once (cron_once, a marker per schedule under $files_location/cron_state/).
  */
 
 // CLI only
@@ -26,6 +33,25 @@ $today    = (int)date('j');   // Day of month (1-31)
 $dow      = (int)date('N');   // ISO day of week (1=Mon..7=Sun)
 $month    = (int)date('n');   // Month (1-12)
 $cronDir  = __DIR__;
+
+/**
+ * True the first time it is asked for $key in $period (e.g. 'days-1', '2026-10-20'), false
+ * after. Holds a lock while deciding, so two overlapping minute runs never both start a job.
+ * No writable state dir = false (skip) rather than a run every minute.
+ */
+function cron_once($key, $period) {
+    global $files_location;
+    $dir = rtrim((string) ($files_location ?: sys_get_temp_dir()), '/') . '/cron_state/';
+    if (!is_dir($dir)) { @mkdir($dir, 0700, true); }
+    $fh = @fopen($dir . preg_replace('/[^A-Za-z0-9_.-]/', '_', $key), 'c+');
+    if (!$fh) { return false; }
+    if (!flock($fh, LOCK_EX | LOCK_NB)) { fclose($fh); return false; }
+    $last = trim((string) stream_get_contents($fh));
+    $due = $last !== (string) $period;
+    if ($due) { ftruncate($fh, 0); rewind($fh); fwrite($fh, (string) $period); fflush($fh); }
+    flock($fh, LOCK_UN); fclose($fh);
+    return $due;
+}
 
 echo "Cron started: " . date('Y-m-d H:i:s') . "\n";
 
@@ -64,16 +90,23 @@ if ($minuteDirs) {
     }
 }
 
-// ── Daily jobs: cron/days/{day_of_month}/*.php ──
-run_jobs_in_dir($cronDir . '/days/' . $today . '/', 'day/' . $today);
+// ── Day jobs: cron/days/{N}/*.php — once every N days ──
+$epochDay = intdiv(time(), 86400);
+foreach (glob($cronDir . '/days/*', GLOB_ONLYDIR) ?: [] as $dDir) {
+    $every = (int) basename($dDir);
+    if ($every > 0 && $epochDay % $every === 0 && cron_once('days-' . $every, date('Y-m-d'))) {
+        run_jobs_in_dir($dDir . '/', 'day/' . $every);
+    }
+}
 
-// ── Weekly jobs: cron/weeks/{day_of_week}/*.php ──
+// ── Weekly jobs: cron/weeks/{day_of_week}/*.php — once on that weekday ──
 // ISO day of week: 1=Monday, 7=Sunday
-run_jobs_in_dir($cronDir . '/weeks/' . $dow . '/', 'week/' . $dow);
+if (is_dir($cronDir . '/weeks/' . $dow) && cron_once('weeks-' . $dow, date('o-\WW'))) {
+    run_jobs_in_dir($cronDir . '/weeks/' . $dow . '/', 'week/' . $dow);
+}
 
-// ── Monthly jobs: cron/months/{month}/*.php ──
-// Only run on the 1st of the month
-if ($today === 1) {
+// ── Monthly jobs: cron/months/{month}/*.php — once on the 1st of that month ──
+if ($today === 1 && is_dir($cronDir . '/months/' . $month) && cron_once('months-' . $month, date('Y-m'))) {
     run_jobs_in_dir($cronDir . '/months/' . $month . '/', 'month/' . $month);
 }
 
