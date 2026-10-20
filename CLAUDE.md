@@ -705,6 +705,12 @@ publish from the admin page), apiResetLegalHistory (confirm=<type>:<app>): wn_le
 every version of ONE app's document and publishes the given text as 1.0, re-acceptance off. It is the only
 code allowed to delete consent_version rows (legal-versioning-probe); acceptances stay in user_consent, so
 earlier acceptors get the one-tap 'first' notice. The whole-site ('') document can't be reset.
+More documents (2026-10-20): an app or sub-admin declares them in its legal.json "documents"
+({"beta_agreement": {"title", "word", "path", "default"}}). Versioned, seeded, edited on Privacy & Terms
+(tab shown for that app only) and served at <mount>/<path> exactly like the core two, but NOT account
+documents (wn_legal_account_types() = privacy + terms only): never in sign-up, the notice or the gate;
+the declaring app asks for it where it applies. wn_legal_app()'s fallback skips sub-admins (beta/ sorted
+before contactsweep/ and became "the app" for admin pages and the device API).
 
 ### Child app usage
 Child apps get all GDPR functions for free via common.php include chain.

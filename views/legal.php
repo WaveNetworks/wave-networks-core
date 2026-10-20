@@ -16,11 +16,11 @@ if (!has_role('admin')) {
     exit;
 }
 
-$types = wn_legal_types();
 $apps  = wn_legal_apps();
-$type  = isset($types[$_GET['type'] ?? '']) ? $_GET['type'] : 'privacy_policy';
-$app   = (string) ($_GET['app'] ?? (count($apps) ? array_key_first($apps) : ''));
+$app   = (string) ($_GET['app'] ?? wn_legal_app());   // the deployment's app, never a sub-admin by default
 if ($app !== '' && !isset($apps[$app])) $app = '';
+$types = wn_legal_types($app === '' ? '' : $app);     // Privacy + Terms, plus what this app declares (legal.json "documents")
+$type  = isset($types[$_GET['type'] ?? '']) ? $_GET['type'] : 'privacy_policy';
 
 $versions = wn_legal_versions($type, $app);
 $current  = wn_legal_current($type, $app);
