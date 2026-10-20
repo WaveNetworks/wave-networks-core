@@ -104,12 +104,6 @@
                     </a>
                 </nav>
             </div>
-            <?php foreach (function_exists('subadmin_registry') ? subadmin_registry() : [] as $sub) { ?>
-            <a class="nav-link text-white" href="<?= h($sub['url']) ?>" data-subadmin="<?= h($sub['slug']) ?>">
-                <i class="bi <?= h($sub['icon']) ?> sidebar-icon"></i>
-                <span class="sidebar-text"><?= h($sub['name']) ?></span>
-            </a>
-            <?php } ?>
             <a class="nav-link text-white <?= ($page ?? '') === 'notification_admin' ? 'active bg-primary rounded' : '' ?>" href="index.php?page=notification_admin">
                 <i class="bi bi-bell-fill sidebar-icon"></i>
                 <span class="sidebar-text">Notification Admin</span>
@@ -308,18 +302,22 @@
         if (is_dir($publicHtml)) {
             foreach (scandir($publicHtml) as $dir) {
                 if ($dir === '.' || $dir === '..' || $dir === 'admin') continue;
-                // Sub-admins (subadmin.json) are in the sidebar, not child apps.
+                // Sub-admins (subadmin.json) are listed below with their own name + icon.
                 if (is_dir($publicHtml . $dir) && file_exists($publicHtml . $dir . '/app/index.php') && !file_exists($publicHtml . $dir . '/subadmin.json')) {
                     $childApps[] = $dir;
                 }
             }
         }
+        $subAdmins = function_exists('subadmin_registry') ? subadmin_registry() : [];
         ?>
-        <?php if (!empty($childApps)) { ?>
+        <?php if (!empty($childApps) || !empty($subAdmins)) { ?>
         <footer class="app-footer px-4 py-2 d-flex align-items-center border-top border-secondary border-opacity-25">
             <nav class="small">
                 <?php foreach ($childApps as $appDir) { ?>
                 <a href="../../<?= h($appDir) ?>/app/" class="badge bg-primary bg-opacity-75 text-decoration-none me-1"><i class="bi bi-box-arrow-up-right me-1"></i><?= h(ucwords(str_replace('-', ' ', $appDir))) ?></a>
+                <?php } ?>
+                <?php foreach ($subAdmins as $sub) { ?>
+                <a href="<?= h($sub['url']) ?>" class="badge bg-primary bg-opacity-75 text-decoration-none me-1" data-subadmin-footer="<?= h($sub['slug']) ?>"><i class="bi <?= h($sub['icon']) ?> me-1"></i><?= h($sub['name']) ?></a>
                 <?php } ?>
             </nav>
         </footer>

@@ -19,7 +19,7 @@ one-offs.
   "slug": "social-media",            // repo name
   "name": "Social media",            // menu label
   "mount": "social",                 // public_html/<mount>/
-  "icon": "bi-megaphone",            // bootstrap-icons class for the admin sidebar
+  "icon": "bi-megaphone",            // bootstrap-icons class for its admin footer pill
   "requires_core": ">=main",         // admin core version it needs
   "db": "none",                      // none | single | sharded  (drives nokemo's onboarding)
   "scopes": [],                      // API scopes it adds
@@ -58,13 +58,13 @@ One generic block reads the repo variable `SUBADMINS="help-desk,social-media"` (
 For each it checks out `WaveNetworks/<repo>` at main, lints it, reads `mount` from its
 manifest and rsyncs it to `public_html/<mount>/` (`--delete` scoped to that dir, `config/`
 excluded). A sub-admin that is mounted on the host but no longer listed has its
-`subadmin.json` removed — it drops out of the registry and the sidebar; its code and data are
+`subadmin.json` removed — it drops out of the registry and the footer; its code and data are
 left alone (offboarding data is a separate, explicit step).
 
 ## Registry (this repo)
 `subadmin_registry()` (`include/common/subadminFunctions.php`) lists sibling directories whose
-`subadmin.json` names that directory as its mount. The admin sidebar renders one entry per
-mounted sub-admin; `subadmin_scopes()` returns the scopes they declare, and
+`subadmin.json` names that directory as its mount. Admin's footer shows one pill per mounted sub-admin
+(owner 2026-10-20: a pill at the bottom, like the child apps, never an admin sidebar entry); `subadmin_scopes()` returns the scopes they declare, and
 `get_available_scopes()` offers them for API keys (an `api-scopes.json` description wins).
 
 ## Following sub-admin changes
