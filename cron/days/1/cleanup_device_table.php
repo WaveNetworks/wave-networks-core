@@ -78,19 +78,26 @@ $ids = [];
 $r = db_query_prepared(
     "SELECT device_id FROM device
       WHERE user_id > 0
+        AND NOT EXISTS (SELECT 1 FROM api_key k WHERE k.device_id = device.device_id)
         AND COALESCE(last_used, created) < DATE_SUB(NOW(), INTERVAL ? DAY)",
     [$signed_days]);
 while ($row = db_fetch($r)) { $ids[] = $row['device_id']; }
 $prune_ids($ids);
 
+// The cap counts and prunes only devices WITHOUT a login token. A token (phone app, AI
+// assistant / MCP, OAuth) does not touch its device's last_used when it is used, so by
+// last_used a token in daily use looks idle: on 2026-10-20, the first daily run (cron.php used
+// to run this only on the 1st) signed the owner's ContactSwipe assistant token out by pruning
+// its device. Tokens expire on their own (cleanup_expired_tokens.php, key_born + 90 days).
+$no_token = "NOT EXISTS (SELECT 1 FROM api_key k WHERE k.device_id = device.device_id)";
 $over = db_query_prepared(
-    "SELECT user_id FROM device WHERE user_id > 0
+    "SELECT user_id FROM device WHERE user_id > 0 AND $no_token
       GROUP BY user_id HAVING COUNT(*) > ?", [$max_per_user]);
 $over_users = [];
 while ($row = db_fetch($over)) { $over_users[] = (int)$row['user_id']; }
 foreach ($over_users as $uid) {
     $ids = [];
-    $r = db_query("SELECT device_id FROM device WHERE user_id = '$uid'
+    $r = db_query("SELECT device_id FROM device WHERE user_id = '$uid' AND $no_token
                     ORDER BY COALESCE(last_used, created) DESC, device_id DESC
                     LIMIT 18446744073709551615 OFFSET $max_per_user");
     while ($row = db_fetch($r)) { $ids[] = $row['device_id']; }
