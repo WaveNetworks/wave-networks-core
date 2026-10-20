@@ -70,3 +70,13 @@ mounted sub-admin; `subadmin_scopes()` returns the scopes they declare, and
 ## Following sub-admin changes
 `subadmin-follow.yml` in each app redeploys when a sub-admin listed in `SUBADMINS` has moved
 on main since the app's last deploy (same idea as `core-follow.yml`).
+
+## UI — same structure and theme as admin
+A sub-admin's staff pages are admin pages: `<mount>/app/index.php` routes `?page=` to `<mount>/views/`,
+wrapped by `<mount>/views/template.php`, which mirrors `admin/views/template.php` (dark sidebar with the
+sub-admin's own nav + "Back to admin", topnav with bell / colour mode / theme switcher / user menu,
+`admin/snippets/feedback.php` flash). Forms are plain posts to action files in
+`<mount>/include/actions/memberActions/`; JS uses `apiPost()` against `<mount>/api/index.php`.
+Theme: `get_theme_css_url('../../admin/', '../../')` and `core_asset_url($rel, '../../admin/')`; set
+`<html data-wn-core="../../admin/">` so core's theme.js and notifications.js resolve core files from a
+page outside `admin/app/`. Reference: help-desk.

@@ -308,7 +308,8 @@
         if (is_dir($publicHtml)) {
             foreach (scandir($publicHtml) as $dir) {
                 if ($dir === '.' || $dir === '..' || $dir === 'admin') continue;
-                if (is_dir($publicHtml . $dir) && file_exists($publicHtml . $dir . '/app/index.php')) {
+                // Sub-admins (subadmin.json) are in the sidebar, not child apps.
+                if (is_dir($publicHtml . $dir) && file_exists($publicHtml . $dir . '/app/index.php') && !file_exists($publicHtml . $dir . '/subadmin.json')) {
                     $childApps[] = $dir;
                 }
             }
