@@ -25,7 +25,8 @@ one-offs.
   "scopes": [],                      // API scopes it adds
   "cron": [],                        // [{"path":"cron/x.php","every":"1m"}]
   "settings": {},                    // settings schema: key => {type,label,default}
-  "extension_points": [],            // app-side hooks it offers
+  "hooks": "include/hooks.php",      // optional: registers its wn_hook_provide() providers
+  "extension_points": [],            // the hooks it offers: [{name, payload, result}]
   "onboarding": []                   // ordered steps nokemo's Sub-admins panel runs
 }
 ```
@@ -80,3 +81,15 @@ sub-admin's own nav + "Back to admin", topnav with bell / colour mode / theme sw
 Theme: `get_theme_css_url('../../admin/', '../../')` and `core_asset_url($rel, '../../admin/')`; set
 `<html data-wn-core="../../admin/">` so core's theme.js and notifications.js resolve core files from a
 page outside `admin/app/`. Reference: help-desk.
+
+## Hooks — how an app talks to a sub-admin
+`include/common/hookFunctions.php`. A sub-admin that offers hooks names a hooks file in its manifest
+(`"hooks": "include/hooks.php"`), which calls `wn_hook_provide('<prefix>.<what>', fn(array $p): array)`
+for each one and lists them under `extension_points`. The app calls `wn_hook($name, $payload)` and gets
+`['ok', 'available', 'result', 'error']`; core loads every mounted sub-admin's hooks file once, in-process,
+the first time any hook is called. So an app never `require`s a sub-admin's internal files and holds no
+key for it, and a sub-admin that is not mounted or not configured answers `available=false` / an error
+instead of breaking the app. A provider loads its own helpers and refuses with `['error' => …]`.
+Data flows app → sub-admin through hooks; sub-admin → app through a hook the app polls (an event
+feed with a cursor), never by the sub-admin loading app code. `scripts/hook-probe.php` (deploy check)
+holds the contract.
