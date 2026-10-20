@@ -719,6 +719,22 @@ compared a PHP `scheduled_at` against `NOW()`, and ContactSwipe's UTC reminders 
 change are in the old local zone and were left alone, so timestamps from 2026-09-18 until the
 next DST end read an hour earlier than the rows above them.
 
+**Encrypted backups (off until a key is set).** `include/common/backupFunctions.php` +
+`scripts/wn-backup.php` + `cron/minutes/60/backup.php`. Once a day (`$backup_hour_utc`, default 10;
+catch-up if the newest is over 36h old) the cron spawns `wn-backup.php run`, which streams EVERY
+database this deployment owns (admin main, `$shardConfigs`, each sibling child app's main + shards,
+every shard_config row, the same list as db_size_known_databases()) plus `$files_location`
+(minus `sessions/` and symlinks) into ONE file encrypted to a backup PUBLIC key: X25519 sealed box
+for a per-file key + crypto_secretstream frames, plaintext never on disk. The host can write a
+backup and never read one. Key: `$backup_public_key` in config.php or `<backup dir>/backup.pub`;
+backup dir = `$backup_dir` or `backups/` beside `files/` (above public_html, 0700); newest
+`$backup_keep_local` (3) kept; each `.wnbk` has a plain `.json` manifest (table row counts, file
+count, ciphertext sha256, no user data) so a puller checks it without decrypting. The PRIVATE key
+lives with the owner only (p3sig vault + offline copy) — never on a host, never on a key server.
+`wn-backup.php keygen|verify|restore` run anywhere with php + sodium, no app config. Runs log to
+cron_log (`job = backup`); failures go to the error log. Test: `tests/backup-roundtrip-test.sh`
+(Docker MariaDB, needs pdo_mysql).
+
 **Schema drift watches itself.** `cron/minutes/60/schema_audit.php` runs `schema_audit_run()`
 once a day over core main + shards and every child app on the deployment (the same engine as
 the `apiSchemaAudit` API action), writes the summary to `cron_log` (`job = schema_audit`, read
