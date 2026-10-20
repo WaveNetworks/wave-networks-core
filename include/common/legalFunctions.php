@@ -321,6 +321,51 @@ function wn_legal_seed_default($type, $app) {
     ], null, 'app default');
 }
 
+// ── Starting over ────────────────────────────────────────────────────────────
+
+/**
+ * Replace ONE document's whole history in ONE app with a single version 1.0 (owner 2026-10-20:
+ * a home address sat in every published version — "delete all of them and start with the
+ * latest"). Every published version of ($type, $app) and its draft are deleted, then $f is
+ * published as 1.0, effective today, asking nobody to accept again. The ONLY code allowed to
+ * delete consent_version rows (scripts/legal-versioning-probe.php holds it to that).
+ *
+ * Other documents, other apps and the whole-site scope ('') are never touched. Acceptances of
+ * the removed versions stay in user_consent as the audit trail (append-only); since none of
+ * them is for the new 1.0, those users are asked once ('first', the in-app notice) to accept it.
+ * $f: content (required), title, summary (default "First published version.").
+ * @return array ['version_id', 'version_label', 'removed' => versions deleted] or ['errors' => [...]]
+ */
+function wn_legal_reset_history($type, $app, array $f, $actor_id = null, $actor_name = null) {
+    $app = (string) $app;
+    if (!isset(wn_legal_types()[$type])) return ['errors' => ['type' => 'Unknown document type.']];
+    if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $app)) return ['errors' => ['app' => 'Starting over is per app; the whole-site document keeps its history.']];
+    if (trim((string) ($f['content'] ?? '')) === '') return ['errors' => ['content' => 'The document is empty.']];
+    $db = wn_legal_db();
+    if (!$db) return ['errors' => ['db' => 'No database.']];
+    $own = !$db->inTransaction();
+    try {
+        if ($own) $db->beginTransaction();
+        $old = wn_legal_q("SELECT version_id FROM consent_version WHERE consent_type = ? AND app_slug = ?", [$type, $app]);
+        $st = $db->prepare("DELETE FROM consent_version WHERE consent_type = ? AND app_slug = ?");
+        $st->execute([$type, $app]);
+        $db->prepare("DELETE FROM consent_version_draft WHERE consent_type = ? AND app_slug = ?")->execute([$type, $app]);
+        $res = wn_legal_publish($type, $app, [
+            'content' => (string) $f['content'], 'title' => (string) ($f['title'] ?? ''),
+            'summary' => trim((string) ($f['summary'] ?? '')) ?: 'First published version.',
+            'requires_reacceptance' => 0, 'version_label' => '1.0', 'effective_date' => wn_legal_today(),
+        ], $actor_id, $actor_name);
+        if (!empty($res['errors'])) { if ($own) $db->rollBack(); return $res; }
+        if ($own) $db->commit();
+    } catch (Throwable $e) {
+        if ($own && $db->inTransaction()) $db->rollBack();
+        error_log('legal reset: ' . $e->getMessage());
+        return ['errors' => ['db' => 'The history could not be reset; nothing changed.']];
+    }
+    error_log('legal: ' . $type . ' for ' . $app . ' started over as 1.0 by ' . ($actor_name ?: 'unknown') . ' (' . count($old) . ' version(s) removed)');
+    return $res + ['removed' => count($old)];
+}
+
 // ── Acceptance ───────────────────────────────────────────────────────────────
 
 function wn_legal_ip_hash($ip = null) {

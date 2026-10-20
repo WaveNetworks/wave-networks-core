@@ -98,6 +98,8 @@ function core_available_scopes() {
         'experiments:read'  => 'Read active A/B experiment summaries (significance, guardrails, staleness) for the heartbeat watchdog',
         'experiments:write' => 'Conclude experiments and record the winning variant (manual ship-the-winner step)',
         'shards:admin'      => 'List, register, test, migrate and retire shard databases (shard registry)',
+        'legal:read'        => 'Read Privacy Policy / Terms versions, the text in force and the draft',
+        'legal:write'       => 'Save Privacy Policy / Terms drafts for staff to publish, and start one app\'s document over as 1.0',
     ];
 }
 
@@ -120,6 +122,7 @@ function monitor_key_scopes() {
         'credentials:read', 'credentials:write',
         'actions:read', 'tests:write', 'tests:read',
         'media:read', 'media:write',
+        'legal:read', 'legal:write',
     ];
     return array_values(array_unique(array_merge($core, child_monitor_key_scopes())));
 }

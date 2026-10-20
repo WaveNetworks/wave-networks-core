@@ -692,13 +692,19 @@ DRAFT (consent_version_draft) in markdown per app (app_slug = child dir, '' = wh
 publishing inserts a NEW consent_version row (label, effective_date — today or scheduled —
 summary = "what changed", requires_reacceptance, published_by/_at, content_sha256). A published
 row is NEVER updated or deleted (scripts/legal-versioning-probe.php fails the deploy on any
-UPDATE/DELETE of consent_version). In force = newest published + effective, app's own before ''.
+UPDATE/DELETE of consent_version, bar the one start-over below). In force = newest published + effective, app's own before ''.
 Public: /admin/legal/privacy|terms[/v/<label>] (legal.php; forwards to the app's own page).
 Child extension point: legal.json at the app root ({"privacy_policy": {"path": "privacy",
 "default": "legal/privacy_policy.md"}, ...}) — public path + text seeded as 1.0.
 Acceptance: user_consent.source + ip_hash; wn_legal_pending() = what check_reconsent_needed()
 returns; actions getLegalStatus / acceptLegalUpdate; assets/js/legal-notice.js shows the
 one-time notice (web + device shell via build_shell map). Render with wn_legal_render_public().
+API (owner 2026-10-20), include/actions/apiActions/legalApiActions.php, scopes legal:read / legal:write
+(on the monitoring key): apiGetLegalDocument (in force + history + draft), apiSaveLegalDraft (staff then
+publish from the admin page), apiResetLegalHistory (confirm=<type>:<app>): wn_legal_reset_history() deletes
+every version of ONE app's document and publishes the given text as 1.0, re-acceptance off. It is the only
+code allowed to delete consent_version rows (legal-versioning-probe); acceptances stay in user_consent, so
+earlier acceptors get the one-tap 'first' notice. The whole-site ('') document can't be reset.
 
 ### Child app usage
 Child apps get all GDPR functions for free via common.php include chain.
