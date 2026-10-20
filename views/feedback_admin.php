@@ -44,6 +44,7 @@ $stats = get_feedback_stats();
         <span class="badge bg-info" id="statNew">New: <?= $stats['new'] ?></span>
         <span class="badge bg-secondary" id="statReviewed">Reviewed: <?= $stats['reviewed'] ?></span>
         <span class="badge bg-warning text-dark" id="statGrouped">Grouped: <?= $stats['grouped'] ?></span>
+        <span class="badge bg-success" id="statResolved">Resolved: <?= $stats['resolved'] ?? 0 ?></span>
         <span class="badge bg-dark" id="statDismissed">Dismissed: <?= $stats['dismissed'] ?></span>
     </div>
 
@@ -68,6 +69,7 @@ $stats = get_feedback_stats();
                 <option value="new">New</option>
                 <option value="reviewed">Reviewed</option>
                 <option value="grouped">Grouped</option>
+                <option value="resolved">Resolved</option>
                 <option value="dismissed">Dismissed</option>
             </select>
         </div>
@@ -351,6 +353,7 @@ $stats = get_feedback_stats();
                 document.getElementById('statNew').textContent      = 'New: ' + (s.new || 0);
                 document.getElementById('statReviewed').textContent = 'Reviewed: ' + (s.reviewed || 0);
                 document.getElementById('statGrouped').textContent  = 'Grouped: ' + (s.grouped || 0);
+                document.getElementById('statResolved').textContent = 'Resolved: ' + (s.resolved || 0);
                 document.getElementById('statDismissed').textContent= 'Dismissed: ' + (s.dismissed || 0);
                 document.getElementById('badgeNew').textContent     = s.new || 0;
 
@@ -371,6 +374,7 @@ $stats = get_feedback_stats();
                             'new':       '<span class="badge bg-info">New</span>',
                             reviewed:    '<span class="badge bg-secondary">Reviewed</span>',
                             grouped:     '<span class="badge bg-warning text-dark">Grouped</span>',
+                            resolved:    '<span class="badge bg-success">Resolved</span>',
                             dismissed:   '<span class="badge bg-dark">Dismissed</span>'
                         };
 

@@ -392,6 +392,7 @@ function get_feedback_stats() {
         'new'        => $by_status['new'] ?? 0,
         'reviewed'   => $by_status['reviewed'] ?? 0,
         'grouped'    => $by_status['grouped'] ?? 0,
+        'resolved'   => $by_status['resolved'] ?? 0,
         'dismissed'  => $by_status['dismissed'] ?? 0,
         'by_type'    => $by_type,
     ];
