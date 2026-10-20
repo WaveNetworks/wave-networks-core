@@ -93,3 +93,11 @@ instead of breaking the app. A provider loads its own helpers and refuses with `
 Data flows app → sub-admin through hooks; sub-admin → app through a hook the app polls (an event
 feed with a cursor), never by the sub-admin loading app code. `scripts/hook-probe.php` (deploy check)
 holds the contract.
+
+## Legal documents of your own
+A sub-admin with terms of its own (beta-testing's Beta Testing Agreement) declares them in a
+`legal.json` at its root: `{"documents": {"beta_agreement": {"title": "Beta Testing Agreement",
+"word": "beta-agreement", "path": "agreement", "default": "legal/beta_agreement.md"}}}`. Core versions
+it like the Privacy Policy (staff edit and publish on Settings › Privacy & Terms, app = the mount;
+`default` is seeded as 1.0), and the sub-admin serves `<mount>/<path>` with `wn_legal_render_public()`.
+It is never part of account sign-up: record acceptance where the sub-admin asks for it.

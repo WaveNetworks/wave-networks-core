@@ -35,12 +35,44 @@
 
 if (!function_exists('wn_legal_types')) {
 
-/** The documents this system versions: consent_type => labels and the public path word. */
-function wn_legal_types() {
-    return [
-        'privacy_policy'   => ['title' => 'Privacy Policy',   'word' => 'privacy', 'icon' => 'bi-shield-lock'],
-        'terms_of_service' => ['title' => 'Terms of Service', 'word' => 'terms',   'icon' => 'bi-file-earmark-text'],
+/**
+ * The documents this system versions: consent_type => labels and the public path word.
+ * Privacy Policy and Terms are ACCOUNT documents (sign-up, the accept-the-update notice). An app or
+ * sub-admin may declare more in its legal.json "documents" (e.g. beta-testing's Beta Testing
+ * Agreement): versioned, published and served the same way, but never part of account sign-up or
+ * the notice ('account' => false): the app that declares it asks for it where it applies.
+ * $app: only that app's declared documents (null = every app's, for lookups).
+ */
+function wn_legal_types($app = null) {
+    $types = [
+        'privacy_policy'   => ['title' => 'Privacy Policy',   'word' => 'privacy', 'icon' => 'bi-shield-lock', 'account' => true],
+        'terms_of_service' => ['title' => 'Terms of Service', 'word' => 'terms',   'icon' => 'bi-file-earmark-text', 'account' => true],
     ];
+    foreach ($app === null ? array_keys(wn_legal_apps()) : [(string) $app] as $slug) {
+        foreach (wn_legal_declared_documents($slug) as $type => $d) {
+            if (!isset($types[$type])) $types[$type] = $d + ['app' => $slug];
+        }
+    }
+    return $types;
+}
+
+/** Documents an app declares in legal.json "documents": consent_type => title, word, icon, account=false. */
+function wn_legal_declared_documents($app) {
+    $cfg = wn_legal_config($app);
+    $out = [];
+    foreach ((array) ($cfg['documents'] ?? []) as $type => $d) {
+        if (!is_array($d) || !preg_match('/^[a-z][a-z0-9_]{2,48}$/', (string) $type) || in_array($type, ['privacy_policy', 'terms_of_service'], true)) continue;
+        $word = (string) ($d['word'] ?? str_replace('_', '-', $type));
+        if (!preg_match('/^[a-z0-9-]{2,48}$/', $word)) continue;
+        $out[$type] = ['title' => (string) ($d['title'] ?? ucwords(str_replace('_', ' ', $type))), 'word' => $word,
+                       'icon' => (string) ($d['icon'] ?? 'bi-file-earmark-check'), 'account' => false];
+    }
+    return $out;
+}
+
+/** The account documents only (sign-up, the accept-again notice, the sign-in gate). */
+function wn_legal_account_types() {
+    return array_filter(wn_legal_types(), function ($t) { return !empty($t['account']); });
 }
 
 function wn_legal_type_from_word($word) {
@@ -77,7 +109,12 @@ function wn_legal_config($app) {
     if (isset($cache[$app])) return $cache[$app];
     $file = wn_legal_webroot() . '/' . $app . '/legal.json';
     $cfg  = is_file($file) ? json_decode((string) @file_get_contents($file), true) : null;
-    return $cache[$app] = is_array($cfg) ? $cfg : [];
+    $cfg  = is_array($cfg) ? $cfg : [];
+    // A declared document's path/default sit with it; expose them where the core two keep theirs.
+    foreach ((array) ($cfg['documents'] ?? []) as $type => $d) {
+        if (is_array($d) && !isset($cfg[$type]) && !in_array($type, ['name', 'documents'], true)) $cfg[$type] = $d;
+    }
+    return $cache[$app] = $cfg;
 }
 
 /**
@@ -97,7 +134,11 @@ function wn_legal_app() {
         $first = explode('/', substr($script, strlen($root) + 1))[0];
         if (isset($apps[$first])) return $first;
     }
-    foreach ($apps as $slug => $_) return $slug;
+    // The deployment's child app, never a mounted sub-admin (beta/, helpdesk/ also have an app/,
+    // and 'beta' sorts before 'contactsweep'): the same rule as get_post_login_home().
+    foreach ($apps as $slug => $_) {
+        if (!is_file(wn_legal_webroot() . '/' . $slug . '/subadmin.json')) return $slug;
+    }
     return '';
 }
 
@@ -387,7 +428,7 @@ function wn_legal_pending($user_id, $app = null) {
     $uid = (int) $user_id;
     $app = $app === null ? wn_legal_app() : (string) $app;
     $out = [];
-    foreach (wn_legal_types() as $type => $t) {
+    foreach (wn_legal_account_types() as $type => $t) {
         $cur = wn_legal_current($type, $app);
         if (!$cur) continue;
         $scope = (string) $cur['app_slug'];
@@ -428,7 +469,7 @@ function wn_legal_gate_needed($user_id) {
 /** The versions in force, for a sign-up form to show and post back (legal_version_ids). */
 function wn_legal_signup_versions($app = null) {
     $out = [];
-    foreach (wn_legal_types() as $type => $t) {
+    foreach (wn_legal_account_types() as $type => $t) {
         $v = wn_legal_current($type, $app);
         if (!$v) continue;
         $out[$type] = ['version_id' => (int) $v['version_id'], 'version_label' => (string) $v['version_label'],

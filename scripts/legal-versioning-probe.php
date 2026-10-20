@@ -258,6 +258,40 @@ $sk = (string) @file_get_contents($root . '/include/common/serviceApiKeyFunction
     ? ok('the API actions are dispatched, scope-gated (legal:read / legal:write, on the monitoring key) and reset needs confirm=<type>:<app>')
     : bad('legal API actions: ' . implode(', ', $miss2 ?: ['scope or confirm check missing']));
 
+// ── 7. declared documents + the app fallback, in a throwaway deployment ──────
+// legalFunctions.php finds apps from its own location, so it runs in a fresh PHP process from a
+// temp public_html: contactsweep/ (an app), beta/ + helpdesk/ (sub-admins), beta declaring a document.
+if (extension_loaded('pdo_sqlite')) {
+    $tmp = sys_get_temp_dir() . '/legal-probe-' . getmypid();
+    foreach (['admin/include/common', 'contactsweep/app', 'beta/app', 'beta/legal', 'helpdesk/app'] as $d) @mkdir("$tmp/public_html/$d", 0777, true);
+    copy($root . '/include/common/legalFunctions.php', "$tmp/public_html/admin/include/common/legalFunctions.php");
+    foreach (['contactsweep', 'beta', 'helpdesk'] as $a) touch("$tmp/public_html/$a/app/index.php");
+    touch("$tmp/public_html/beta/subadmin.json"); touch("$tmp/public_html/helpdesk/subadmin.json");
+    file_put_contents("$tmp/public_html/beta/legal.json", json_encode(['name' => 'Beta', 'documents' => ['beta_agreement' =>
+        ['title' => 'Beta Testing Agreement', 'word' => 'beta-agreement', 'path' => 'agreement', 'default' => 'legal/beta_agreement.md']]]));
+    file_put_contents("$tmp/public_html/beta/legal/beta_agreement.md", "# Beta\n\nProbe text.\n");
+    file_put_contents("$tmp/run.php", '<?php
+$GLOBALS["db"] = $db = new PDO("sqlite::memory:", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$db->exec("CREATE TABLE consent_version (version_id INTEGER PRIMARY KEY AUTOINCREMENT, consent_type TEXT, version_label TEXT, effective_date TEXT, document_url TEXT, summary TEXT, content TEXT, is_active INTEGER DEFAULT 1, created TEXT, app_slug TEXT NOT NULL DEFAULT \'\', title TEXT, requires_reacceptance INTEGER NOT NULL DEFAULT 1, content_sha256 TEXT, published_by INTEGER, published_by_name TEXT, published_at TEXT)");
+$db->exec("CREATE TABLE consent_version_draft (draft_id INTEGER PRIMARY KEY AUTOINCREMENT, consent_type TEXT, app_slug TEXT NOT NULL DEFAULT \'\', title TEXT, content TEXT, summary TEXT, requires_reacceptance INTEGER DEFAULT 0, effective_date TEXT, updated_by INTEGER, updated_by_name TEXT, updated TEXT)");
+$db->exec("CREATE TABLE user_consent (consent_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, consent_type TEXT, consent_version_id INTEGER, action TEXT, ip_address TEXT, user_agent TEXT, ip_hash TEXT, source TEXT, created TEXT)");
+require __DIR__ . "/public_html/admin/include/common/legalFunctions.php";
+$c = wn_legal_current("beta_agreement", "beta");
+echo json_encode(["app" => wn_legal_app(), "declared" => isset(wn_legal_types()["beta_agreement"]) && !wn_legal_types()["beta_agreement"]["account"],
+  "tabs" => !isset(wn_legal_types("contactsweep")["beta_agreement"]) && isset(wn_legal_types("beta")["beta_agreement"]),
+  "account" => array_keys(wn_legal_account_types()), "seeded" => $c ? $c["version_label"] : null,
+  "url" => wn_legal_public_url("beta_agreement", "beta"), "word" => wn_legal_type_from_word("beta-agreement"),
+  "kept_out" => !isset(wn_legal_pending(5, "beta")["beta_agreement"]) && !isset(wn_legal_signup_versions("beta")["beta_agreement"])]);
+');
+    $r = json_decode((string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg("$tmp/run.php") . ' 2>&1'), true);
+    exec('rm -rf ' . escapeshellarg($tmp));
+    ($r && $r['app'] === 'contactsweep') ? ok("with no request context the app is the child app, never a sub-admin (beta/ sorts first)") : bad('fallback app: ' . json_encode($r['app'] ?? $r));
+    ($r && $r['declared'] && $r['tabs'] && $r['account'] === ['privacy_policy', 'terms_of_service'] && $r['seeded'] === '1.0'
+        && $r['url'] === '/beta/agreement' && $r['word'] === 'beta_agreement' && $r['kept_out'])
+        ? ok('a document declared in legal.json "documents" is versioned (default seeded as 1.0), served at its own path, and kept out of account sign-up and the notice')
+        : bad('declared documents: ' . json_encode($r));
+}
+
 echo $fails
     ? "legal-versioning-probe: FAIL — " . count($fails) . " problem(s).\n"
     : "legal-versioning-probe: OK — " . count($oks) . " checks. Published versions are new rows that never change; acceptance records the version.\n";
