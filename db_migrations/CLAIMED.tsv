@@ -69,3 +69,4 @@ main/6.3	Migration 6.3 for Main Database (oauth_token: sealed Apple refresh toke
 main/6.4	Migration 6.4 for Main Database (login_history.login_method ENUM -> VARCHAR(30) so oauth_google/oauth_apple are kept; task #2461)
 shard/1.4	Migration 1.4 for Shard Database (mark existing feedback receipts read; receipts no longer badge; task #2502)
 main/6.5	Migration 6.5 for Main Database (feedback.status ENUM gains resolved; repair rows the resolved writes blanked; task #2539)
+main/6.6	use_case.audience (internal|user|admin) + manual_section: user journeys feed the help-desk user manual (owner 2026-10-20)

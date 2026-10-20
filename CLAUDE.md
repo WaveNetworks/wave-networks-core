@@ -366,7 +366,7 @@ shard isolation and lose per-tenant data locality.
 | user_action_summary | SHARD | Per-user rolled-up counts (kept forever) |
 | device_action_log | MAIN | Pre-login / anonymous device actions (7d rolling) |
 | feature_metric_daily | MAIN | Cross-user daily feature aggregates (kept forever) |
-| use_case | MAIN | Test infrastructure — named user journeys |
+| use_case | MAIN | Test infrastructure — named user journeys. `audience` (main 6.6): `user` = journeys an app's E2E scenarios register, the source of the help-desk user manual; `admin`; `internal` = static code inventory (default). `manual_section` = its manual chapter |
 | use_case_test_run | MAIN | Test infrastructure — per-run pass/fail records |
 
 Rule of thumb: if a column is `user_id`, it belongs on a shard. If it's

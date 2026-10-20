@@ -5,9 +5,9 @@
  *   apiListTestSessionActions  read user_action_log for the test user
  *                              (is_test_account=1) on a given child app,
  *                              grouped by session, ordered by created.
- *   apiListUseCases            list use_case rows for a source_app
+ *   apiListUseCases            list use_case rows for a source_app (+ audience=user|admin|internal, main 6.6)
  *   apiGetUseCase              fetch a single use_case by id or slug
- *   apiUpsertUseCase           UPSERT a use_case (key: source_app+slug)
+ *   apiUpsertUseCase           UPSERT a use_case (key: source_app+slug; audience + manual_section only when sent)
  *   apiRecordUseCaseTestRun    INSERT a use_case_test_run row
  *   apiListUseCaseTestRuns     list runs for a use_case (latest first)
  *
@@ -315,14 +315,14 @@ if (($action ?? null) == 'apiListUseCases') {
         $limit = max(1, min(500, (int)($_POST['limit'] ?? 100)));
         $sql = "SELECT use_case_id, source_app, slug, name, description,
                        requires_login, starting_page, ending_action, action_path,
-                       test_category, test_status, derived_from_log_count,
+                       test_category, audience, manual_section, test_status, derived_from_log_count,
                        last_seen_at, last_test_run_id, created, updated
                 FROM use_case";
-        $args = [];
-        if ($app !== '') {
-            $sql .= " WHERE source_app = ?";
-            $args[] = $app;
-        }
+        $args = []; $where = [];
+        if ($app !== '') { $where[] = "source_app = ?"; $args[] = $app; }
+        $aud = trim((string)($_POST['audience'] ?? ''));
+        if (in_array($aud, ['internal', 'user', 'admin'], true)) { $where[] = "audience = ?"; $args[] = $aud; }
+        if ($where) $sql .= " WHERE " . implode(' AND ', $where);
         $sql .= " ORDER BY source_app ASC, slug ASC LIMIT $limit";
         $r = db_query_prepared($sql, $args);
         $items = [];
@@ -418,6 +418,16 @@ if (($action ?? null) == 'apiUpsertUseCase') {
                 $app, $slug, $name, $desc, $req,
                 $start ?: null, $end ?: null, $path_json, $cat, $log_count,
             ]);
+            // audience / manual_section (main 6.6) only change when sent, so a caller that predates
+            // them (the static derivation) never resets a journey an app's scenarios marked 'user'.
+            $aud = trim((string)($_POST['audience'] ?? ''));
+            if (in_array($aud, ['internal', 'user', 'admin'], true)) {
+                db_query_prepared("UPDATE use_case SET audience = ? WHERE source_app = ? AND slug = ?", [$aud, $app, $slug]);
+            }
+            if (isset($_POST['manual_section'])) {
+                $sec = mb_substr(trim((string)$_POST['manual_section']), 0, 80);
+                db_query_prepared("UPDATE use_case SET manual_section = ? WHERE source_app = ? AND slug = ?", [$sec !== '' ? $sec : null, $app, $slug]);
+            }
             $r = db_query_prepared(
                 "SELECT * FROM use_case WHERE source_app = ? AND slug = ?",
                 [$app, $slug]
