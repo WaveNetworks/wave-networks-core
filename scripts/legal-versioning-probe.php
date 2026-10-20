@@ -6,7 +6,9 @@
  * Holds include/common/legalFunctions.php to what the admin screen, the public pages and
  * the acceptance records all depend on:
  *   1. nothing in the code UPDATEs, DELETEs, REPLACEs or TRUNCATEs consent_version (a
- *      published version is immutable; drafts live in consent_version_draft);
+ *      published version is immutable; drafts live in consent_version_draft) — except the ONE
+ *      DELETE in wn_legal_reset_history(), which starts one app's document over as 1.0
+ *      (owner 2026-10-20) and is run below;
  *   2. migration main/5.3 is declared and adds what the code reads;
  *   3. RUN against an in-memory SQLite database (the real functions, not a copy):
  *      publishing creates a NEW row with the next number while the old row stays
@@ -43,6 +45,14 @@ foreach ($it as $f) {
     if (substr($p, -4) !== '.php' || strpos($p, '/vendor/') !== false || strpos($p, '/node_modules/') !== false) continue;
     if (realpath($p) === realpath(__FILE__)) continue;
     $src = (string) @file_get_contents($p);
+    if (substr($p, -strlen('/include/common/legalFunctions.php')) === '/include/common/legalFunctions.php') {
+        // The one sanctioned delete: cut wn_legal_reset_history() out, and require exactly one DELETE inside it.
+        if (preg_match('/\nfunction wn_legal_reset_history\(.*?\n}\n/s', $src, $rm)) {
+            $n = preg_match_all('/DELETE\s+FROM\s+`?consent_version`?(?![A-Za-z0-9_])/i', $rm[0]);
+            if ($n !== 1 || preg_match('/\b(UPDATE|REPLACE\s+INTO|TRUNCATE)\s+`?consent_version`?(?![A-Za-z0-9_])/i', $rm[0])) $hits[] = 'wn_legal_reset_history (expected exactly one DELETE, nothing else)';
+            $src = str_replace($rm[0], "\n", $src);
+        }
+    }
     if (preg_match_all('/\b(UPDATE|DELETE\s+FROM|REPLACE\s+INTO|TRUNCATE(?:\s+TABLE)?)\s+`?consent_version`?(?![A-Za-z0-9_])/i', $src, $m)) {
         $hits[] = substr($p, strlen($root) + 1) . ' (' . implode(', ', array_unique($m[1])) . ')';
     }
@@ -50,7 +60,7 @@ foreach ($it as $f) {
         $hits[] = substr($p, strlen($root) + 1) . ' (upsert)';
     }
 }
-$hits ? bad('published versions are rewritten by: ' . implode('; ', $hits)) : ok('nothing in the code updates, deletes or upserts a consent_version row');
+$hits ? bad('published versions are rewritten by: ' . implode('; ', $hits)) : ok('nothing in the code updates, deletes or upserts a consent_version row (bar the one start-over delete)');
 
 // ── 2. migration ─────────────────────────────────────────────────────────────
 $mig = (string) @file_get_contents($root . '/db_migrations/main/5.3.sql');
@@ -186,6 +196,26 @@ if (!extension_loaded('pdo_sqlite')) {
         ? ok('a permalink serves that exact version, marked as not current, with the history (scheduled one hidden)') : bad('permalink page: ' . json_encode(['v' => $pg['version']['version_label'] ?? null, 'h' => count($pg['history'])]));
     wn_legal_public_url('privacy_policy', 'probeapp', '2.0') === '/admin/legal/privacy/v/2.0' ? ok('without legal.json the public URL is /admin/legal/privacy[/v/<n>]') : bad('public url: ' . wn_legal_public_url('privacy_policy', 'probeapp', '2.0'));
 
+    // Starting over: one app's document becomes a single 1.0; everything else is untouched.
+    $db->exec("INSERT INTO consent_version_draft (consent_type, app_slug, content) VALUES ('privacy_policy', 'probeapp', 'old draft')");
+    wn_legal_publish('terms_of_service', 'probeapp', ['content' => "# Terms\n\nKept.", 'summary' => 'Terms.', 'requires_reacceptance' => 0]);
+    $others = $db->query("SELECT * FROM consent_version WHERE NOT (consent_type = 'privacy_policy' AND app_slug = 'probeapp') ORDER BY version_id")->fetchAll(PDO::FETCH_ASSOC);
+    $consents = (int) $db->query("SELECT COUNT(*) FROM user_consent")->fetchColumn();
+    $rs = wn_legal_reset_history('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nClean start.", 'summary' => 'Starts over.'], 1, 'api: probe');
+    $left = wn_legal_versions('privacy_policy', 'probeapp');
+    (($rs['removed'] ?? 0) === 4 && count($left) === 1 && $left[0]['version_label'] === '1.0' && (int) $left[0]['requires_reacceptance'] === 0
+        && $left[0]['content'] === "# Privacy\n\nClean start." && wn_legal_draft('privacy_policy', 'probeapp') === null)
+        ? ok('starting over leaves exactly one version 1.0 with the new text, no draft, re-acceptance off') : bad('reset: ' . json_encode([$rs, $left]));
+    ($db->query("SELECT * FROM consent_version WHERE NOT (consent_type = 'privacy_policy' AND app_slug = 'probeapp') ORDER BY version_id")->fetchAll(PDO::FETCH_ASSOC) === $others
+        && (int) $db->query("SELECT COUNT(*) FROM user_consent")->fetchColumn() === $consents)
+        ? ok('starting over touches no other document or scope, and keeps every acceptance record') : bad('reset touched other rows or acceptances');
+    (($p7 = wn_legal_pending(7)) && ($p7['privacy_policy']['kind'] ?? '') === 'first' && wn_legal_gate_needed(7) === [])
+        ? ok("after starting over, earlier acceptors are asked once in the app ('first'), never blocked at sign-in") : bad('pending after reset: ' . json_encode(array_map(fn($v) => $v['kind'] ?? '?', wn_legal_pending(7))));
+    $rw = wn_legal_reset_history('privacy_policy', '', ['content' => 'x']);
+    $re = wn_legal_reset_history('privacy_policy', 'probeapp', ['content' => '  ']);
+    (!empty($rw['errors']['app']) && !empty($re['errors']['content']) && count(wn_legal_versions('privacy_policy', 'probeapp')) === 1 && count(wn_legal_versions('privacy_policy', '')) === 1)
+        ? ok('the whole-site document can never be started over, and an empty text changes nothing') : bad('reset refusals: ' . json_encode([$rw, $re]));
+
     // Markdown safety.
     $html = wn_legal_markdown("# T <script>alert(1)</script>\n\n[x](javascript:alert(1)) [ok](https://example.org) **b**\n\n- one\n- two");
     (strpos($html, '<script') === false && stripos($html, 'javascript:') === false && strpos($html, '<a href="https://example.org"') !== false && strpos($html, '<li>one</li>') !== false && strpos($html, '<h2>') !== false)
@@ -217,6 +247,16 @@ foreach (['saveLegalDraft', 'discardLegalDraft', 'publishLegalVersion', 'getLega
     if (!preg_match('~\$_POST\[[\'"]action[\'"]\][^;{]{0,40}?==\s*[\'"]' . $a . '[\'"]~', $acts)) $missing[] = $a;
 }
 $missing ? bad('actions not dispatched in the idiom api-envelope reads: ' . implode(', ', $missing)) : ok('the five legal actions are dispatched where the API can see them');
+$la2 = (string) @file_get_contents($root . '/include/actions/apiActions/legalApiActions.php');
+$miss2 = [];
+foreach (['apiGetLegalDocument' => 'legal:read', 'apiSaveLegalDraft' => 'legal:write', 'apiResetLegalHistory' => 'legal:write'] as $a => $sc) {
+    if (!preg_match('~\$action\s*===?\s*[\'"]' . $a . '[\'"]~', $la2)) $miss2[] = $a;
+}
+$sk = (string) @file_get_contents($root . '/include/common/serviceApiKeyFunctions.php');
+(!$miss2 && strpos($la2, "require_api_scope(\$action === 'apiGetLegalDocument' ? 'legal:read' : 'legal:write')") !== false
+    && strpos($la2, "\$type . ':' . \$app") !== false && substr_count($sk, "'legal:write'") >= 2)
+    ? ok('the API actions are dispatched, scope-gated (legal:read / legal:write, on the monitoring key) and reset needs confirm=<type>:<app>')
+    : bad('legal API actions: ' . implode(', ', $miss2 ?: ['scope or confirm check missing']));
 
 echo $fails
     ? "legal-versioning-probe: FAIL — " . count($fails) . " problem(s).\n"
