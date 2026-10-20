@@ -51,3 +51,12 @@ $stripe_public_key = 'pk_live_xxxx';
 $vapid_subject     = 'mailto:admin@yourdomain.com';
 $vapid_public_key  = '';
 $vapid_private_key = '';
+
+// Encrypted backups (include/common/backupFunctions.php) — off until a public key is set.
+// The PRIVATE key never goes on a host: generate with `php scripts/wn-backup.php keygen --out FILE`
+// on your own machine and keep the secret in your vault + offline. Alternatively put the same
+// base64 line in <backup dir>/backup.pub.
+// $backup_public_key = '';          // base64 X25519 public key
+// $backup_hour_utc   = 10;          // daily run hour (UTC)
+// $backup_keep_local = 3;           // backups kept on the host
+// $backup_dir        = '';          // default: backups/ beside files/ (above public_html)
