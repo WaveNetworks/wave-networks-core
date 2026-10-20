@@ -55,6 +55,10 @@ require '$ROOT/include/common/backupFunctions.php';
 function db_size_known_databases() { return ['t_admin' => null,
   't_child' => ['host' => '127.0.0.1;port=$PORT', 'name' => 't_child', 'user' => 'root', 'pass' => 'rootpw']]; }
 if ((\$argv[1] ?? '') === 'pub') { \$GLOBALS['backup_public_key'] = trim(file_get_contents('$WORK/pub')); }
+if ((\$argv[1] ?? '') === 'stream') {
+    try { \$m = wn_backup_stream(wn_backup_parse_public(trim(file_get_contents('$WORK/pub')))); fwrite(STDERR, 'WNBK-MANIFEST ' . json_encode(\$m) . "\\n"); exit(0); }
+    catch (Throwable \$e) { fwrite(STDERR, 'WNBK-FAILED ' . \$e->getMessage() . "\\n"); exit(3); }
+}
 try { \$m = wn_backup_run(2); echo wn_backup_summary(\$m), "\n"; } catch (Throwable \$e) { echo "ERR ", \$e->getMessage(), "\n"; exit(3); }
 PHP
 
@@ -114,6 +118,16 @@ pass "refused: wrong key, flipped byte, truncated file, missing final frame"
 
 php "$ROOT/scripts/wn-backup.php" restore --key "$WORK/secret.txt" --in "$BK" --out "$WORK/r" >/dev/null 2>&1 && die "restore over existing dir"
 pass "restore refuses an existing directory"
+
+# Stream mode: the backup on STDOUT, nothing on the host's disk, the manifest on STDERR.
+before=$(ls "$WORK"/backups | wc -l)
+php "$WORK/run.php" stream > "$WORK/stream.wnbk" 2> "$WORK/stream.err"
+grep -q '^WNBK-MANIFEST ' "$WORK/stream.err" || die "stream: no manifest on stderr"
+sha=$(sed -n 's/^WNBK-MANIFEST //p' "$WORK/stream.err" | php -r 'echo json_decode(stream_get_contents(STDIN), true)["ct_sha256"];')
+[[ "$sha" == "$(sha256sum "$WORK/stream.wnbk" | cut -d' ' -f1)" ]] || die "stream: sha256 mismatch"
+[[ "$(ls "$WORK"/backups | wc -l)" == "$before" ]] || die "stream wrote to the backup dir"
+php "$ROOT/scripts/wn-backup.php" verify --key "$WORK/secret.txt" --in "$WORK/stream.wnbk" | tail -1 | grep -q "verify OK" || die "stream verify"
+pass "stream: encrypted backup on stdout verifies, manifest on stderr, nothing on the host's disk"
 
 sleep 1; php "$WORK/run.php" pub >/dev/null; sleep 1; php "$WORK/run.php" pub >/dev/null
 [[ $(ls "$WORK"/backups/*.wnbk | wc -l) == 2 && $(ls "$WORK"/backups/*.json | wc -l) == 2 ]] || die "local retention"

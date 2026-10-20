@@ -742,6 +742,9 @@ backup dir = `$backup_dir` or `backups/` beside `files/` (above public_html, 070
 `$backup_keep_local` (3) kept; each `.wnbk` has a plain `.json` manifest (table row counts, file
 count, ciphertext sha256, no user data) so a puller checks it without decrypting. The PRIVATE key
 lives with the owner only (p3sig vault + offline copy) — never on a host, never on a key server.
+`wn-backup.php stream --pub B64` writes the same encrypted stream to STDOUT (manifest as the last
+STDERR line, "WNBK-MANIFEST {json}") and nothing to the host's disk: the backup box starts it over
+SSH on hosts whose cron kills long jobs (StackCP killed the cron-started run ~3 min in, 2026-10-20).
 `wn-backup.php keygen|verify|restore` run anywhere with php + sodium, no app config. Runs log to
 cron_log (`job = backup`); failures go to the error log. Test: `tests/backup-roundtrip-test.sh`
 (Docker MariaDB, needs pdo_mysql).

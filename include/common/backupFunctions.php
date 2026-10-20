@@ -74,9 +74,9 @@ function wn_backup_key_id($pk_raw) {
 
 // ─── WRITER ─────────────────────────────────────────────────────────────────
 
-/** Open $path for writing a backup to $pk_raw. Returns the writer state. */
+/** Open $path (a new file, or an already-open stream such as STDOUT) for writing a backup to $pk_raw. */
 function wn_backup_writer_open($path, $pk_raw, array $meta = []) {
-    $fh = fopen($path, 'xb');
+    $fh = is_resource($path) ? $path : fopen($path, 'xb');
     if (!$fh) { throw new RuntimeException("cannot create $path"); }
     $key = sodium_crypto_secretstream_xchacha20poly1305_keygen();
     [$state, $ssh] = sodium_crypto_secretstream_xchacha20poly1305_init_push($key);
@@ -131,7 +131,8 @@ function wn_backup_flush(array &$w) {
 function wn_backup_writer_close(array &$w, array $manifest) {
     wn_backup_flush($w);
     wn_backup_frame($w, 'm' . json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), true);
-    if (!fflush($w['fh']) || !fclose($w['fh'])) { throw new RuntimeException('backup close failed'); }
+    if (!fflush($w['fh'])) { throw new RuntimeException('backup close failed'); }
+    if (empty($w['keep_open']) && !fclose($w['fh'])) { throw new RuntimeException('backup close failed'); }
     return [$w['bytes'], hash_final($w['hash'])];
 }
 
@@ -410,6 +411,29 @@ function wn_backup_run($keep = 3) {
     }
     flock($lock, LOCK_UN);
     return $plain;
+}
+
+/**
+ * Stream one backup to STDOUT, encrypted to $pk_raw, and return the plain manifest (the
+ * caller prints it on STDERR). Nothing touches the host's disk. For hosts whose cron kills a
+ * long job (StackCP: the cron-started run died ~3 min in): the backup box starts this over
+ * SSH and keeps the stream (openclaw-ops scripts/backup-pull.py, mode "stream").
+ */
+function wn_backup_stream($pk_raw) {
+    @set_time_limit(0);
+    $slug = wn_backup_slug();
+    $started = time();
+    $created = gmdate('Y-m-d\TH:i:s\Z', $started);
+    $manifest = ['v' => 1, 'app' => $slug, 'created' => $created, 'key_id' => wn_backup_key_id($pk_raw), 'databases' => [], 'files' => null];
+    $out = fopen('php://stdout', 'wb');
+    $w = wn_backup_writer_open($out, $pk_raw, ['app' => $slug, 'created' => $created]);
+    $w['keep_open'] = true;
+    foreach (wn_backup_databases() as $name => $conn) { $manifest['databases'][$name] = wn_backup_dump_db($w, $conn); }
+    $files = (string) ($GLOBALS['files_location'] ?? '');
+    if ($files !== '') { $manifest['files'] = wn_backup_dump_files($w, $files); }
+    $manifest['finished'] = gmdate('Y-m-d\TH:i:s\Z');
+    [$bytes, $sha] = wn_backup_writer_close($w, $manifest);
+    return $manifest + ['file' => 'wnbk-' . $slug . '-' . gmdate('Ymd-His', $started) . 'Z.wnbk', 'ct_bytes' => $bytes, 'ct_sha256' => $sha];
 }
 
 /** The newest finished backup's plain manifest in the dir, or null. */

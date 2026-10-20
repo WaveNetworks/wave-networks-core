@@ -4,6 +4,11 @@
  *
  * On the host (bootstraps the app):
  *   php scripts/wn-backup.php run        make a backup now (also what the cron spawns)
+ *   php scripts/wn-backup.php stream --pub B64
+ *       Write the encrypted backup to STDOUT (nothing on the host's disk) and its plain
+ *       manifest as the last STDERR line: "WNBK-MANIFEST {json}". Started over SSH by the
+ *       backup box on hosts whose cron kills long jobs. The public key comes on the command
+ *       line (it is public); the host needs no backup.pub for this.
  *   php scripts/wn-backup.php status     is a key set, where, the newest backup
  *
  * Anywhere with php + sodium (no app config needed):
@@ -31,7 +36,14 @@ for ($i = 2; $i < count($argv); $i++) {
 }
 function fail($msg) { fwrite(STDERR, "wn-backup: $msg\n"); exit(1); }
 
-if ($cmd === 'run' || $cmd === 'status') {
+if ($cmd === 'stream') {
+    // STDOUT is the backup: warnings go to STDERR, and anything the bootstrap prints is moved there.
+    ini_set('display_errors', 'stderr');
+    ob_start();
+    include __DIR__ . '/../include/common_readonly.php';
+    $junk = ob_get_clean();
+    if ($junk !== '' && $junk !== false) { fwrite(STDERR, $junk); }
+} elseif ($cmd === 'run' || $cmd === 'status') {
     include __DIR__ . '/../include/common_readonly.php';
 } else {
     require_once __DIR__ . '/../include/common/backupFunctions.php';
@@ -189,6 +201,20 @@ case 'run':
     $line = wn_backup_summary($m);
     if (function_exists('log_cron')) { log_cron('backup', $line); }
     echo "backup OK $line\n";
+    break;
+
+case 'stream':
+    $pk = wn_backup_parse_public(is_string($opt['pub'] ?? null) ? $opt['pub'] : '');
+    if (!$pk) { fail('--pub <base64 public key> is required'); }
+    try {
+        $m = wn_backup_stream($pk);
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'WNBK-FAILED ' . $e->getMessage() . "\n");
+        if (function_exists('log_error_to_db')) { log_error_to_db('ERROR', 'Backup stream failed: ' . $e->getMessage(), __FILE__, __LINE__, null); }
+        exit(1);
+    }
+    if (function_exists('log_cron')) { log_cron('backup', 'streamed ' . wn_backup_summary($m)); }
+    fwrite(STDERR, 'WNBK-MANIFEST ' . json_encode($m, JSON_UNESCAPED_SLASHES) . "\n");
     break;
 
 case 'status':
