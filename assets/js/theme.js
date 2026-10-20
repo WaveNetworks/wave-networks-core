@@ -7,6 +7,9 @@
 
 (function() {
     var selector = document.getElementById('themeSelector');
+    // Pages outside admin/app/ (sub-admins) set <html data-wn-core="../../admin/"> so local
+    // theme files resolve against core, not the page's own folder.
+    var CORE = document.documentElement.getAttribute('data-wn-core') || '../';
     if (!selector) return;
 
     var BOOTSWATCH_API = 'https://bootswatch.com/api/5.json';
@@ -159,7 +162,7 @@
             newLink.onerror = function() {
                 saveTheme('sandstone');
                 setSidebarMode('dark');
-                link.href = '../assets/bootstrap/css/bootstrap.min.css';
+                link.href = CORE + 'assets/bootstrap/css/bootstrap.min.css';
                 newLink.remove();
             };
             newLink.onload = function() {
@@ -171,7 +174,7 @@
         }
 
         if (name === 'default' || name === 'bootstrap') {
-            link.href = '../assets/bootstrap/css/bootstrap.min.css';
+            link.href = CORE + 'assets/bootstrap/css/bootstrap.min.css';
         } else {
             var newLink = document.createElement('link');
             newLink.rel = 'stylesheet';
@@ -179,7 +182,7 @@
             newLink.onerror = function() {
                 // Theme CSS failed to load — fall back to default
                 saveTheme('sandstone');
-                link.href = '../assets/bootstrap/css/bootstrap.min.css';
+                link.href = CORE + 'assets/bootstrap/css/bootstrap.min.css';
                 newLink.remove();
             };
             newLink.onload = function() {

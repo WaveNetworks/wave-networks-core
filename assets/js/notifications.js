@@ -235,7 +235,8 @@
         if (!isPushSupported()) return;
 
         // Register service worker
-        navigator.serviceWorker.register('../sw.js', { scope: '../' })
+        var core = document.documentElement.getAttribute('data-wn-core') || '../';
+        navigator.serviceWorker.register(core + 'sw.js', { scope: core })
             .then(function(registration) {
                 // Check existing subscription
                 return registration.pushManager.getSubscription().then(function(subscription) {
