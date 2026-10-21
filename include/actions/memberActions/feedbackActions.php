@@ -131,6 +131,22 @@ if (($action ?? null) == 'dismissFeedback') {
     }
 }
 
+// ── Set a feedback entry's type (admin) ────────────────────
+// Corrects what the person picked, or the AI's correction; an admin's choice is final (the classifier skips it).
+if (($action ?? null) == 'setFeedbackType') {
+    $errs = array();
+
+    if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (!has_role('admin'))    { $errs['role'] = 'Admin access required.'; }
+
+    if (count($errs) <= 0) {
+        [$ok, $msg] = set_feedback_type($_POST['feedback_id'] ?? 0, trim((string) ($_POST['feedback_type'] ?? '')), 'admin');
+        if ($ok) { $_SESSION['success'] = $msg; } else { $_SESSION['error'] = $msg; }
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
 // ── Delete screenshot from a feedback row (admin) ──────────
 // Lets admins purge a capture if PII slipped through, without nuking
 // the feedback message itself.
