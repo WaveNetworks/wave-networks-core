@@ -402,7 +402,7 @@ $stats = get_feedback_stats();
                         }
 
                         return '<tr>' +
-                            '<td>' + (typeBadges[row.feedback_type] || '') + '</td>' +
+                            '<td>' + fbType(row, typeBadges) + '</td>' +
                             '<td>' + thumb + '<small>' + msg + '</small>' + fbWhere(row) + (row.page_url ? '<br><a href="' + esc(row.page_url) + '" class="text-muted small" target="_blank">' + esc(row.page_url).substring(0, 50) + '</a>' : '') + '</td>' +
                             '<td><small>' + esc(row.user_email || '—') + '<br><span class="text-muted">' + esc(row.user_role || '') + '</span></small></td>' +
                             '<td class="text-center"><span class="badge bg-light text-dark">' + (row.upvotes || 0) + '</span></td>' +
@@ -473,6 +473,35 @@ $stats = get_feedback_stats();
         var fd = new FormData();
         fd.append('action', 'dismissFeedback');
         fd.append('feedback_id', fid);
+        fetch('../api/index.php', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (j) { if (!j.error) loadFeedback(fbPage); });
+    };
+
+    // Type cell: the badge opens a menu to set it (an admin's choice is final). "AI" = the ops box's classifier
+    // changed it; the tooltip says what the person picked and why.
+    function fbType(row, typeBadges) {
+        var badge = typeBadges[row.feedback_type] || esc(row.feedback_type || '');
+        var mark = '';
+        if (row.submitted_type && row.submitted_type !== row.feedback_type) {
+            var who = row.type_source === 'admin' ? 'admin' : 'AI';
+            var tip = 'Sent as ' + row.submitted_type + (row.type_note ? ' — ' + row.type_note : '');
+            mark = ' <span class="badge text-bg-light border" title="' + esc(tip) + '">' + who + '</span>';
+        }
+        var items = ['bug', 'suggestion', 'general'].map(function (t) {
+            return '<li><button class="dropdown-item' + (t === row.feedback_type ? ' active' : '') + '" type="button" onclick="doSetType(' +
+                parseInt(row.feedback_id) + ', \'' + t + '\')">' + t.charAt(0).toUpperCase() + t.slice(1) + '</button></li>';
+        }).join('');
+        return '<div class="dropdown d-inline-block"><button class="btn btn-link p-0 border-0 align-baseline" type="button" ' +
+            'data-bs-toggle="dropdown" data-bs-popper-config=\'{"strategy":"fixed"}\' aria-expanded="false" title="Change the type">' + badge + '</button>' +
+            '<ul class="dropdown-menu dropdown-menu-sm">' + items + '</ul></div>' + mark;
+    }
+
+    window.doSetType = function (fid, type) {
+        var fd = new FormData();
+        fd.append('action', 'setFeedbackType');
+        fd.append('feedback_id', fid);
+        fd.append('feedback_type', type);
         fetch('../api/index.php', { method: 'POST', body: fd })
             .then(function (r) { return r.json(); })
             .then(function (j) { if (!j.error) loadFeedback(fbPage); });

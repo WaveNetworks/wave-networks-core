@@ -232,6 +232,10 @@ function get_feedback_entries($filters = []) {
         $s = sanitize($filters['source_app'], SQL);
         $where[] = "f.source_app = '$s'";
     }
+    if (!empty($filters['type_source'])) {
+        $s = sanitize($filters['type_source'], SQL);
+        $where[] = "f.type_source = '$s'";
+    }
     if (isset($filters['user_id']) && $filters['user_id'] !== '') {
         $uid = intval($filters['user_id']);
         $where[] = "f.user_id = '$uid'";
@@ -294,6 +298,34 @@ function get_feedback_by_id($feedback_id) {
                     LEFT JOIN user u ON u.user_id = f.user_id
                     WHERE f.feedback_id = '$id'");
     return $r ? db_fetch($r) : null;
+}
+
+/**
+ * Correct a feedback entry's type (owner 2026-10-21: people pick "general" for bugs because it's easier).
+ * The first correction keeps what the person picked in submitted_type, so it can be seen and undone.
+ * $source 'ai' = the ops box's classifier: it marks the entry read even when the type stays, and never
+ * overrides a type an admin set. $source 'admin' = a person; always wins.
+ *
+ * @return array [ok bool, message string, changed bool]
+ */
+function set_feedback_type($feedback_id, $type, $source = 'admin', $note = '') {
+    $fid = intval($feedback_id);
+    if (!in_array($type, ['bug', 'suggestion', 'general'], true)) return [false, 'feedback_type must be bug, suggestion or general.', false];
+    if (!in_array($source, ['ai', 'admin'], true)) return [false, 'source must be ai or admin.', false];
+    $fb = get_feedback_by_id($fid);
+    if (!$fb) return [false, 'Feedback not found.', false];
+    if ($source === 'ai' && ($fb['type_source'] ?? 'user') === 'admin') return [true, 'An admin set this type; left as it is.', false];
+
+    $changed   = $fb['feedback_type'] !== $type;
+    $submitted = $fb['submitted_type'] ?? null;
+    if ($changed && $submitted === null) $submitted = $fb['feedback_type'];
+    $t  = sanitize($type, SQL);
+    $sr = sanitize($source, SQL);
+    $n  = trim((string) $note) === '' ? 'NULL' : "'" . sanitize(mb_substr(trim((string) $note), 0, 200), SQL) . "'";
+    $st = $submitted === null ? 'NULL' : "'" . sanitize($submitted, SQL) . "'";
+    $r = db_query("UPDATE feedback SET feedback_type = '$t', submitted_type = $st, type_source = '$sr', type_note = $n WHERE feedback_id = '$fid'");
+    if (!$r) return [false, 'Failed to set the type: ' . db_error(), false];
+    return [true, $changed ? "Type set to $type." : "Type kept as $type.", $changed];
 }
 
 /**

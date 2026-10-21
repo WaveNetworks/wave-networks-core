@@ -3,7 +3,7 @@
  * Feedback API Actions
  * Actions: apiListFeedback, apiGetFeedback, apiSubmitFeedback, apiGetFeedbackStats,
  *          apiListChangeRequests, apiGetChangeRequest, apiCreateChangeRequest,
- *          apiUpdateChangeRequest, apiGroupFeedback, apiUpvoteFeedback
+ *          apiUpdateChangeRequest, apiGroupFeedback, apiUpvoteFeedback, apiSetFeedbackType
  * Authenticated via service API key (Bearer token) with scope gating.
  */
 
@@ -13,6 +13,7 @@ if (($action ?? null) == 'apiListFeedback') {
         $filters = [];
         if (!empty($_POST['feedback_type'])) $filters['feedback_type'] = $_POST['feedback_type'];
         if (!empty($_POST['source_app']))    $filters['source_app']    = $_POST['source_app'];
+        if (!empty($_POST['type_source']))   $filters['type_source']   = $_POST['type_source'];
         if (!empty($_POST['status']))        $filters['status']        = $_POST['status'];
         if (!empty($_POST['search']))        $filters['search']        = $_POST['search'];
         if (isset($_POST['user_id']) && $_POST['user_id'] !== '') $filters['user_id'] = $_POST['user_id'];
@@ -354,6 +355,24 @@ if (($action ?? null) == 'apiMarkFeedbackShipped') {
             $_SESSION['success'] = 'Feedback marked shipped.';
         } else {
             $_SESSION['error'] = implode(' ', $errs);
+        }
+    }
+}
+
+// ── Correct a feedback entry's type ─────────────────────────
+// feedback_id, feedback_type (bug|suggestion|general), source (ai|admin, default ai), note (the reason).
+// The nokemo ops box's classifier reads entries still type_source=user (apiListFeedback type_source=user)
+// and sends one call each. An admin-set type is never overridden by source=ai.
+if (($action ?? null) == 'apiSetFeedbackType') {
+    if (require_api_scope('feedback:admin')) {
+        [$ok, $msg, $changed] = set_feedback_type($_POST['feedback_id'] ?? 0, trim((string) ($_POST['feedback_type'] ?? '')),
+                                                  trim((string) ($_POST['source'] ?? 'ai')), (string) ($_POST['note'] ?? ''));
+        if ($ok) {
+            $data['feedback_id'] = intval($_POST['feedback_id'] ?? 0);
+            $data['changed']     = $changed;
+            $_SESSION['success'] = $msg;
+        } else {
+            $_SESSION['error'] = $msg;
         }
     }
 }
