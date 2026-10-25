@@ -51,14 +51,84 @@ window.WnDispatch = (function () {
         });
     }
 
+    /**
+     * The confirm sheet: the message, Cancel, and a yes button worded from the thing
+     * being confirmed (a "Delete" button's yes says Delete). Styled in place through
+     * the CSSOM, so it needs no stylesheet and passes the CSP.
+     */
+    function ask(msg, el, yes) {
+        var old = document.getElementById('wnConfirm');
+        if (old) old.remove();
+        var src = el.tagName === 'FORM' ? el.querySelector('button[type="submit"], button:not([type])') : el;
+        var label = ((src && src.textContent) || '').replace(/\s+/g, ' ').trim();
+        if (label.length > 16) label = label.split(' ')[0];   // "Delete this landing page" → Delete
+        if (!label || label.length > 16) label = 'OK';
+        var danger = !!(src && /danger/.test(src.className || '')) || /delete|remove/i.test(label);
+
+        var wrap = document.createElement('div');
+        wrap.id = 'wnConfirm';
+        wrap.setAttribute('role', 'alertdialog');
+        wrap.setAttribute('aria-modal', 'true');
+        wrap.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.45);'
+            + 'display:flex;align-items:flex-end;justify-content:center;';
+        var box = document.createElement('div');
+        box.style.cssText = 'background:var(--bs-body-bg,#fff);color:var(--bs-body-color,#212529);width:100%;'
+            + 'max-width:520px;border-radius:16px 16px 0 0;padding:20px 16px calc(16px + env(safe-area-inset-bottom));'
+            + 'box-shadow:0 -4px 24px rgba(0,0,0,.25);';
+        var p = document.createElement('p');
+        p.textContent = msg;
+        p.style.cssText = 'margin:0 0 16px;font-size:1rem;line-height:1.4;';
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:10px;';
+        var no = document.createElement('button');
+        no.type = 'button';
+        no.className = 'btn btn-outline-secondary';
+        no.setAttribute('data-wn-confirm', 'no');
+        no.textContent = 'Cancel';
+        var ok = document.createElement('button');
+        ok.type = 'button';
+        ok.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+        ok.setAttribute('data-wn-confirm', 'yes');
+        ok.textContent = label;
+        [no, ok].forEach(function (b) { b.style.cssText = 'flex:1;min-height:48px;'; });
+        row.appendChild(no); row.appendChild(ok);
+        box.appendChild(p); box.appendChild(row); wrap.appendChild(box);
+
+        var close = function () { wrap.remove(); };
+        no.addEventListener('click', close);
+        wrap.addEventListener('click', function (e) { if (e.target === wrap) close(); });
+        ok.addEventListener('click', function () { close(); yes(); });
+        document.body.appendChild(wrap);
+        ok.focus();
+    }
+
     function run(el, evt) {
         var name = el.getAttribute('data-act');
         var page = el.closest('[data-screen]');
         page = page ? page.getAttribute('data-screen') : null;
 
+        // The question is asked in the app, not with window.confirm: a WebView's native
+        // dialog is not guaranteed (an iPhone "Delete this landing page" did nothing, task
+        // #2381). The event is held, and a yes replays it with the guard already passed.
         var confirmMsg = el.getAttribute('data-confirm');
-        if (confirmMsg && !window.confirm(confirmMsg)) {
-            if (evt) evt.preventDefault();   // a confirm on a form guards the submit
+        if (confirmMsg && !el.__wnConfirmed) {
+            if (evt) evt.preventDefault();
+            var submitter = evt && evt.submitter;
+            ask(confirmMsg, el, function () {
+                el.__wnConfirmed = true;
+                try {
+                    if (evt && evt.type === 'submit' && el.tagName === 'FORM') {
+                        if (el.requestSubmit) el.requestSubmit(submitter && submitter.form === el ? submitter : undefined);
+                        else el.submit();
+                    } else if (evt && evt.type === 'click') {
+                        el.click();
+                    } else {
+                        run(el, null);
+                    }
+                } finally {
+                    el.__wnConfirmed = false;
+                }
+            });
             return;
         }
 
