@@ -114,7 +114,9 @@ if (($action ?? null) == 'login') {
 
 if (($action ?? null) == 'logout') {
     logout();
-    header('Location: ../auth/login.php');
+    // Behind proxy sign-in, the proxy's own session would sign them straight back in.
+    $proxy_logout = function_exists('wn_proxy_auth_logout_url') ? wn_proxy_auth_logout_url() : '';
+    header('Location: ' . ($proxy_logout !== '' ? $proxy_logout : '../auth/login.php'));
     exit;
 }
 

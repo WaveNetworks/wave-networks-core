@@ -60,3 +60,19 @@ $vapid_private_key = '';
 // $backup_hour_utc   = 10;          // daily run hour (UTC)
 // $backup_keep_local = 3;           // backups kept on the host
 // $backup_dir        = '';          // default: backups/ beside files/ (above public_html)
+
+// ─── Behind a reverse proxy (include/common/proxyFunctions.php) ─────────────
+// The proxy's address as this server sees it. Only then are its X-Forwarded-Proto/Host/For
+// believed (real https, hostname and visitor IP). Leave unset when there is no proxy.
+// $trusted_proxies = ['10.159.250.0/24'];
+//
+// Sign-in done BY the proxy (e.g. a Shibboleth SP on it). Header names as the proxy sets them
+// ('RequestHeader set EduPersonPrincipalName "%{eppn}e"'), or the env var name when the SP
+// runs on this server ('eppn'). Users are matched by email.
+// $proxy_auth_user_header       = 'EduPersonPrincipalName';
+// $proxy_auth_email_header      = '';     // default: the user header, when it is an email
+// $proxy_auth_first_name_header = '';     // e.g. 'givenName'
+// $proxy_auth_last_name_header  = '';     // e.g. 'sn'
+// $proxy_auth_logout_url        = '/Shibboleth.sso/Logout';
+// $proxy_auth_autocreate        = false;  // create unknown users (still obeys registration_mode)
+// $proxy_auth_required          = true;   // false = the password form stays as a second door

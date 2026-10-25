@@ -119,6 +119,18 @@ config.php is gitignored. config.sample.php is committed as reference.
 $files_location uses __DIR__-relative path: __DIR__ . '/../../../files/' (resolves to one level above public_html).
 $shardConfigs array maps shard names to connection details.
 
+## Reverse proxy + proxy sign-in (include/common/proxyFunctions.php)
+Off unless configured (config.sample.php has every setting; env names are the upper-case forms).
+- `$trusted_proxies`: bootstrap (step 2f) applies that proxy's X-Forwarded-Proto/Host/Port/For to
+  $_SERVER, so existing HTTPS/HTTP_HOST/REMOTE_ADDR readers just work. Other peers' headers ignored.
+  Read the visitor IP as REMOTE_ADDR; the proxy's own address is WN_PEER_ADDR.
+- `$proxy_auth_user_header`: login.php signs in the user the proxy names (match by email),
+  login_method 'proxy', no core TOTP. HTTP_ header forms only trusted from a trusted proxy.
+  Required by default: password/code/register/SAML/OAuth doors closed (common_auth.php 7a).
+  Session remembers `proxy_auth_id`; common.php drops it if the proxy names someone else.
+  Logout continues to `$proxy_auth_logout_url`, or the proxy SSO signs them straight back in.
+- Test: `php tests/proxy-functions-test.php`.
+
 ## User homedir system
 create_home_dir_id($user_id) called ONCE on registration.
 Stores absolute bucketed path in user_profile.homedir on the SHARD.

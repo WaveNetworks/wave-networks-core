@@ -119,6 +119,12 @@ wn_apply_runtime_secrets();
 include_once __DIR__ . '/common/keyRingFunctions.php';
 wn_key_ring_init(file_exists($configFile));
 
+// 2f. Behind a reverse proxy (include/common/proxyFunctions.php): a trusted proxy's
+// X-Forwarded-* become the real scheme, host and visitor IP before anything reads $_SERVER.
+// No-op unless $trusted_proxies / TRUSTED_PROXIES is set.
+include_once __DIR__ . '/common/proxyFunctions.php';
+wn_proxy_normalize_request();
+
 // 3. PDO connection. Persistent so PHP-FPM workers reuse the socket across
 // requests instead of opening a fresh one per AJAX call. Especially matters
 // for child apps (each one opens its own $child_db on top of this $db).

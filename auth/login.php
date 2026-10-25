@@ -7,6 +7,38 @@ if (!empty($_SESSION['user_id'])) {
     exit;
 }
 
+// Proxy sign-in (include/common/proxyFunctions.php): the proxy has already said who this is.
+// Sign them in, or explain why not — never a redirect back here, which would loop.
+if (function_exists('wn_proxy_auth_enabled') && wn_proxy_auth_enabled()) {
+    $_proxy = wn_proxy_auth_login();
+    if (!empty($_proxy['user'])) {
+        if (function_exists('check_reconsent_needed')) {
+            $uid = $_proxy['user']['user_id'];
+            $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($uid) : check_reconsent_needed($uid);
+            if (!empty($reconsent)) {
+                $_SESSION['reconsent_needed'] = $reconsent;
+                header('Location: consent.php');
+                exit;
+            }
+        }
+        header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
+        exit;
+    }
+    if (!empty($_proxy['error']) || wn_proxy_auth_required()) {
+        http_response_code(403);
+        $_proxy_msg = $_proxy['error'] ?? 'This site signs you in through your organization\'s login, and this request did not come through it. Open the site at its usual address.';
+        $page_title = 'Sign In';
+        ob_start();
+?>
+<h4 class="card-title mb-3">Sign In</h4>
+<div class="alert alert-warning mb-0"><?= h($_proxy_msg) ?></div>
+<?php
+        $page_content_html = ob_get_clean();
+        include(__DIR__ . '/template.php');
+        exit;
+    }
+}
+
 // If the last error was the unconfirmed-email blocker, surface a resend form
 // pre-filled with the email the user just typed.
 $_show_resend = !empty($_SESSION['error']) && strpos($_SESSION['error'], 'confirm your email') !== false;

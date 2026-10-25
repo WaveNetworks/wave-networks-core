@@ -40,6 +40,14 @@ if (php_sapi_name() !== 'cli') {
         init_session_storage();
         session_start();
 
+        // Behind proxy sign-in, a session belongs to the identity that made it. When the
+        // proxy now says someone else, drop it and sign in again as them (proxyFunctions.php).
+        if (function_exists('wn_proxy_auth_session_mismatch') && wn_proxy_auth_session_mismatch()) {
+            logout();
+            header('Location: ../auth/login.php');
+            exit;
+        }
+
         if (empty($_SESSION['user_id'])) {
             // Try auto-login via cookie. Note this validates the SAME credential a
             // device token is (an api_key row) — the only difference is transport.

@@ -21,6 +21,17 @@ if (function_exists('get_or_create_device')) {
 // 7. definition.php
 include(__DIR__ . '/definition.php');
 
+// 7a. Proxy sign-in only (proxyFunctions.php): the proxy is the one way in, so the password,
+// code, registration and in-app SSO doors are shut. login.php signs the person in from the
+// proxy's identity, or says why it can't.
+if (function_exists('wn_proxy_auth_required') && wn_proxy_auth_required()) {
+    if (!in_array($action, [null, 'logout', 'acceptReconsent'], true)) { $action = null; }
+    if (!in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), ['login.php', 'consent.php'], true)) {
+        header('Location: login.php');
+        exit;
+    }
+}
+
 // 8. Action includes — login actions only for auth pages
 foreach (glob(__DIR__ . '/actions/loginActions/*.php') as $f) { include_once($f); }
 foreach (glob(__DIR__ . '/actions/apiActions/*.php') as $f) { include_once($f); }
