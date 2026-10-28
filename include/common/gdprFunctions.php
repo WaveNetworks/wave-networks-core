@@ -479,6 +479,7 @@ function delete_user_data($user_id, $source = 'delete_user_data') {
         'api_key',
         'forgot',
         'notification',
+        'user_passkey',
     ] as $tbl) {
         db_query("DELETE FROM `$tbl` WHERE user_id = '$uid'");
     }

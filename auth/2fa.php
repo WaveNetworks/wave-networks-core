@@ -29,6 +29,9 @@ ob_start();
 </form>
 
 <?php
+// "Use a passkey instead" when the account has one (WN_PASSKEY, task #2661).
+$wn_pk = __DIR__ . '/../snippets/passkey_signin.php';
+if (file_exists($wn_pk)) { include($wn_pk); }
 // "Can't use any of these?" — a code to the verified email, last resort (core, task #2660).
 $wn_fb = __DIR__ . '/../snippets/twofa_email_fallback.php';
 if (file_exists($wn_fb)) { include($wn_fb); }

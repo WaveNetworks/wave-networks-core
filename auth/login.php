@@ -114,6 +114,11 @@ if ($saml_providers) { ?>
     <a href="phone.php" class="btn btn-outline-secondary"><i class="bi bi-phone"></i> Sign in with your phone</a>
 </div>
 <?php } ?>
+<?php
+// "Sign in with a passkey" — renders only when the app opted in (WN_PASSKEY, task #2661).
+$wn_pk = __DIR__ . '/../snippets/passkey_signin.php';
+if (file_exists($wn_pk)) { include($wn_pk); }
+?>
 
 <div class="text-center">
     <a href="forgot.php" class="small">Forgot your password?</a>
