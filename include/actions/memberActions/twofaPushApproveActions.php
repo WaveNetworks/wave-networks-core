@@ -4,6 +4,8 @@
  *   twofaPushPending — the newest live request for the signed-in account (the app asks on
  *                      every open and when the push is tapped; push_id narrows it)
  *   twofaPushDecide  — push_id, decision approve|deny, number (approve needs the right one)
+ *   twofaPushPhone   — subscription_id, approve 0|1: revoke one phone from approving sign-ins
+ *                      (Sign-in & security), or allow it again
  * The approver is always the session's account, never a parameter.
  * Rules: include/common/twofaPushFunctions.php.
  */
@@ -40,6 +42,22 @@ if (($_POST['action'] ?? '') == 'twofaPushDecide' && function_exists('wn_2fa_pus
         } else {
             $_SESSION['success'] = 'Blocked. That sign-in did not happen. If it was not you, change your password.';
         }
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
+if (($_POST['action'] ?? '') == 'twofaPushPhone' && function_exists('wn_2fa_push_enabled') && wn_2fa_push_enabled()) {
+    $errs = array();
+    $on = (int)($_POST['approve'] ?? 0) === 1;
+    if (empty($_SESSION['user_id'])) { $errs['auth'] = 'Login required.'; }
+    if (empty($_POST['subscription_id'])) { $errs['phone'] = 'Which phone?'; }
+    if (count($errs) <= 0 && !wn_2fa_push_set_phone((int)$_SESSION['user_id'], $_SESSION['shard_id'] ?? 0, (int)$_POST['subscription_id'], $on)) {
+        $errs['phone'] = 'That phone is not on this account, or it is already ' . ($on ? 'allowed' : 'removed') . '.';
+    }
+    if (count($errs) <= 0) {
+        $_SESSION['success'] = $on ? 'That phone can approve sign-ins again.'
+            : 'That phone can no longer approve sign-ins. It still gets your other notifications; to sign it out too, use Signed-in devices.';
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }

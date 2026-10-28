@@ -33,8 +33,33 @@ function wn_2fa_push_available($user) {
     $uid = (int)$user['user_id'];
     prime_shard($user['shard_id']);
     $r = db_fetch(db_query_shard($user['shard_id'],
-        "SELECT COUNT(*) AS n FROM push_subscription WHERE user_id = '$uid' AND endpoint LIKE 'native:%'"));
+        "SELECT COUNT(*) AS n FROM push_subscription WHERE user_id = '$uid' AND endpoint LIKE 'native:%' AND approve_signin = 1"));
     return (int)($r['n'] ?? 0) > 0;
+}
+
+/** The account's phones (native push rows) for Sign-in & security: id, label, dates, approve_signin. */
+function wn_2fa_push_phones($user_id, $shard_id) {
+    if (!wn_2fa_push_enabled() || !$shard_id) { return []; }
+    $uid = (int)$user_id;
+    prime_shard($shard_id);
+    $rows = db_fetch_all(db_query_shard($shard_id,
+        "SELECT subscription_id, user_agent, created, last_used, approve_signin FROM push_subscription
+         WHERE user_id = '$uid' AND endpoint LIKE 'native:%' ORDER BY COALESCE(last_used, created) DESC LIMIT 20")) ?: [];
+    foreach ($rows as &$r) {
+        $ua = (string)$r['user_agent'];
+        $r['label'] = stripos($ua, 'iPhone') !== false ? 'iPhone' : (stripos($ua, 'iPad') !== false ? 'iPad'
+                    : (stripos($ua, 'Android') !== false ? 'Android phone' : 'Phone'));
+    }
+    return $rows;
+}
+
+/** Revoke (0) or allow again (1) one phone approving sign-ins. Only the account's own row. */
+function wn_2fa_push_set_phone($user_id, $shard_id, $subscription_id, $on) {
+    $uid = (int)$user_id; $sid = (int)$subscription_id; $v = $on ? 1 : 0;
+    prime_shard($shard_id);
+    $r = db_query_shard($shard_id, "UPDATE push_subscription SET approve_signin = '$v'
+                                    WHERE subscription_id = '$sid' AND user_id = '$uid' AND endpoint LIKE 'native:%'");
+    return $r && $r->rowCount() > 0;
 }
 
 /** Three numbers for the phone: the right one plus two others, stable for the row. */
@@ -91,7 +116,7 @@ function wn_2fa_push_start($user) {
     if (function_exists('send_push_to_user')) {
         send_push_to_user($uid, $user['shard_id'], 'Signing in on ' . $where . '?',
             'Tap to approve. Pick the number shown on the screen.',
-            ['action_url' => '../app/?page=webapprove&push=' . $id, 'tag' => 'wn-2fa-push-' . $id]);
+            ['action_url' => '../app/?page=webapprove&push=' . $id, 'tag' => 'wn-2fa-push-' . $id, 'signin_approvers_only' => 1]);
     }
     return ['number' => $num, 'id' => $id];
 }

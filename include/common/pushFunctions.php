@@ -64,6 +64,15 @@ function send_push_to_user($user_id, $shard_id, $title, $body, $payload = []) {
         "SELECT * FROM push_subscription WHERE user_id = '$user_id'");
     $subscriptions = db_fetch_all($r);
 
+    // A 2FA sign-in request goes only to phones still allowed to approve (task #2662).
+    if (!empty($payload['signin_approvers_only'])) {
+        $subscriptions = array_values(array_filter($subscriptions, function ($sub) {
+            return function_exists('is_native_push_endpoint') && is_native_push_endpoint($sub['endpoint'])
+                && (int)($sub['approve_signin'] ?? 1) === 1;
+        }));
+    }
+    unset($payload['signin_approvers_only']);
+
     if (empty($subscriptions)) {
         return 0;
     }
