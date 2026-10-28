@@ -18,7 +18,9 @@ $available_providers = db_fetch_all(db_query("SELECT * FROM oauth_provider WHERE
 
 // 2FA state
 $totp_enabled = !empty($user['totp_enabled']);
-$totp_secret = $user['totp_secret'] ?? null;
+// Sealed at rest (task #2397): open it for the QR / manual key, never show the sealed blob.
+$totp_secret = !empty($user['totp_secret']) ? wn_secret_open($user['totp_secret']) : null;
+$twofa_blocker = twofa_enrol_blocker($user_id);
 
 // Check if enable2FA was just triggered (secret generated but not yet verified)
 $setup_pending = !$totp_enabled && !empty($totp_secret);
@@ -139,10 +141,14 @@ if ($setup_pending) {
                 <p class="text-muted small mb-3">
                     Works with any TOTP authenticator app: Google Authenticator, Authy, 1Password, Microsoft Authenticator, etc.
                 </p>
+                <?php if ($twofa_blocker !== '') { ?>
+                <div class="alert alert-warning small mb-0"><i class="bi bi-envelope-exclamation"></i> <?= h($twofa_blocker) ?></div>
+                <?php } else { ?>
                 <form method="post">
                     <input type="hidden" name="action" value="enable2FA">
                     <button type="submit" class="btn btn-success"><i class="bi bi-shield-plus"></i> Set Up 2FA</button>
                 </form>
+                <?php } ?>
                 <?php } ?>
 
             </div>

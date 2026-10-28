@@ -50,3 +50,20 @@ function totp_verify($secret, $code) {
     // totp_secret is sealed at rest (task #2397); an unmarked legacy value opens as itself.
     return totp_instance()->verifyCode(wn_secret_open($secret), $code);
 }
+
+/**
+ * Why this user may NOT turn on a second factor yet, or '' if they may.
+ * Owner rule (task #2658): 2FA needs a verified email first, because the verified
+ * email is the way back in after a lost authenticator. Without it, one lost phone
+ * is a locked account. Every enrol path (web, phone, any factor) asks this.
+ */
+function twofa_enrol_blocker($user_id) {
+    $user = get_user((int)$user_id);
+    if (!$user) { return 'Account not found.'; }
+    if (empty($user['email']) || empty($user['is_confirmed'])) {
+        return 'Verify your email address before turning on two-factor sign-in. '
+             . 'It is how you get back in if you lose your phone.';
+    }
+    return '';
+}
+

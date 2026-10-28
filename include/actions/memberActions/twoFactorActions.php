@@ -10,6 +10,7 @@ if (($action ?? null) == 'enable2FA') {
     $errs = array();
 
     if (!$_SESSION['user_id']) { $errs['auth'] = 'Login required.'; }
+    if (count($errs) <= 0 && ($why = twofa_enrol_blocker((int)$_SESSION['user_id'])) !== '') { $errs['email'] = $why; }
 
     if (count($errs) <= 0) {
         $secret = totp_generate_secret();
@@ -42,7 +43,9 @@ if (($action ?? null) == 'verify2FASetup') {
         $user_id = (int)$_SESSION['user_id'];
         $user = get_user($user_id);
 
-        if (!$user || !$user['totp_secret']) {
+        if (($why = twofa_enrol_blocker($user_id)) !== '') {
+            $errs['email'] = $why;
+        } elseif (!$user || !$user['totp_secret']) {
             $errs['setup'] = '2FA secret not found. Please start setup again.';
         } elseif (!totp_verify($user['totp_secret'], $code)) {
             $errs['code'] = 'Invalid code. Please try again.';
