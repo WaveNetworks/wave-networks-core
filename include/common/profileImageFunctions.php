@@ -101,6 +101,57 @@ function upload_profile_image($user_id, $shard_id, $file) {
 }
 
 /**
+ * Set a user's profile photo from image bytes rather than an upload — for a child app
+ * that keeps the same person's photo somewhere else (ContactSwipe's own contact card,
+ * task #2656: "these should be one and the same") and mirrors it here. Same storage,
+ * thumbnail and DB update as upload_profile_image(); the homedir comes from the
+ * profile row first, so it works on a device (Bearer) request with no web session.
+ *
+ * @param int    $user_id
+ * @param string $shard_id
+ * @param string $bytes  JPEG, PNG, WebP or GIF
+ * @return array ['success' => bool, 'error' => string]
+ */
+function set_profile_image_from_bytes($user_id, $shard_id, $bytes) {
+    $user_id = (int) $user_id;
+    if ($user_id <= 0 || !is_string($bytes) || $bytes === '') return ['success' => false, 'error' => 'No image.'];
+    if (strlen($bytes) > 12 * 1024 * 1024) return ['success' => false, 'error' => 'Image must be 12 MB or smaller.'];
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_buffer($finfo, $bytes);
+    finfo_close($finfo);
+    $ext_map = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+    if (!isset($ext_map[$mime])) return ['success' => false, 'error' => 'Only JPEG, PNG, WebP, and GIF images are allowed.'];
+
+    $profile = get_user_profile($user_id, $shard_id);
+    $homedir = (string) ($profile['homedir'] ?? '');
+    if ($homedir === '' || !is_dir($homedir)) {
+        $homedir = ((int) ($_SESSION['user_id'] ?? 0) === $user_id) ? (string) ($_SESSION['homedir'] ?? '') : '';
+    }
+    if ($homedir === '' || !is_dir($homedir)) $homedir = (string) create_home_dir_id($user_id);
+    if ($homedir === '') return ['success' => false, 'error' => 'Could not create user directory.'];
+
+    $profile_dir = rtrim($homedir, '/') . '/profile/';
+    if (!is_dir($profile_dir)) mkdir($profile_dir, 0755, true);
+    $original_path = $profile_dir . 'profile_original.' . $ext_map[$mime];
+    if (file_put_contents($original_path, $bytes) === false) return ['success' => false, 'error' => 'Failed to save the image.'];
+
+    $thumb_filename = generate_profile_thumbnail($original_path, $profile_dir, 200);
+    if (!$thumb_filename) {
+        @unlink($original_path);
+        return ['success' => false, 'error' => 'Failed to process image. Please try a different file.'];
+    }
+
+    $relative_path = 'profile/' . $thumb_filename;
+    $safe_path = sanitize($relative_path, SQL);
+    prime_shard($shard_id);
+    db_query_shard($shard_id, "UPDATE user_profile SET profile_image = '$safe_path' WHERE user_id = '$user_id'");
+    if ((int) ($_SESSION['user_id'] ?? 0) === $user_id) $_SESSION['profile_image'] = $relative_path;
+
+    return ['success' => true, 'error' => ''];
+}
+
+/**
  * Generate a center-cropped square JPEG thumbnail from a source image.
  *
  * @param string $source_path  Absolute path to source image
