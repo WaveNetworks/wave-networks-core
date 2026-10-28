@@ -13,8 +13,7 @@ if (($_POST['action'] ?? '') == 'twofaPushPending' && function_exists('wn_2fa_pu
     if (empty($_SESSION['user_id'])) { $errs['auth'] = 'Login required.'; }
     if (count($errs) <= 0) {
         $row = wn_2fa_push_pending((int)$_SESSION['user_id'], (int)($_POST['push_id'] ?? 0));
-        $data['request'] = $row ? wn_2fa_push_view($row) : null;
-        $_SESSION['success'] = 'ok';
+        $data['request'] = $row ? wn_2fa_push_view($row) : null;   // no success text: the app asks on every resume and would toast it
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }
