@@ -13,6 +13,12 @@ ob_start();
 
 <h4 class="card-title mb-3">Authentication Code</h4>
 
+<?php
+// "Approve on your phone" when the app opts in and the account has a phone (WN_2FA_PUSH, task #2662).
+$wn_tp = __DIR__ . '/../snippets/twofa_push.php';
+if (file_exists($wn_tp)) { include($wn_tp); }
+?>
+
 <p class="text-muted small">Enter the code from your authenticator app.</p>
 
 <form method="post" action="">

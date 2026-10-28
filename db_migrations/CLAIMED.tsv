@@ -73,3 +73,4 @@ main/6.6	use_case.audience (internal|user|admin) + manual_section: user journeys
 main/6.7	feedback.submitted_type/type_source/type_note: AI + admin type corrections keep what the person picked (owner 2026-10-21)
 main/6.8	twofa_email_code: emailed code as the last-resort second factor, verified email only (task #2660)
 main/6.9	user_passkey: WebAuthn passkeys as second factor and password-less sign-in (task #2661)
+main/7.0	login_approval.kind/match_number/deny_reason: approve a sign-in on the phone as the 2FA step, number match (task #2662)
