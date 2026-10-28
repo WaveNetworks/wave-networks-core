@@ -34,6 +34,9 @@
 
     window.WnPasskey = {
         supported: function () {
+            // Not inside the phone app's own origin (https://localhost, app://): a passkey there could
+            // never belong to the site, so the page says to use the browser instead.
+            if (location.protocol !== 'https:' || /^(localhost|127\.|\[::1\])/.test(location.hostname)) return false;
             return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
         },
         why: why,
