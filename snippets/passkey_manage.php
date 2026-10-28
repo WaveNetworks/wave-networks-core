@@ -12,8 +12,8 @@ if (function_exists('wn_passkey_enabled') && wn_passkey_enabled() && !empty($_SE
 ?>
 <div class="card mb-4" id="wn-passkeys">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Passkeys</span>
-        <?php if ($wn_pk_list) { ?><span class="badge bg-success"><?= count($wn_pk_list) ?></span><?php } else { ?><span class="badge bg-secondary">None</span><?php } ?>
+        <span><i class="bi bi-fingerprint me-1"></i> Passkeys</span>
+        <?php if ($wn_pk_list) { ?><span class="badge bg-success">On · <?= count($wn_pk_list) ?></span><?php } else { ?><span class="badge bg-secondary">Off</span><?php } ?>
     </div>
     <div class="card-body">
         <p class="small text-body-secondary">Sign in with your face, fingerprint or device PIN instead of your password. A passkey also works as your second step after a password. It stays on your device; we only keep a public key.</p>
@@ -58,12 +58,15 @@ if (function_exists('wn_passkey_enabled') && wn_passkey_enabled() && !empty($_SE
             </div>
             <div class="col-sm-5"><button type="button" class="btn btn-primary w-100" id="wn-passkey-add-btn">Add a passkey</button></div>
         </div>
-        <p class="small text-body-secondary mb-0 d-none" id="wn-passkey-unsupported">This browser can't make passkeys. Try your phone, or a recent Safari, Chrome or Edge.</p>
+        <?php /* Shown until the script below runs: the phone app shows this page without running its
+                 scripts, and a passkey is made in a browser (Safari, Chrome, Edge) anyway. */ ?>
+        <p class="small text-body-secondary mb-0" id="wn-passkey-unsupported">To add a passkey, open this page in your browser (Safari, Chrome or Edge) on your phone or computer. Then use it to sign in here and in the app.</p>
         <p class="small text-danger mt-2 mb-0 d-none" id="wn-passkey-add-error" role="alert"></p>
         <script><?php readfile(__DIR__ . '/../assets/js/passkey.js'); ?></script>
         <script>
         (function () {
-            if (!window.WnPasskey || !WnPasskey.supported()) { document.getElementById('wn-passkey-unsupported').classList.remove('d-none'); return; }
+            if (!window.WnPasskey || !WnPasskey.supported()) { return; }
+            document.getElementById('wn-passkey-unsupported').classList.add('d-none');
             document.getElementById('wn-passkey-add').classList.remove('d-none');
             var btn = document.getElementById('wn-passkey-add-btn'), err = document.getElementById('wn-passkey-add-error');
             btn.addEventListener('click', function () {
