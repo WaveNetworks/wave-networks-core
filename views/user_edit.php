@@ -178,7 +178,6 @@ $active_tab = $_GET['tab'] ?? 'profile';
                 <p><strong>Created:</strong> <?= h($user['created_date']) ?></p>
                 <p><strong>Last Login:</strong> <?= h($user['last_login'] ?? 'Never') ?></p>
                 <p><strong>Confirmed:</strong> <?= $user['is_confirmed'] ? 'Yes' : 'No' ?></p>
-                <p><strong>2FA:</strong> <?= $user['totp_enabled'] ? 'Enabled' : 'Disabled' ?></p>
                 <p><strong>OAuth:</strong> <?= h($user['oauth_provider'] ?? 'None') ?></p>
 
                 <?php if (!$user['is_confirmed']) { ?>
@@ -187,6 +186,51 @@ $active_tab = $_GET['tab'] ?? 'profile';
                     <input type="hidden" name="user_id" value="<?= h($user_id) ?>">
                     <button type="submit" class="btn btn-sm btn-success">Confirm User</button>
                 </form>
+                <?php } ?>
+            </div>
+        </div>
+
+        <!-- Sign-in factors + support reset (userFactorAdminActions.php: adminResetFactor; task #2663) -->
+        <?php $wn_factor_passkeys = function_exists('wn_passkey_list') ? wn_passkey_list($user_id) : []; ?>
+        <div class="card mt-3" id="signin-factors">
+            <div class="card-header">Sign-in factors</div>
+            <div class="card-body small">
+                <p class="mb-1"><strong>Password:</strong> <?= !empty($user['password']) ? 'Set' : 'None (signs in another way)' ?></p>
+                <p class="mb-1"><strong>Authenticator app:</strong>
+                    <?php if (!empty($user['totp_enabled'])) { ?><span class="badge bg-success">On</span>
+                    <?php } elseif (!empty($user['totp_secret'])) { ?><span class="badge bg-warning text-dark">Setup started</span>
+                    <?php } else { ?><span class="badge bg-secondary">Off</span><?php } ?>
+                </p>
+                <p class="mb-1"><strong>Passkeys:</strong> <?= count($wn_factor_passkeys) ?: 'None' ?></p>
+                <?php if ($wn_factor_passkeys) { ?>
+                <ul class="mb-1 ps-3">
+                    <?php foreach ($wn_factor_passkeys as $wn_fp) { ?>
+                    <li><?= h($wn_fp['name']) ?> <span class="text-muted">(added <?= h(substr($wn_fp['created'], 0, 10)) ?>, <?= $wn_fp['last_used'] ? 'last used ' . h(substr($wn_fp['last_used'], 0, 10)) : 'never used' ?>)</span></li>
+                    <?php } ?>
+                </ul>
+                <?php } ?>
+                <p class="mb-2"><strong>Email code fallback:</strong> <?= !empty($user['is_confirmed']) ? 'Available (verified email)' : 'Not available (email not verified)' ?></p>
+
+                <?php if (!empty($user['totp_enabled']) || !empty($user['totp_secret']) || $wn_factor_passkeys) { ?>
+                <details>
+                    <summary>Support reset</summary>
+                    <p class="text-muted mt-2 mb-2">Only after you have confirmed it is really them. They get an email and a notification, and the reset is logged with your account.</p>
+                    <form method="post">
+                        <input type="hidden" name="action" value="adminResetFactor">
+                        <input type="hidden" name="user_id" value="<?= h($user_id) ?>">
+                        <select name="factor" class="form-select form-select-sm mb-2" aria-label="Factor to reset" id="wn-factor-pick">
+                            <?php if (!empty($user['totp_enabled']) || !empty($user['totp_secret'])) { ?><option value="totp">Turn off the authenticator app</option><?php } ?>
+                            <?php if ($wn_factor_passkeys) { ?><option value="passkey">Remove a passkey</option><?php } ?>
+                        </select>
+                        <?php if ($wn_factor_passkeys) { ?>
+                        <select name="passkey_id" class="form-select form-select-sm mb-2" aria-label="Passkey to remove">
+                            <?php foreach ($wn_factor_passkeys as $wn_fp) { ?><option value="<?= (int)$wn_fp['passkey_id'] ?>"><?= h($wn_fp['name']) ?></option><?php } ?>
+                        </select>
+                        <?php } ?>
+                        <input type="text" name="reason" class="form-control form-control-sm mb-2" minlength="8" maxlength="200" required placeholder="Why (e.g. lost phone, identity checked by video call)">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
+                    </form>
+                </details>
                 <?php } ?>
             </div>
         </div>

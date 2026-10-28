@@ -67,3 +67,27 @@ function twofa_enrol_blocker($user_id) {
     return '';
 }
 
+
+/**
+ * Tell a person that support turned off one of their sign-in factors (task #2663): email +
+ * security notification, so a reset nobody asked for is seen.
+ */
+function wn_factor_support_notice($user, $what) {
+    $b    = function_exists('get_branding') ? get_branding() : [];
+    $site = $b['site_name'] ?? 'your account';
+    $line = 'Support turned off your ' . $what . ' for ' . $site . '.';
+    $e    = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
+    $body = '<h2>' . $e($line) . '</h2><p>On ' . $e(gmdate('j M Y, H:i')) . ' UTC. Sign in with your password and set it up again on your account security page.</p>'
+          . '<p style="color:#666">If you did not ask for this, change your password now and reply to this email.</p>';
+    if (!empty($user['email'])) {
+        if (function_exists('send_email_now')) {
+            send_email_now($user['email'], '', 'Sign-in method reset on ' . $site, $body, ['source_app' => 'core']);
+        } elseif (function_exists('send_email')) {
+            send_email($user['email'], '', 'Sign-in method reset on ' . $site, $body);
+        }
+    }
+    if (function_exists('send_notification')) {
+        send_notification((int)$user['user_id'], $user['shard_id'] ?? null, 'security', 'Sign-in method reset by support',
+            $line . ' If you did not ask for this, change your password.', ['source_app' => 'core']);
+    }
+}

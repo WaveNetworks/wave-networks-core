@@ -42,6 +42,7 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'createApiKey'   => ['key_name'],                // not the key itself
     'sendFeedback'   => ['feedback_type'],           // not the message body
     'login'          => ['email'],                   // not password, not 2fa code
+    'adminResetFactor' => ['user_id', 'factor', 'passkey_id'],  // support reset of a sign-in factor (task #2663); not the reason text
 
     // ── elevateHER canonical progression events (Task #533) ──
     // These are stable analytics names. Param keys are IDs/enums only —
