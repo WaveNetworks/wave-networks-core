@@ -21,7 +21,7 @@ if (($action ?? null) == 'enable2FA') {
 
         $qr = totp_qr_code($_SESSION['email'], $secret);
 
-        $_SESSION['success'] = '2FA secret generated. Scan the QR code with your authenticator app.';
+        $_SESSION['success'] = 'Scan the QR code with your authenticator app, then type the 6-digit code it shows.';
         $data['secret'] = $secret;
         $data['qr']     = $qr;
     } else {
@@ -46,15 +46,15 @@ if (($action ?? null) == 'verify2FASetup') {
         if (($why = twofa_enrol_blocker($user_id)) !== '') {
             $errs['email'] = $why;
         } elseif (!$user || !$user['totp_secret']) {
-            $errs['setup'] = '2FA secret not found. Please start setup again.';
+            $errs['setup'] = 'Start the authenticator app set-up again.';
         } elseif (!totp_verify($user['totp_secret'], $code)) {
-            $errs['code'] = 'Invalid code. Please try again.';
+            $errs['code'] = 'That code is not right. Check the time on your phone and try the newest code.';
         }
     }
 
     if (count($errs) <= 0) {
         db_query("UPDATE user SET totp_enabled = 1 WHERE user_id = '$user_id'");
-        $_SESSION['success'] = 'Two-factor authentication enabled successfully.';
+        $_SESSION['success'] = 'Authenticator app on. After your password, sign-in now asks for its 6-digit code.';
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }
@@ -81,7 +81,7 @@ if (($action ?? null) == 'disable2FA') {
 
     if (count($errs) <= 0) {
         db_query("UPDATE user SET totp_enabled = 0, totp_secret = NULL WHERE user_id = '$user_id'");
-        $_SESSION['success'] = 'Two-factor authentication disabled.';
+        $_SESSION['success'] = 'Authenticator app turned off. It no longer signs in to this account.';
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }
