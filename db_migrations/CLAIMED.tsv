@@ -71,3 +71,4 @@ shard/1.4	Migration 1.4 for Shard Database (mark existing feedback receipts read
 main/6.5	Migration 6.5 for Main Database (feedback.status ENUM gains resolved; repair rows the resolved writes blanked; task #2539)
 main/6.6	use_case.audience (internal|user|admin) + manual_section: user journeys feed the help-desk user manual (owner 2026-10-20)
 main/6.7	feedback.submitted_type/type_source/type_note: AI + admin type corrections keep what the person picked (owner 2026-10-21)
+main/6.8	twofa_email_code: emailed code as the last-resort second factor, verified email only (task #2660)

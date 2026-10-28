@@ -156,6 +156,7 @@ function wn_login_finish($user, $method, $two_factor = true) {
         if ($linked || strpos((string)$method, 'oauth_') === 0) { $_SESSION['oauth_device_2fa'] = true; }
         $_SESSION['2fa_pending'] = true;
         $_SESSION['2fa_user_id'] = $user['user_id'];
+        $_SESSION['2fa_first_factor'] = (string)$method;   // 'email_code' may not finish with an email code too
         header('Location: 2fa.php');
         exit;
     }
@@ -184,6 +185,41 @@ function wn_login_finish($user, $method, $two_factor = true) {
         }
     }
 
+    $_SESSION['success'] = 'Welcome back!';
+    header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
+    exit;
+}
+
+/**
+ * The tail of every finished second step (authenticator code, email code): session, device,
+ * history ($method = login_history.login_method), re-consent, home. Never returns.
+ * After an email code, the app's "sign-in methods" page (WN_2FA_REVIEW_URL) is the landing.
+ */
+function wn_2fa_finish($user, $method) {
+    unset($_SESSION['2fa_pending'], $_SESSION['2fa_user_id'], $_SESSION['2fa_first_factor']);
+    // A "Continue with Google" from the phone app goes back to the app (task #2461).
+    if (function_exists('oauth_device_pending') && oauth_device_pending() && !empty($_SESSION['oauth_device_2fa'])) {
+        unset($_SESSION['oauth_device_2fa']);
+        oauth_device_handoff($user, $method);
+    }
+    load_user_session($user);
+    if (function_exists('get_or_create_device')) { get_or_create_device(); }
+    if (function_exists('record_login')) { record_login($user['user_id'], $method, 'success'); }
+
+    if (function_exists('check_reconsent_needed')) {
+        $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
+        if (!empty($reconsent)) {
+            $_SESSION['reconsent_needed'] = $reconsent;
+            header('Location: consent.php');
+            exit;
+        }
+    }
+    $review = ($method === '2fa_email' && function_exists('wn_2fa_email_review_url')) ? wn_2fa_email_review_url(false) : '';
+    if ($review !== '') {
+        $_SESSION['warning'] = 'You signed in with an email code. Review your sign-in methods: if you lost your authenticator app, set up a new one here.';
+        header('Location: ' . $review);
+        exit;
+    }
     $_SESSION['success'] = 'Welcome back!';
     header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
     exit;

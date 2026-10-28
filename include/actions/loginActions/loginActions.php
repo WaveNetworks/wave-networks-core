@@ -60,6 +60,7 @@ if (($action ?? null) == 'login') {
         if ($user['totp_enabled']) {
             $_SESSION['2fa_pending'] = true;
             $_SESSION['2fa_user_id'] = $user['user_id'];
+            $_SESSION['2fa_first_factor'] = 'password';      // the email fallback may finish this one (twofaEmailFunctions.php)
             header('Location: 2fa.php');
             exit;
         }
@@ -403,30 +404,54 @@ if (($action ?? null) == 'verify2FA') {
     }
 
     if (count($errs) <= 0) {
-        unset($_SESSION['2fa_pending'], $_SESSION['2fa_user_id']);
-        // A "Continue with Google" from the phone app goes back to the app (task #2461).
-        if (function_exists('oauth_device_pending') && oauth_device_pending() && !empty($_SESSION['oauth_device_2fa'])) {
-            unset($_SESSION['oauth_device_2fa']);
-            oauth_device_handoff($user, '2fa');
-        }
-        load_user_session($user);
-        // Record login history
-        if (function_exists('record_login')) {
-            record_login($user['user_id'], '2fa', 'success');
-        }
+        wn_2fa_finish($user, '2fa');
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
 
-        // Check re-consent
-        if (function_exists('check_reconsent_needed')) {
-            $reconsent = function_exists('wn_legal_gate_needed') ? wn_legal_gate_needed($user['user_id']) : check_reconsent_needed($user['user_id']);
-            if (!empty($reconsent)) {
-                $_SESSION['reconsent_needed'] = $reconsent;
-                header('Location: consent.php');
-                exit;
-            }
-        }
-        $_SESSION['success'] = 'Welcome back!';
-        header('Location: ' . (function_exists('get_post_login_home') ? get_post_login_home() : '../app/'));
-        exit;
+// ─── 2FA LAST RESORT: A CODE TO THE VERIFIED EMAIL (task #2660) ──────────────
+// "Can't use any of these?" on 2fa.php. Replaces the second factor only, and only
+// after a password: the rules live in twofaEmailFunctions.php (wn_2fa_email_refusal).
+
+if (($action ?? null) == 'send2FAEmail') {
+    $errs = array();
+    if (empty($_SESSION['2fa_pending']) || empty($_SESSION['2fa_user_id'])) {
+        $errs['auth'] = 'No pending 2FA verification.';
+    }
+    if (count($errs) <= 0) {
+        $user = get_user($_SESSION['2fa_user_id']);
+        $why  = wn_2fa_email_request($user, $_SESSION['2fa_first_factor'] ?? '');
+        if ($why !== '') { $errs['email'] = $why; }
+    }
+    if (count($errs) <= 0) {
+        $_SESSION['2fa_email_sent'] = time();
+        $_SESSION['success'] = 'We sent a code to ' . wn_2fa_email_masked($user['email']) . '. It works for ' . WN_2FA_EMAIL_TTL_MIN . ' minutes.';
+    } else {
+        $_SESSION['error'] = implode('<br>', $errs);
+    }
+}
+
+if (($action ?? null) == 'verify2FAEmail') {
+    $errs = array();
+    $user = null;
+    if (empty($_SESSION['2fa_pending']) || empty($_SESSION['2fa_user_id'])) {
+        $errs['auth'] = 'No pending 2FA verification.';
+    }
+    if (count($errs) <= 0) {
+        $user = get_user($_SESSION['2fa_user_id']);
+        // Re-checked here, not only when sending: the rule is about THIS sign-in.
+        $why = wn_2fa_email_refusal($user, $_SESSION['2fa_first_factor'] ?? '');
+        if ($why !== '') { $errs['email'] = $why; }
+    }
+    if (count($errs) <= 0) {
+        $r = wn_2fa_email_verify($user['user_id'], $_POST['email_code'] ?? '');
+        if (!empty($r['error'])) { $errs['code'] = $r['error']; }
+    }
+    if (count($errs) <= 0) {
+        unset($_SESSION['2fa_email_sent']);
+        wn_2fa_email_used_notice($user);
+        wn_2fa_finish($user, '2fa_email');
     } else {
         $_SESSION['error'] = implode('<br>', $errs);
     }

@@ -28,6 +28,12 @@ ob_start();
     <button type="submit" class="btn btn-primary w-100">Verify</button>
 </form>
 
+<?php
+// "Can't use any of these?" — a code to the verified email, last resort (core, task #2660).
+$wn_fb = __DIR__ . '/../snippets/twofa_email_fallback.php';
+if (file_exists($wn_fb)) { include($wn_fb); }
+?>
+
 <div class="text-center mt-3">
     <a href="login.php" class="small">Cancel</a>
 </div>

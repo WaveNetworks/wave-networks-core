@@ -83,6 +83,7 @@ if (isset($_GET['acs']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user['totp_enabled']) {
             $_SESSION['2fa_pending'] = true;
             $_SESSION['2fa_user_id'] = $user['user_id'];
+            $_SESSION['2fa_first_factor'] = 'saml';
             header('Location: 2fa.php');
             exit;
         }
