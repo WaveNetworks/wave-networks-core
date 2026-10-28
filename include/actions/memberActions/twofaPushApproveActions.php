@@ -3,7 +3,8 @@
  * 2FA push approve — the phone half (task #2662).
  *   twofaPushPending — the newest live request for the signed-in account (the app asks on
  *                      every open and when the push is tapped; push_id narrows it)
- *   twofaPushDecide  — push_id, decision approve|deny, number (approve needs the right one)
+ *   twofaPushDecide  — push_id, decision approve|deny, number (approve needs the right one),
+ *                      device_key + push_token (the biometric-gated key, assets/js/twofa-device-key.js)
  *   twofaPushPhone   — subscription_id, approve 0|1: revoke one phone from approving sign-ins
  *                      (Sign-in & security), or allow it again
  * The approver is always the session's account, never a parameter.
@@ -28,6 +29,14 @@ if (($_POST['action'] ?? '') == 'twofaPushDecide' && function_exists('wn_2fa_pus
     if (!in_array($decision, ['approve', 'deny'], true)) { $errs['decision'] = 'Pick the number or tap Not me.'; }
     if (empty($_POST['push_id'])) { $errs['push_id'] = 'Which request?'; }
 
+    // Device key (shard/1.6): bind on first use, then an approval needs an allowed phone's key.
+    // "Not me" never needs it: blocking is always safe.
+    if (count($errs) <= 0 && $decision === 'approve') {
+        $key = (string)($_POST['device_key'] ?? '');
+        if ($key !== '') { wn_2fa_push_bind_key((int)$_SESSION['user_id'], $_SESSION['shard_id'] ?? 0, (string)($_POST['push_token'] ?? ''), $key); }
+        $why = wn_2fa_push_key_check((int)$_SESSION['user_id'], $_SESSION['shard_id'] ?? 0, $key);
+        if ($why !== '') { $errs['device'] = $why; }
+    }
     if (count($errs) <= 0) {
         $r = wn_2fa_push_decide((int)$_POST['push_id'], (int)$_SESSION['user_id'], $decision, (int)($_POST['number'] ?? 0));
         if (!empty($r['error'])) { $errs['push'] = $r['error']; }

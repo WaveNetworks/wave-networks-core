@@ -75,3 +75,4 @@ main/6.8	twofa_email_code: emailed code as the last-resort second factor, verifi
 main/6.9	user_passkey: WebAuthn passkeys as second factor and password-less sign-in (task #2661)
 main/7.0	login_approval.kind/match_number/deny_reason: approve a sign-in on the phone as the 2FA step, number match (task #2662)
 shard/1.5	push_subscription.approve_signin: revoke a phone from approving sign-ins (task #2662)
+shard/1.6	push_subscription.device_key_hash: sign-in approvals tied to a biometric-gated device key (task #2662)

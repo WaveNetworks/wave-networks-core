@@ -148,7 +148,7 @@ foreach (glob(__DIR__ . '/mobile/*.php') as $f) { include_once($f); }
 
 // 5. Migrations
 $db_version    = $db_version ?? 7.0;
-$shard_version = $shard_version ?? 1.5;
+$shard_version = $shard_version ?? 1.6;
 check_and_migrate_main_db();
 
 // 5b. Shard registry. Shards live in the shard_config table, not in a literal

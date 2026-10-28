@@ -62,6 +62,43 @@ function wn_2fa_push_set_phone($user_id, $shard_id, $subscription_id, $on) {
     return $r && $r->rowCount() > 0;
 }
 
+/**
+ * Bind a phone's device key (task #2662, shard/1.6). The app keeps a random key in the
+ * Keychain/Keystore behind biometrics and sends it with its push token on the first approval;
+ * only sha256 is stored, and only on that token's row when it has none yet (never overwritten,
+ * so a stolen session cannot re-key a phone). True when bound now.
+ */
+function wn_2fa_push_bind_key($user_id, $shard_id, $push_token, $key) {
+    if (strlen((string)$key) < 32 || strlen((string)$push_token) < 8) { return false; }
+    $uid = (int)$user_id;
+    $s_ep = sanitize('native:' . $push_token, SQL);
+    $hash = hash('sha256', (string)$key);
+    prime_shard($shard_id);
+    $r = db_query_shard($shard_id, "UPDATE push_subscription SET device_key_hash = '$hash'
+                                    WHERE user_id = '$uid' AND endpoint = '$s_ep' AND device_key_hash IS NULL");
+    return $r && $r->rowCount() > 0;
+}
+
+/**
+ * May this phone approve? Once any phone on the account holds a device key, only the key of a
+ * phone still allowed (approve_signin = 1) counts. Before any key is bound (older app builds)
+ * the session alone decides, as before. Returns '' or the refusal text.
+ */
+function wn_2fa_push_key_check($user_id, $shard_id, $key) {
+    $uid = (int)$user_id;
+    prime_shard($shard_id);
+    $hash = $key !== '' ? hash('sha256', (string)$key) : '';
+    $rows = db_fetch_all(db_query_shard($shard_id, "SELECT device_key_hash, approve_signin FROM push_subscription
+        WHERE user_id = '$uid' AND endpoint LIKE 'native:%' AND device_key_hash IS NOT NULL")) ?: [];
+    if (!$rows) { return ''; }
+    foreach ($rows as $r) {
+        if ($hash !== '' && hash_equals((string)$r['device_key_hash'], $hash)) {
+            return (int)$r['approve_signin'] === 1 ? '' : 'This phone was removed from approving sign-ins. Allow it again on Sign-in & security, or use another way on the computer.';
+        }
+    }
+    return 'This phone cannot approve sign-ins for this account. Use a phone listed on Sign-in & security, or use another way on the computer.';
+}
+
 /** Three numbers for the phone: the right one plus two others, stable for the row. */
 function wn_2fa_push_choices($row) {
     $right = (int)$row['match_number'];
