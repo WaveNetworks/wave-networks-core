@@ -137,6 +137,7 @@ $assetMap = [
     '../../admin/assets/js/legal-notice.js'       => 'js/vendor/legal-notice.js',
     '../../admin/assets/js/twofa-push-check.js'   => 'js/vendor/twofa-push-check.js',
     '../../admin/assets/js/twofa-device-key.js'   => 'js/vendor/twofa-device-key.js',
+    '../../admin/assets/js/biometric-unlock.js'   => 'js/vendor/biometric-unlock.js',
     '../assets/js/modal.js'                       => 'js/vendor/modal.js',
     '../assets/js/theme.js'                       => '__DROP__',   // desktop theme picker; mobile is fixed brand
     '../assets/js/toast.js'                       => 'js/vendor/toast.js',
