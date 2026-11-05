@@ -769,6 +769,8 @@ lives with the owner only (p3sig vault + offline copy) — never on a host, neve
 `wn-backup.php stream --pub B64` writes the same encrypted stream to STDOUT (manifest as the last
 STDERR line, "WNBK-MANIFEST {json}") and nothing to the host's disk: the backup box starts it over
 SSH on hosts whose cron kills long jobs (StackCP killed the cron-started run ~3 min in, 2026-10-20).
+Each database's connection is retried (5s, 20s, 60s) on connection-level errors, since a shared MySQL
+server can refuse one briefly mid-run; the final error names the database.
 `wn-backup.php keygen|verify|restore` run anywhere with php + sodium, no app config. Runs log to
 cron_log (`job = backup`); failures go to the error log. Test: `tests/backup-roundtrip-test.sh`
 (Docker MariaDB, needs pdo_mysql).

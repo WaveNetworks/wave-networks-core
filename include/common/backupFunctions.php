@@ -240,14 +240,38 @@ function wn_backup_sql_value(PDO $pdo, $v) {
 }
 
 /**
+ * Open a connection, waiting out a shared MySQL server that briefly refuses it. A backup opens
+ * one connection per database over several minutes, so one refusal must not cost the whole run
+ * (contactswipe 2026-11-05: [2002] on a later database, the same server fine again moments
+ * later). Nothing has been written for this database yet, so waiting here is safe. Only
+ * connection-level errors are retried; a bad password fails at once. The final error names the
+ * database, because the driver's message does not.
+ */
+function wn_backup_retry(callable $connect, $name, array $waits = [5, 20, 60]) {
+    for ($try = 0; ; $try++) {
+        try {
+            return $connect();
+        } catch (PDOException $e) {
+            if ($try < count($waits) && preg_match('/\[(1040|2002|2003|2006|2013)\]/', $e->getMessage())) {
+                sleep($waits[$try]);
+                continue;
+            }
+            throw new RuntimeException("database $name: " . $e->getMessage() . ' (after ' . ($try + 1) . ' tries)', 0, $e);
+        }
+    }
+}
+
+/**
  * Stream one database as SQL into the writer, from one consistent snapshot. Returns
  * {tables: {name: rows}, views: n}.
  */
 function wn_backup_dump_db(array &$w, array $conn) {
-    $pdo = new PDO("mysql:host={$conn['host']};dbname={$conn['name']};charset=utf8mb4", $conn['user'], $conn['pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 10,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'",
-    ]);
+    $pdo = wn_backup_retry(function () use ($conn) {
+        return new PDO("mysql:host={$conn['host']};dbname={$conn['name']};charset=utf8mb4", $conn['user'], $conn['pass'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 10,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'",
+        ]);
+    }, (string) $conn['name']);
     $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
     $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT');
 
