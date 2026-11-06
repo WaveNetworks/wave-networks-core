@@ -251,6 +251,27 @@ if (($action ?? null) == 'apiBulkUpdateChangeRequests') {
             );
 
             $affected = $r ? $r->rowCount() : 0;
+
+            // Same feedback cascade as update_change_request(). This is the path
+            // nokemo's CR sync uses, so without it shipped feedback sat on 'grouped'.
+            if ($r) {
+                if ($status === 'completed') {
+                    $fb_from = "'grouped','new','reviewed'";
+                    $fb_to   = 'resolved';
+                } elseif ($status === 'rejected') {
+                    $fb_from = "'grouped','new','reviewed'";
+                    $fb_to   = 'dismissed';
+                } else {
+                    $fb_from = "'resolved','dismissed'";
+                    $fb_to   = 'grouped';
+                }
+                db_query_prepared(
+                    "UPDATE feedback SET status = '$fb_to'
+                     WHERE change_request_id IN ($placeholders) AND status IN ($fb_from)",
+                    $ids
+                );
+            }
+
             $_SESSION['success'] = "Bulk-updated {$affected} change request(s) to status '{$status}'.";
             $data['updated']   = $affected;
             $data['requested'] = count($ids);
