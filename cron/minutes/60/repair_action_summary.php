@@ -38,9 +38,11 @@ foreach ((array) ($shardConfigs ?? []) as $shard_name => $cfg) {
         $flag = rtrim((string) ($files_location ?? sys_get_temp_dir()), '/') . '/cron_state/summary_optimized_' . preg_replace('/\W/', '_', $shard_name);
         $had = db_query_shard_prepared($shard_name, "SELECT 1 FROM user_action_summary LIMIT 1", []);
         if ($had && !is_file($flag) && (is_dir(dirname($flag)) || @mkdir(dirname($flag), 0700, true))) {
-            db_query_shard_prepared($shard_name, "OPTIMIZE TABLE user_action_summary", []);
-            @touch($flag);
-            echo "    summary repair: $shard_name clean, optimized\n";
+            // Only a rebuild that really ran counts: a failed one retries next hour.
+            if (db_query_shard_prepared($shard_name, "OPTIMIZE TABLE user_action_summary", [])) {
+                @touch($flag);
+                echo "    summary repair: $shard_name clean, optimized\n";
+            }
         }
         continue;
     }
