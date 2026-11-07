@@ -42,6 +42,12 @@ jobs:
         run: php scripts/hook-probe.php
         working-directory: admin
 
+      # Translation (include/common/i18nFunctions.php): no catalog = English, unchanged; a hostile
+      # locale reads nothing; a bad translation shows the English default. DB-free.
+      - name: Check the translation contract
+        run: php scripts/i18n-probe.php
+        working-directory: admin
+
       # A refusal must be visible: an under-scoped key gets 403 naming the scope, an action this
       # deployment does not have gets 404 by name — never the same empty 200 as "nothing found".
       - name: Check the API envelope (no silent refusal)

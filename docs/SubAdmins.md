@@ -94,6 +94,18 @@ Data flows app → sub-admin through hooks; sub-admin → app through a hook the
 feed with a cursor), never by the sub-admin loading app code. `scripts/hook-probe.php` (deploy check)
 holds the contract.
 
+## Translation
+`include/common/i18nFunctions.php`. Source strings stay in English in the code:
+`h(wn_t('people.count', '{count} people', ['count' => $n]))`. `wn_t()` returns plain text, so escape
+it. It is `wn_t`, never a global `t()`, which would be a fatal redeclare for code that declares its
+own. The multi-lingual sub-admin publishes one flat JSON catalog per locale to
+`multilingual/config/catalogs/<locale>.json` (`config/` survives a deploy); core reads the file
+directly, with no DB and no hook in the request. With no catalog `wn_locale()` is `en` and `wn_t()`
+returns the default, so nothing changes for an app without the sub-admin. Lookup falls back
+`pt-BR → pt → English`; locale order is `wn_set_locale()`, the `wn_locale` cookie, then
+`Accept-Language`, and only published locales are ever chosen. `scripts/i18n-probe.php` (deploy
+check) holds the contract.
+
 ## Legal documents of your own
 A sub-admin with terms of its own (beta-testing's Beta Testing Agreement) declares them in a
 `legal.json` at its root: `{"documents": {"beta_agreement": {"title": "Beta Testing Agreement",
