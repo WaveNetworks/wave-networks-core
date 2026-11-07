@@ -123,6 +123,7 @@ function monitor_key_scopes() {
         'actions:read', 'tests:write', 'tests:read',
         'media:read', 'media:write',
         'legal:read', 'legal:write',
+        'system:read',
     ];
     return array_values(array_unique(array_merge($core, child_monitor_key_scopes())));
 }
