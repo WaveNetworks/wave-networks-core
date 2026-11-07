@@ -106,6 +106,17 @@ returns the default, so nothing changes for an app without the sub-admin. Lookup
 `Accept-Language`, and only published locales are ever chosen. `scripts/i18n-probe.php` (deploy
 check) holds the contract.
 
+JavaScript uses `wnT('people.count', '{count} people', {count: n})` from `assets/js/wn-i18n.js`, also
+plain text. It reads one flat catalog from the public `i18n.php?locale=<tags>` (no session, no DB,
+ETag; the phone's origins are allowed by `wn_send_cors_headers()`), keeps it in localStorage for the
+first paint and offline, and refreshes in the background, at most every 15 minutes; `document` gets
+`wn:i18n` when strings change, so a screen can redraw. First launch offline shows English, and an
+English-first device makes no request. Locale order is the `wn_locale` cookie (localStorage on the
+phone), then the device's languages. `{n, plural, ...}` works through `Intl.PluralRules`; other ICU
+forms show the English default. The phone's baked shell needs `js/vendor/wn-i18n.js` in
+`m/index.html`, then a mobile release. PHP rendered into that shell at build time is English:
+strings there must be set by JS. `scripts/i18n-js-probe.js` (deploy check) holds the contract.
+
 ## Legal documents of your own
 A sub-admin with terms of its own (beta-testing's Beta Testing Agreement) declares them in a
 `legal.json` at its root: `{"documents": {"beta_agreement": {"title": "Beta Testing Agreement",

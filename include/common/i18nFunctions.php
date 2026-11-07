@@ -192,3 +192,57 @@ if (!function_exists('wn_locale_dir')) {
         return in_array($base, ['ar', 'he', 'fa', 'ur'], true) ? 'rtl' : 'ltr';
     }
 }
+
+if (!function_exists('wn_i18n_wanted')) {
+    /** A comma list of tags, most wanted first, as normalised tags. Anything else is dropped. At most 8. */
+    function wn_i18n_wanted($raw) {
+        $out = [];
+        foreach (array_slice(explode(',', substr((string) $raw, 0, 200)), 0, 8) as $tag) {
+            $tag = wn_locale_normalize($tag);
+            if ($tag !== '' && !in_array($tag, $out, true)) $out[] = $tag;
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('wn_i18n_payload')) {
+    /**
+     * What i18n.php serves for ?locale=<comma list>: ['status', 'body', 'etag']. The first wanted
+     * tag with a published locale wins. Fallback happens here, so a client holds one flat map:
+     * 'pt-BR' is the 'pt' catalog with the 'pt-BR' catalog laid over it. English needs no strings.
+     */
+    function wn_i18n_payload($raw) {
+        $wanted = wn_i18n_wanted($raw);
+        if (!$wanted) return ['status' => 400, 'body' => '{"error":"locale is required"}', 'etag' => ''];
+        $available = wn_i18n_locales();
+        $hit = '';
+        foreach ($wanted as $tag) {
+            $hit = wn_locale_match($tag, $available);
+            if ($hit !== '') break;
+        }
+        if ($hit === '') return ['status' => 404, 'body' => '{"error":"not published"}', 'etag' => ''];
+        $strings = [];
+        if ($hit !== WN_I18N_DEFAULT_LOCALE) {
+            foreach (array_reverse(wn_locale_fallbacks($hit)) as $candidate) {
+                if (!in_array($candidate, $available, true)) continue;
+                $strings = array_merge($strings, array_filter(wn_i18n_catalog($candidate), fn($v) => is_string($v) && $v !== ''));
+            }
+        }
+        ksort($strings, SORT_STRING);
+        $body = json_encode(['locale' => $hit, 'dir' => wn_locale_dir($hit), 'strings' => (object) $strings],
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return ['status' => 200, 'body' => $body, 'etag' => '"' . sha1($body) . '"'];
+    }
+}
+
+if (!function_exists('wn_i18n_etag_matches')) {
+    /** Does an If-None-Match header name $etag? Allows W/ and the -gzip suffix mod_deflate adds. */
+    function wn_i18n_etag_matches($header, $etag) {
+        if ($etag === '') return false;
+        foreach (explode(',', (string) $header) as $item) {
+            $item = preg_replace('/^W\//', '', trim($item));
+            if (str_replace('-gzip"', '"', $item) === $etag) return true;
+        }
+        return false;
+    }
+}

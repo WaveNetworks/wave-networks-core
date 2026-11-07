@@ -48,6 +48,12 @@ jobs:
         run: php scripts/i18n-probe.php
         working-directory: admin
 
+      # The JavaScript half: wn-i18n.js in a stub browser, then the real i18n.php through php -S
+      # (ETag, the phone's CORS origins, hostile locales). No DB, no network.
+      - name: Check the JavaScript translation contract
+        run: node scripts/i18n-js-probe.js
+        working-directory: admin
+
       # A refusal must be visible: an under-scoped key gets 403 naming the scope, an action this
       # deployment does not have gets 404 by name — never the same empty 200 as "nothing found".
       - name: Check the API envelope (no silent refusal)

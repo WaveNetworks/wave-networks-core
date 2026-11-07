@@ -93,6 +93,27 @@ ip_check('rtl', wn_locale_dir(), 'rtl');
 ip_check('ltr', wn_locale_dir('es'), 'ltr');
 ip_reset();
 
+// i18n.php's payload: published locales only, fallback merged, nothing from outside the directory.
+$body = fn($raw) => json_decode(wn_i18n_payload($raw)['body'], true);
+ip_check('wanted drops hostile tags', wn_i18n_wanted('../x, es_MX ,en.json,pt-br'), ['es-MX', 'pt-BR']);
+ip_check('wanted stops at 8', count(wn_i18n_wanted(implode(',', ['aa', 'ab', 'ac', 'ad', 'ae', 'af', 'ag', 'ah', 'ai']))), 8);
+ip_check('payload: nothing usable', wn_i18n_payload('../i18n-outside-' . getmypid())['status'], 400);
+ip_check('payload: empty', wn_i18n_payload('')['status'], 400);
+ip_check('payload: unpublished', wn_i18n_payload('fr,sv')['status'], 404);
+ip_check('payload: first published wins', $body('fr,pt,es')['locale'], 'pt');
+ip_check('payload: region served by language', $body('es-MX')['locale'], 'es');
+ip_check('payload: region laid over language', $body('pt-BR')['strings'], ['greet' => 'Oi {name}', 'only.pt' => 'Olá']);
+ip_check('payload: blank translation left out', isset($body('es')['strings']['blank']), false);
+ip_check('payload: english wanted first', $body('en-GB,es'), ['locale' => 'en', 'dir' => 'ltr', 'strings' => []]);
+ip_check('payload: rtl', $body('ar')['dir'], 'rtl');
+ip_check('payload: unreadable catalog is empty', $body('de')['strings'], []);
+ip_check('payload: etag follows content', wn_i18n_payload('es')['etag'] === wn_i18n_payload('es')['etag'] && wn_i18n_payload('es')['etag'] !== wn_i18n_payload('pt')['etag'], true);
+$etag = wn_i18n_payload('es')['etag'];
+ip_check('etag match', wn_i18n_etag_matches($etag, $etag), true);
+ip_check('etag weak + gzip quoted', wn_i18n_etag_matches('"x", W/"' . substr($etag, 1, -1) . '-gzip"', $etag), true);
+ip_check('etag miss', wn_i18n_etag_matches('"nope"', $etag), false);
+ip_check('etag empty', wn_i18n_etag_matches('""', ''), false);
+
 array_map('unlink', glob("$dir/*"));
 rmdir($dir);
 @unlink(dirname($dir) . '/i18n-outside-' . getmypid() . '.json');
