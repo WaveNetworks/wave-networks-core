@@ -32,22 +32,11 @@ if (!isset($db)) {
 
 global $db;
 
-// ── 1. Prune orphan anonymous device rows ──
+// ── 1. Orphan anonymous device rows ──
+// cron/minutes/5/prune_device_backlog.php prunes them (and expired device_action_log rows) in
+// batches: one DELETE of millions of rows here was killed by the host and rolled back each day.
 $cutoff_days = defined('DEVICE_CLEANUP_DAYS') ? (int)DEVICE_CLEANUP_DAYS : 30;
-if ($cutoff_days < 1) { $cutoff_days = 30; }
-
-$stmt = db_query_prepared(
-    "DELETE FROM device
-       WHERE (user_id IS NULL OR user_id = 0)
-         AND COALESCE(last_used, created) < DATE_SUB(NOW(), INTERVAL ? DAY)",
-    [$cutoff_days]);
-$device_deleted = $stmt->rowCount();
-
-// Reclaim disk space — anonymous devices are the dominant bloat path. Only
-// OPTIMIZE when the delete was significant (it briefly locks the table).
-if ($device_deleted > 1000) {
-    db_query("OPTIMIZE TABLE device");
-}
+$device_deleted = 0;
 
 // ── 1b. Prune signed-in devices (task #2422) ──
 // Step 1 never touches a user's devices, so a client that logs in fresh every
@@ -126,6 +115,6 @@ try {
 //        is keeping up with new growth. Deliberately NOT logged to error_log:
 //        routine INFO rows get scraped by the monitoring poller and re-spawn
 //        a Fix: task every day, drowning real errors in noise. ──
-echo "    cleanup_device_table: device_deleted=$device_deleted (>$cutoff_days d), "
+echo "    cleanup_device_table: anonymous devices: see prune_device_backlog, "
    . "signed_in_deleted=$signed_deleted (>$signed_days d or >$max_per_user/user), "
    . "login_history_deleted=$login_deleted (>$login_days d)\n";

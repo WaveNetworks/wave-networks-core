@@ -37,6 +37,12 @@ if (($action ?? null) == 'apiGetDbSizes') {
         $data['limit_mb']       = DB_SIZE_LIMIT_MB;
         $data['warn_mb']        = DB_SIZE_WARN_MB;
         $data['critical_mb']    = DB_SIZE_CRITICAL_MB;
+        // Whether this host's cron runs at all. Without it nothing is ever pruned (pwt and
+        // ElevateHER grew to millions of rows with an empty cron_log). Newest row by primary key.
+        $last = db_query_prepared("SELECT ran_at FROM cron_log ORDER BY log_id DESC LIMIT 1", []);
+        $last = $last ? $last->fetchColumn() : false;
+        $data['cron_last_ran'] = $last ?: null;
+        $data['cron_minutes_ago'] = $last ? (int) floor((time() - strtotime($last . ' UTC')) / 60) : null;
         $_SESSION['success'] = 'OK';
     }
 }

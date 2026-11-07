@@ -296,10 +296,8 @@ foreach ($shardConfigs as $shard_name => $cfg) {
 }
 
 // ── 2. Main DB device_action_log TTL delete ──
-$stmt = db_query_prepared(
-    "DELETE FROM device_action_log WHERE expires_at IS NOT NULL AND expires_at < NOW()", []);
-$device_deleted = $stmt ? $stmt->rowCount() : 0;
-$total_deleted += $device_deleted;
+// Done in batches by cron/minutes/5/prune_device_backlog.php: one DELETE of a backlog of
+// millions was killed by the host and rolled back each day (pwt, 2026-11-07).
 
 // ── 3. Cross-shard feature_metric_daily aggregation ──
 $metrics = []; // key: "source_app|page|action"
