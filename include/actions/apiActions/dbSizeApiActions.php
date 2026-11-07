@@ -71,6 +71,25 @@ if (($action ?? null) == 'apiGetDeviceStats') {
             }
         };
         $anon = '(user_id IS NULL OR user_id = 0)';
+        // quick=1: only the newest 20,000 devices, by primary key, so a table of millions answers
+        // inside a proxy timeout (pwt: 6.4M rows, the full counts took over 30s).
+        if (!empty($_POST['quick'] ?? $_GET['quick'] ?? '')) {
+            $tail = "device_id > (SELECT m FROM (SELECT COALESCE(MAX(device_id), 0) - 20000 AS m FROM device) x)";
+            $data['tail'] = $q("SELECT COUNT(*) AS rows_, MIN(created) AS from_, MAX(created) AS to_, SUM($anon) AS anonymous,
+                    MAX(device_id) AS max_id FROM device WHERE $tail")[0] ?? [];
+            $data['tail_per_hour'] = $q("SELECT DATE_FORMAT(created, '%Y-%m-%d %H:00') AS hour, COUNT(*) AS created
+                FROM device WHERE $tail GROUP BY DATE_FORMAT(created, '%Y-%m-%d %H:00') ORDER BY hour DESC LIMIT 48");
+            $data['tail_user_agents'] = $q("SELECT LEFT(COALESCE(user_agent, ''), 160) AS user_agent, COUNT(*) AS devices
+                FROM device WHERE $tail GROUP BY LEFT(COALESCE(user_agent, ''), 160) ORDER BY devices DESC LIMIT 10");
+            $data['tail_ips'] = $q("SELECT ip_address, COUNT(*) AS devices
+                FROM device WHERE $tail GROUP BY ip_address ORDER BY devices DESC LIMIT 10");
+            $data['tail_actions'] = $q("SELECT source_app, page, action, COUNT(*) AS n FROM device_action_log
+                WHERE log_id > (SELECT m FROM (SELECT COALESCE(MAX(log_id), 0) - 20000 AS m FROM device_action_log) x)
+                GROUP BY source_app, page, action ORDER BY n DESC LIMIT 10");
+            $data['cron_recent'] = $q("SELECT job, ran_at, result FROM cron_log ORDER BY log_id DESC LIMIT 40");
+            $_SESSION['success'] = 'OK';
+            return;
+        }
         $data['device'] = $q("SELECT COUNT(*) AS total, SUM($anon) AS anonymous,
                 SUM($anon AND COALESCE(last_used, created) < UTC_TIMESTAMP() - INTERVAL 30 DAY) AS anonymous_past_30d,
                 SUM(created >= UTC_TIMESTAMP() - INTERVAL 1 DAY) AS new_24h,
