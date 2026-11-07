@@ -87,8 +87,10 @@ if (php_sapi_name() !== 'cli') {
 // and carry its flash across (mobileAuthFunctions.php).
 if (php_sapi_name() !== 'cli' && function_exists('wn_mobile_form_support')) { wn_mobile_form_support(); }
 
-// 6b. Device tracking — identify all visitors via persistent cookie
-if (function_exists('get_or_create_device')) {
+// 6b. Device tracking — identify all visitors via persistent cookie. Not for a cron or CLI
+// script: there is no visitor, and each run minted a blank device plus a 'view' log row
+// (ElevateHER, 2026-11-07: one per minute once cron was installed).
+if (php_sapi_name() !== 'cli' && function_exists('get_or_create_device')) {
     try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }
 }
 
@@ -98,8 +100,8 @@ include(__DIR__ . '/definition.php');
 // 8. Action includes
 foreach (glob(__DIR__ . '/actions/*/*.php') as $f) { include_once($f); }
 
-// 9. Action logging — record what was just executed
-if (function_exists('log_user_action')) {
+// 9. Action logging — record what was just executed (a request, never a CLI run)
+if (php_sapi_name() !== 'cli' && function_exists('log_user_action')) {
     $__action = $_POST['action'] ?? 'view';
     try { log_user_action($__action); } catch (Exception $e) { /* silent */ }
     unset($__action);
