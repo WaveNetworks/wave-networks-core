@@ -142,6 +142,47 @@ function db_size_bar_class($status) {
     </div>
 </div>
 
+<?php
+// Largest tables across every database: what is actually using the space.
+$big_tables = [];
+foreach (get_live_db_table_sizes('', 5) as $s) {
+    foreach ((array) $s['tables'] as $t) { $big_tables[] = $t + ['schema_name' => $s['schema_name']]; }
+}
+usort($big_tables, function ($a, $b) { return $b['size_mb'] <=> $a['size_mb']; });
+$big_tables = array_slice($big_tables, 0, 10);
+?>
+<div class="card mt-3">
+    <div class="card-body">
+        <h6 class="mb-2">Largest tables</h6>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>Schema</th>
+                        <th class="text-end">Size (MB)</th>
+                        <th class="text-end">Unused (MB)</th>
+                        <th class="text-end">Rows (estimate)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php if (!$big_tables) { ?>
+                    <tr><td colspan="5" class="text-center text-muted py-3">No tables found.</td></tr>
+                <?php } foreach ($big_tables as $t) { ?>
+                    <tr>
+                        <td><code><?= h($t['table']) ?></code></td>
+                        <td><code><?= h($t['schema_name']) ?></code></td>
+                        <td class="text-end"><?= number_format($t['size_mb'], 1) ?></td>
+                        <td class="text-end"><?= number_format($t['free_mb'], 1) ?></td>
+                        <td class="text-end"><?= number_format($t['rows']) ?></td>
+                    </tr>
+                <?php } ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <div class="mt-3 text-muted small">
     <strong>Provisioning a new shard:</strong> create the database on the host, then
     register it from the shard console (nokemo &rarr; Shards), which stores it in

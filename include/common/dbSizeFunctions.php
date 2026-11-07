@@ -218,6 +218,73 @@ function db_size_measure_one($schema, $conn) {
     ];
 }
 
+function db_size_tables_one($schema, $conn, $limit = 15, $count_table = '') {
+    /**
+     * The largest tables of one schema. $conn null means the connection we are already on. `rows`
+     * is InnoDB's estimate and can be off by double (ContactSwipe shard2: 3.9M reported, 2.1M
+     * real), so a table named in $count_table also gets `exact_rows`, a real COUNT(*). The name
+     * is only used after information_schema has returned it. Returns null when unreachable.
+     */
+    $limit = max(1, min(100, (int) $limit));
+    try {
+        if ($conn === null) {
+            global $db;
+            $pdo = $db;
+        } else {
+            $pdo = new PDO(
+                "mysql:host={$conn['host']};dbname={$conn['name']};charset=utf8mb4",
+                $conn['user'], $conn['pass'],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+            );
+        }
+        $st = $pdo->prepare(
+            "SELECT table_name AS table_name, table_rows AS row_estimate,
+                    ROUND(data_length / 1048576, 2) AS data_mb, ROUND(index_length / 1048576, 2) AS index_mb,
+                    ROUND(data_free / 1048576, 2) AS free_mb
+               FROM information_schema.TABLES WHERE table_schema = ? AND table_type = 'BASE TABLE'
+              ORDER BY data_length + index_length DESC");
+        $st->execute([$schema]);
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $i => $r) {
+            $named = $count_table !== '' && $r['table_name'] === $count_table;
+            if ($i >= $limit && !$named) { continue; }
+            $row = [
+                'table'    => $r['table_name'],
+                'rows'     => (int) $r['row_estimate'],
+                'data_mb'  => (float) $r['data_mb'],
+                'index_mb' => (float) $r['index_mb'],
+                'free_mb'  => (float) $r['free_mb'],
+                'size_mb'  => round((float) $r['data_mb'] + (float) $r['index_mb'], 2),
+            ];
+            if ($named) {
+                $row['exact_rows'] = (int) $pdo->query('SELECT COUNT(*) FROM `' . str_replace('`', '``', $r['table_name']) . '`')->fetchColumn();
+            }
+            $out[] = $row;
+        }
+        return $out;
+    } catch (Throwable $e) {
+        error_log("db_size_tables_one($schema): " . $e->getMessage());
+        return null;
+    }
+}
+
+function get_live_db_table_sizes($only_schema = '', $limit = 15, $count_table = '') {
+    /** Largest tables of every database this deployment owns, biggest schema first. Sizes only, never rows or credentials. */
+    $out = [];
+    foreach (db_size_known_databases() as $schema => $conn) {
+        if ($only_schema !== '' && $schema !== $only_schema) { continue; }
+        $tables = db_size_tables_one($schema, $conn, $limit, $count_table);
+        $out[] = [
+            'schema_name' => $schema,
+            'listed_mb'   => $tables === null ? null : round(array_sum(array_column($tables, 'size_mb')), 2),
+            'tables'      => $tables,
+            'error'       => $tables === null ? 'unreachable' : '',
+        ];
+    }
+    usort($out, function ($a, $b) { return $b['listed_mb'] <=> $a['listed_mb']; });
+    return $out;
+}
+
 function get_live_db_sizes() {
     $out = [];
 
