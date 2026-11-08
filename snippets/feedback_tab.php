@@ -45,6 +45,9 @@ if (empty($_SESSION['user_id'])) return;
                 <label class="form-label fw-semibold">Your Feedback</label>
                 <textarea class="form-control" id="fbMessage" rows="5" placeholder="Tell us what you think..."></textarea>
             </div>
+            <?php if (function_exists('wn_thanks_checkbox_html') && !empty($_SESSION['user_id']) && ($fb_tc_user = get_user($_SESSION['user_id']))) {
+                echo wn_thanks_checkbox_html($fb_tc_user['email'], 'fbThanksConsent');
+            } ?>
             <!-- Screenshot preview (hidden until capture completes) -->
             <div class="mb-3" id="fbScreenshotPanel" style="display:none;">
                 <label class="form-label fw-semibold d-flex align-items-center justify-content-between">
@@ -257,6 +260,11 @@ function submitFeedbackTab() {
     fd.append('message', message);
     fd.append('page_url', window.location.href);
     fd.append('source_app', detectSourceApp());
+    var fbThanks = document.getElementById('fbThanksConsent');
+    if (fbThanks) {
+        fd.append('thanks_was', fbThanks.defaultChecked ? '1' : '0');
+        if (fbThanks.checked) fd.append('thanks_consent', '1');
+    }
 
     if (window._fbCapture && window._fbCapture.context) {
         fd.append('context_json', JSON.stringify(window._fbCapture.context));

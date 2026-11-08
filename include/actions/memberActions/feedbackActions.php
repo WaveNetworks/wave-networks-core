@@ -44,6 +44,10 @@ if (($action ?? null) == 'submitFeedback') {
         }
 
         $fid = submit_feedback($message, $type, $opts);
+        // Task #2725: the opt-in on the form. Only a change to the box is recorded.
+        if (function_exists('wn_thanks_apply_post') && ($fb_user = get_user($_SESSION['user_id']))) {
+            wn_thanks_apply_post($fb_user['email'], $_SESSION['first_name'] ?? '', 'feedback', $_SESSION['user_id']);
+        }
         if ($fid !== false) {
             $data['feedback_id'] = $fid;
             $_SESSION['success'] = 'Thank you for your feedback!';

@@ -415,3 +415,18 @@ if (($action ?? null) == 'apiUpvoteFeedback') {
         }
     }
 }
+
+// ── Who may be thanked by first name (task #2725) ───────────
+// emails: JSON array. Answers only for those addresses, with the current decision.
+if (($action ?? null) == 'apiGetThanksConsents') {
+    if (require_api_scope('feedback:read')) {
+        $emails = json_decode((string) ($_POST['emails'] ?? '[]'), true);
+        $people = [];
+        foreach (array_slice(is_array($emails) ? $emails : [], 0, 500) as $e) {
+            $row = wn_thanks_get($e);
+            $people[strtolower(trim((string) $e))] = ['allowed' => (bool) ($row && (int) $row['allowed'] === 1),
+                'first_name' => ($row && (int) $row['allowed'] === 1) ? (string) $row['first_name'] : ''];
+        }
+        $data['people'] = $people;
+    }
+}

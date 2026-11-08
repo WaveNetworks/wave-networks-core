@@ -223,6 +223,7 @@ function build_export_data($user_id, $shard_id) {
         'user' => $user,
         'profile' => $profile,
         'consent_history' => $consent,
+        'thanks_by_first_name' => function_exists('wn_thanks_get') ? (wn_thanks_get($user['email'] ?? '') ?: []) : [],
         'devices' => $devices,
         'notifications' => $notifications,
     ];
