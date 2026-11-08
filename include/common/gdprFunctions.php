@@ -409,6 +409,9 @@ function delete_user_data($user_id, $source = 'delete_user_data') {
     $user     = function_exists('get_user') ? get_user($uid) : null;
     $shard_id = $user['shard_id'] ?? null;
 
+    // Thanks consent is keyed by address and has no other way to be forgotten (task #2725).
+    if (!empty($user['email'])) { db_query_prepared('DELETE FROM thanks_consent WHERE email = ?', [strtolower(trim((string) $user['email']))]); }
+
     // 0. Record the deletion FIRST, so every child app purges it from its own cron even
     //    when it is not loaded in this request (see process_user_deletion_events).
     $event_id = record_user_deletion_event($uid, $shard_id, $source);

@@ -418,6 +418,7 @@ if (($action ?? null) == 'apiUpvoteFeedback') {
 
 // ── Who may be thanked by first name (task #2725) ───────────
 // emails: JSON array. Answers only for those addresses, with the current decision.
+// email_hashes: JSON array of sha256 of the lowercased address → by_hash, only those allowed now.
 if (($action ?? null) == 'apiGetThanksConsents') {
     if (require_api_scope('feedback:read')) {
         $emails = json_decode((string) ($_POST['emails'] ?? '[]'), true);
@@ -428,5 +429,7 @@ if (($action ?? null) == 'apiGetThanksConsents') {
                 'first_name' => ($row && (int) $row['allowed'] === 1) ? (string) $row['first_name'] : ''];
         }
         $data['people'] = $people;
+        $hashes = json_decode((string) ($_POST['email_hashes'] ?? '[]'), true);
+        $data['by_hash'] = (object) wn_thanks_allowed_by_hash(array_slice(is_array($hashes) ? $hashes : [], 0, 500));
     }
 }

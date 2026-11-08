@@ -33,6 +33,17 @@ if (!function_exists('wn_thanks_question')) {
         return (bool) ($row && (int) $row['allowed'] === 1);
     }
 
+    /** hash of the address => first name, only for people allowed right now who gave a usable name. */
+    function wn_thanks_allowed_by_hash(array $hashes) {
+        $hashes = array_values(array_filter(array_map('strval', $hashes), fn($h) => preg_match('/^[0-9a-f]{64}$/', $h)));
+        if (!$hashes) return [];
+        $r = db_query_prepared('SELECT SHA2(email, 256) AS h, first_name FROM thanks_consent WHERE allowed = 1 AND SHA2(email, 256) IN ('
+             . implode(',', array_fill(0, count($hashes), '?')) . ')', $hashes);
+        $out = [];
+        foreach (($r ? db_fetch_all($r) : []) as $row) { $out[$row['h']] = (string) $row['first_name']; }
+        return $out;
+    }
+
     /** Record a decision. A first name already held is kept when this form did not supply one. */
     function wn_thanks_set($email, $allowed, $first_name, $where, $user_id = null) {
         $email = strtolower(trim((string) $email));
