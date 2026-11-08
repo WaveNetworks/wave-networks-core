@@ -56,6 +56,24 @@ if (!function_exists('wn_thanks_question')) {
         return $was === $now ? false : wn_thanks_set($email, $now, $first_name, $where, $user_id);
     }
 
+    /**
+     * A yes from a form with no sign-in behind it (the public beta signup). Anyone can type any
+     * address there, so it waits, and never touches a decision already on file.
+     */
+    function wn_thanks_set_pending($email, $first_name, $where) {
+        $email = strtolower(trim((string) $email));
+        if (!valid_email($email)) return false;
+        $first = wn_thanks_first_name($first_name);
+        return (bool) db_query_prepared('INSERT IGNORE INTO thanks_consent (email, first_name, allowed, decided_where) VALUES (?, ?, 0, ?)',
+            [$email, $first !== '' ? $first : null, 'pending:' . substr((string) $where, 0, 30)]);
+    }
+
+    /** They opened a link sent to that address, so the pending yes was theirs. */
+    function wn_thanks_confirm_pending($email) {
+        return (bool) db_query_prepared("UPDATE thanks_consent SET allowed = 1, decided_where = SUBSTRING(decided_where, 9) WHERE email = ? AND decided_where LIKE 'pending:%'",
+            [strtolower(trim((string) $email))]);
+    }
+
     /** The question as a Bootstrap checkbox. Pass '' as the email for someone we do not know yet. */
     function wn_thanks_checkbox_html($email, $id = 'wnThanksConsent') {
         $on = $email !== '' && wn_thanks_allowed($email);
