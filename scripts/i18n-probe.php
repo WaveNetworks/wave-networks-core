@@ -114,6 +114,34 @@ ip_check('etag weak + gzip quoted', wn_i18n_etag_matches('"x", W/"' . substr($et
 ip_check('etag miss', wn_i18n_etag_matches('"nope"', $etag), false);
 ip_check('etag empty', wn_i18n_etag_matches('""', ''), false);
 
+// Testers-only preview (task #2695): only the holder of the code sees an unpublished language.
+ip_reset();
+@mkdir("$dir/preview", 0700, true);
+$pv_code = str_repeat('a1', 16);
+file_put_contents("$dir/preview/ro.json", json_encode(['greet' => 'Salut {name}']));
+file_put_contents("$dir/preview/ro.key", hash('sha256', $pv_code) . "\n");
+ip_check('preview: never listed as published', in_array('ro', wn_i18n_locales(true), true), false);
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'ro';
+ip_check('preview: a browser in that language still gets English', wn_t('greet', 'Hi {name}', ['name' => 'Ana']), 'Hi Ana');
+ip_check('preview: unpublished without a code is 404', wn_i18n_payload('ro')['status'], 404);
+foreach (['ro.' . str_repeat('b2', 16), 'ro', 'ro.', '../x.' . $pv_code, '.' . $pv_code, 'en.' . $pv_code, ''] as $bad) {
+    ip_check('preview: refused code ' . json_encode($bad), wn_i18n_preview_check($bad), '');
+}
+ip_check('preview: wrong code serves nothing', wn_i18n_payload('ro', 'ro.' . str_repeat('b2', 16))['status'], 404);
+$_COOKIE[WN_I18N_PREVIEW_COOKIE] = 'ro.' . $pv_code;
+wn_i18n_preview_locale(true); wn_i18n_catalog('en', true);
+ip_check('preview: the tester gets the language', wn_locale(), 'ro');
+ip_check('preview: the tester gets the text', wn_t('greet', 'Hi {name}', ['name' => 'Ana']), 'Salut Ana');
+$pv = wn_i18n_payload('ro', 'ro.' . $pv_code);
+ip_check('preview: the endpoint serves it', [$pv['status'], json_decode($pv['body'], true)['strings']['greet'] ?? ''], [200, 'Salut {name}']);
+wn_set_locale('es');
+ip_check('preview: an explicit locale (an email) still wins', wn_locale(), 'es');
+wn_set_locale('');
+unset($_COOKIE[WN_I18N_PREVIEW_COOKIE]);
+wn_i18n_preview_locale(true); wn_i18n_catalog('en', true); ip_reset();
+
+array_map('unlink', glob("$dir/preview/*"));
+rmdir("$dir/preview");
 array_map('unlink', glob("$dir/*"));
 rmdir($dir);
 @unlink(dirname($dir) . '/i18n-outside-' . getmypid() . '.json');

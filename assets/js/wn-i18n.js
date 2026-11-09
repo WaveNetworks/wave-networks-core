@@ -12,7 +12,9 @@
  * Locale: wn_locale cookie (localStorage on the phone, which has no cookie), then the device's
  * languages. i18n.php answers with the first published one and has already applied the
  * pt-BR → pt fallback, so this file holds one flat map. A language taken off the app answers 404
- * and its cached copy is dropped. English-first devices make no request at all.
+ * and its cached copy is dropped. English-first devices make no request at all, unless they hold a
+ * tester's preview code (wn_locale_preview cookie or localStorage; wnI18n.setPreview), which asks
+ * for that language's unpublished catalog.
  *
  * Plurals: {n, plural, ...} is formatted with Intl.PluralRules. Other ICU forms (select, number,
  * date, offset:) and ICU apostrophe quoting are not handled here: that message shows the English
@@ -129,11 +131,17 @@
         }
     }
 
-    function cookie() {
+    function cookie(name) {
         try {
-            var m = /(?:^|;\s*)wn_locale=([^;]*)/.exec(doc.cookie || '');
+            var m = new RegExp('(?:^|;\\s*)' + (name || 'wn_locale') + '=([^;]*)').exec(doc.cookie || '');
             return m ? decodeURIComponent(m[1]) : '';
         } catch (e) { return ''; }
+    }
+
+    /** A tester's preview code, 'es.<hex>', or ''. */
+    function previewCode() {
+        var c = cookie('wn_locale_preview') || store('getItem', 'wn_locale_preview') || '';
+        return /^[A-Za-z0-9-]+\.[0-9a-f]{32}$/.test(c) ? c : '';
     }
 
     /** Valid tags, most wanted first. */
@@ -167,8 +175,8 @@
 
     /** Bring the catalog up to date. Resolves either way: a failed refresh keeps what is showing. */
     function load(force) {
-        var list = wanted(), want = list.join(','), mine = ++turn, url = endpoint(), cached = null;
-        if (!list.length || /^en(-|$)/i.test(list[0])) {
+        var pv = previewCode(), list = pv ? [pv.split('.')[0]] : wanted(), want = list.join(',') + (pv ? '|preview' : ''), mine = ++turn, url = endpoint(), cached = null;
+        if (!pv && (!list.length || /^en(-|$)/i.test(list[0]))) {
             store('removeItem', CACHE);
             use({});
             return Promise.resolve();
@@ -177,7 +185,7 @@
         var usable = cached && cached.wanted === want && cached.strings && typeof cached.strings === 'object';
         use(usable ? cached : {});
         if (!url || !global.fetch || (usable && !force && Date.now() - cached.at < TTL)) { return Promise.resolve(); }
-        return global.fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + 'locale=' + encodeURIComponent(want), {credentials: 'omit', cache: 'no-cache'})
+        return global.fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + 'locale=' + encodeURIComponent(list.join(',')) + (pv ? '&preview=' + encodeURIComponent(pv) : ''), {credentials: 'omit', cache: pv ? 'no-store' : 'no-cache'})
             .then(function (res) {
                 if (res.status === 400 || res.status === 404) { return {}; }
                 return res.ok ? res.json() : null;
@@ -202,6 +210,12 @@
         return load(true);
     }
 
+    /** A tester's preview code ('' ends the preview). The phone has no cookie from the preview link. */
+    function setPreview(code) {
+        if (code) { store('setItem', 'wn_locale_preview', String(code)); } else { store('removeItem', 'wn_locale_preview'); }
+        return load(true);
+    }
+
     global.wnT = wnT;
     global.wnI18n = {
         locale: function () { return state.locale; },
@@ -209,6 +223,7 @@
         wanted: wanted,
         load: load,
         setLocale: setLocale,
+        setPreview: setPreview,
         ready: null
     };
     global.wnI18n.ready = load(false);

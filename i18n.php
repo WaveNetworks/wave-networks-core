@@ -3,6 +3,7 @@
  * i18n.php — a published catalog for JavaScript (assets/js/wn-i18n.js), public and read-only.
  *
  *   GET /admin/i18n.php?locale=pt-BR,es     the first wanted tag that is published
+ *   GET /admin/i18n.php?locale=es&preview=es.<code>   a tester's unpublished language (never cached)
  *   200 {locale, dir, strings}   400 no usable tag   404 none of them published
  *
  * No session, no database: translations of the interface are not private, and the phone's baked
@@ -26,13 +27,13 @@ if (!in_array($_SERVER['REQUEST_METHOD'] ?? '', ['GET', 'HEAD'], true)) {
     exit('{"error":"method not allowed"}');
 }
 
-$r = wn_i18n_payload($_GET['locale'] ?? '');
+$r = wn_i18n_payload($_GET['locale'] ?? '', $_GET['preview'] ?? '');
 http_response_code($r['status']);
 if ($r['status'] !== 200) {
     header('Cache-Control: no-store');
     exit($r['body']);
 }
-header('Cache-Control: public, max-age=0, must-revalidate');
+header(!empty($r['preview']) ? 'Cache-Control: no-store' : 'Cache-Control: public, max-age=0, must-revalidate');
 header('ETag: ' . $r['etag']);
 if (wn_i18n_etag_matches($_SERVER['HTTP_IF_NONE_MATCH'] ?? '', $r['etag'])) {
     http_response_code(304);

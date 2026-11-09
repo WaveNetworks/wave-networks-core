@@ -17,6 +17,7 @@
 
 if (!defined('WN_I18N_DEFAULT_LOCALE')) define('WN_I18N_DEFAULT_LOCALE', 'en');
 if (!defined('WN_I18N_COOKIE')) define('WN_I18N_COOKIE', 'wn_locale');
+if (!defined('WN_I18N_PREVIEW_COOKIE')) define('WN_I18N_PREVIEW_COOKIE', 'wn_locale_preview');
 
 if (!function_exists('wn_i18n_dir')) {
     /** Where published catalogs live. WN_I18N_DIR overrides it for tests. */
@@ -105,6 +106,33 @@ if (!function_exists('wn_locale_negotiate')) {
     }
 }
 
+if (!function_exists('wn_i18n_preview_check')) {
+    /**
+     * Testers-only preview (task #2695): "es.<32 hex>", or ''. The locale, when the code is the one
+     * the multi-lingual sub-admin wrote for it (preview/<locale>.key holds its sha256). A language
+     * in preview is not published: wn_i18n_locales() never lists it, so nobody else can get it.
+     */
+    function wn_i18n_preview_check($code) {
+        $bits = explode('.', (string) $code, 2);
+        if (count($bits) !== 2 || !preg_match('/\A[0-9a-f]{32}\z/', $bits[1])) return '';
+        $locale = wn_locale_normalize($bits[0]);
+        if ($locale === '' || $locale === WN_I18N_DEFAULT_LOCALE) return '';
+        $file = wn_i18n_dir() . '/preview/' . $locale . '.key';
+        $want = is_file($file) ? trim((string) @file_get_contents($file)) : '';
+        return ($want !== '' && hash_equals($want, hash('sha256', $bits[1]))) ? $locale : '';
+    }
+}
+
+if (!function_exists('wn_i18n_preview_locale')) {
+    /** The language this tester's cookie opens, or ''. Checked once per request. */
+    function wn_i18n_preview_locale($reset = false) {
+        static $hit = null;
+        if ($reset) $hit = null;
+        if ($hit === null) $hit = wn_i18n_preview_check($_COOKIE[WN_I18N_PREVIEW_COOKIE] ?? '');
+        return $hit;
+    }
+}
+
 if (!function_exists('wn_set_locale')) {
     /** Use $locale for the rest of this request (a queued email, a cron run). '' clears it. */
     function wn_set_locale($locale) {
@@ -113,13 +141,15 @@ if (!function_exists('wn_set_locale')) {
 }
 
 if (!function_exists('wn_locale')) {
-    /** The locale for this request: wn_set_locale(), then the cookie, then the browser. */
+    /** The locale for this request: wn_set_locale(), a tester's preview, the cookie, the browser. */
     function wn_locale() {
         $available = wn_i18n_locales();
-        foreach ([$GLOBALS['__wn_locale'] ?? '', $_COOKIE[WN_I18N_COOKIE] ?? ''] as $wanted) {
-            $hit = wn_locale_match($wanted, $available);
-            if ($hit !== '') return $hit;
-        }
+        $hit = wn_locale_match($GLOBALS['__wn_locale'] ?? '', $available);
+        if ($hit !== '') return $hit;
+        $hit = wn_i18n_preview_locale();
+        if ($hit !== '') return $hit;
+        $hit = wn_locale_match($_COOKIE[WN_I18N_COOKIE] ?? '', $available);
+        if ($hit !== '') return $hit;
         $hit = wn_locale_negotiate($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '', $available);
         return $hit !== '' ? $hit : WN_I18N_DEFAULT_LOCALE;
     }
@@ -133,7 +163,8 @@ if (!function_exists('wn_i18n_catalog')) {
         $locale = wn_locale_normalize($locale);
         if ($locale === '') return [];
         if (isset($cache[$locale])) return $cache[$locale];
-        $file = wn_i18n_dir() . '/' . $locale . '.json';
+        // A tester sees the preview file for that language (approved text and drafts).
+        $file = wn_i18n_dir() . ($locale === wn_i18n_preview_locale() ? '/preview/' : '/') . $locale . '.json';
         $data = is_file($file) ? json_decode((string) @file_get_contents($file), true) : null;
         if (is_file($file) && !is_array($data)) error_log("wn_i18n_catalog: unreadable catalog $locale");
         return $cache[$locale] = is_array($data) ? $data : [];
@@ -210,8 +241,19 @@ if (!function_exists('wn_i18n_payload')) {
      * What i18n.php serves for ?locale=<comma list>: ['status', 'body', 'etag']. The first wanted
      * tag with a published locale wins. Fallback happens here, so a client holds one flat map:
      * 'pt-BR' is the 'pt' catalog with the 'pt-BR' catalog laid over it. English needs no strings.
+     * A valid $preview code answers with that language's preview, whatever is wanted.
      */
-    function wn_i18n_payload($raw) {
+    function wn_i18n_payload($raw, $preview = '') {
+        $pv = wn_i18n_preview_check($preview);
+        if ($pv !== '') {
+            $file = wn_i18n_dir() . '/preview/' . $pv . '.json';
+            $data = is_file($file) ? json_decode((string) @file_get_contents($file), true) : null;
+            $strings = is_array($data) ? array_filter($data, fn($v) => is_string($v) && $v !== '') : [];
+            ksort($strings, SORT_STRING);
+            $body = json_encode(['locale' => $pv, 'dir' => wn_locale_dir($pv), 'strings' => (object) $strings, 'preview' => true],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return ['status' => 200, 'body' => $body, 'etag' => '"' . sha1($body) . '"', 'preview' => true];
+        }
         $wanted = wn_i18n_wanted($raw);
         if (!$wanted) return ['status' => 400, 'body' => '{"error":"locale is required"}', 'etag' => ''];
         $available = wn_i18n_locales();
