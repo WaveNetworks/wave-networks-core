@@ -436,7 +436,17 @@ window.WnRouter = (function () {
             if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
 
             var a = e.target.closest('a[href]');
-            if (!a || a.hasAttribute('data-no-route') || a.getAttribute('target') === '_blank') return;
+            if (!a || a.hasAttribute('data-no-route')) return;
+            // target="_blank" to a web page: the iOS WebView has no second window, so the tap did
+            // nothing ("Your beta page doesn't go anywhere", ContactSwipe task #2740). In the app,
+            // open it in the system browser; on the web the browser opens the new tab itself.
+            if (a.getAttribute('target') === '_blank') {
+                if (window.WN_ENV && window.WN_ENV.BUNDLED && /^https?:/i.test(a.href || '')) {
+                    e.preventDefault();
+                    Platform.openExternal(a.href);
+                }
+                return;
+            }
 
             var href = a.getAttribute('href');
             if (!href) return;
