@@ -1,5 +1,7 @@
 # wave-networks-core — CLAUDE.md
 
+How this codebase works. Everything needed to build on it is in this file and the files it points to.
+
 ## What this repo is
 Standalone auth and user admin for Wave Networks. Knows nothing about
 plans, billing, or business domain. Child apps are separate repos deployed
@@ -225,11 +227,10 @@ executed by cron.php on their respective intervals:
   weeks/{dow}  ONCE on that weekday   months/{m} ONCE on the 1st of month m
 Each day/week/month period runs once (cron_once(): a marker per schedule in
 $files_location/cron_state/, taken under a lock so overlapping minute runs never double up).
-Until 2026-10-20 days/{N} meant "day N of the month" and re-ran on every minute that day: the
-"daily" cleanups ran ~1440 times on the 1st and never otherwise, and the action-log roll-up
-inserted the same day 1440 times (one app: 8.6M user_action_summary rows for 321 facts,
-removed by cron/minutes/60/repair_action_summary.php). A job that must not double-count still
-guards itself; the runner's guarantee is "once per period", not "exactly at midnight".
+Before 2026-10-20 days/{N} meant "day N of the month" and re-ran every minute that day;
+cron/minutes/60/repair_action_summary.php repairs the duplicated action-log roll-up rows from
+that period. A job that must not double-count still guards itself; the runner's guarantee is
+"once per period", not "exactly at midnight".
 
 Daily (cron/days/1/):
   cleanup_error_log.php        — deletes error_log entries older than 30 days
@@ -461,7 +462,7 @@ Scopes: JSON array of scope strings. get_available_scopes() = core_available_sco
 Authentication: Bearer token in Authorization header. common_api.php extracts
   the token, calls validate_service_api_key(), populates global $_SERVICE_API_KEY.
   A service-key call with no device cookie / X-Wn-Device header creates NO device row (a
-  server is not a device; the monitoring server minted ~18k anonymous devices a day before 2026-10-20).
+  server is not a device).
 
 Admin view: views/api_keys.php (admin-only, page=api_keys).
   Lists keys with name, prefix, scopes, created/last-used timestamps, status.
@@ -711,7 +712,7 @@ Child extension point: legal.json at the app root ({"privacy_policy": {"path": "
 Acceptance: user_consent.source + ip_hash; wn_legal_pending() = what check_reconsent_needed()
 returns; actions getLegalStatus / acceptLegalUpdate; assets/js/legal-notice.js shows the
 one-time notice (web + device shell via build_shell map). Render with wn_legal_render_public().
-API (owner 2026-10-20), include/actions/apiActions/legalApiActions.php, scopes legal:read / legal:write
+API: include/actions/apiActions/legalApiActions.php, scopes legal:read / legal:write
 (on the monitoring key): apiGetLegalDocument (in force + history + draft), apiSaveLegalDraft (staff then
 publish from the admin page), apiResetLegalHistory (confirm=<type>:<app>): wn_legal_reset_history() deletes
 every version of ONE app's document and publishes the given text as 1.0, re-acceptance off. It is the only
@@ -736,7 +737,7 @@ keeps that status instead of flattening it to 400. An action name the deployment
 dispatch is refused by name with 404 (`wn_refuse_unknown_action()` in
 `include/common/apiDispatchFunctions.php`, reading the same action files the glob includes).
 Before 2026-09-18 both cases answered `200 {"error":"","results":[]}` — identical to "nothing
-found", which is how a fleet-wide check passed on apps it never ran on. `scripts/api-envelope-probe.php`
+found", so a caller could not tell a refusal from an empty result. `scripts/api-envelope-probe.php`
 (in the deploy, portable with `--root`) holds every endpoint to it.
 
 **One clock: UTC.** PHP runs in UTC (`date_default_timezone_set('UTC')` in `include/bootstrap.php`
@@ -748,9 +749,7 @@ reading a time (see an app's own timezone helper). `include/common/clockFunction
 helpers (`wn_clock_init_pdo`, `wn_clock_pdo_options`, `wn_clock_check`) and
 `scripts/clock-probe.php` (in the deploy, and portable with `--root`) fails the build on a
 connection opened without it. Until 2026-09-18 MySQL used the host's local zone while PHP used
-UTC: in one table, SQL-written timestamps sat an hour ahead of PHP-written ones, queued email
-compared a PHP `scheduled_at` against `NOW()`, and one app's UTC reminders were swept by
-`due_at <= NOW()` and fired an hour early through British Summer Time. Rows written before the
+UTC, so SQL-written and PHP-written timestamps disagreed by the zone offset. Rows written before the
 change are in the old local zone and were left alone, so timestamps from 2026-09-18 until the
 next DST end read an hour earlier than the rows above them.
 
@@ -765,10 +764,10 @@ backup and never read one. Key: `$backup_public_key` in config.php or `<backup d
 backup dir = `$backup_dir` or `backups/` beside `files/` (above public_html, 0700); newest
 `$backup_keep_local` (3) kept; each `.wnbk` has a plain `.json` manifest (table row counts, file
 count, ciphertext sha256, no user data) so a puller checks it without decrypting. The PRIVATE key
-lives with the owner only (p3sig vault + offline copy) — never on a host, never on a key server.
+lives with the owner only — never on a host, never on a key server.
 `wn-backup.php stream --pub B64` writes the same encrypted stream to STDOUT (manifest as the last
-STDERR line, "WNBK-MANIFEST {json}") and nothing to the host's disk: the backup box starts it over
-SSH on hosts whose cron kills long jobs (the shared host killed the cron-started run ~3 min in, 2026-10-20).
+STDERR line, "WNBK-MANIFEST {json}") and nothing to the host's disk, so a backup puller can start
+it over SSH on hosts whose cron kills long jobs.
 Each database's connection is retried (5s, 20s, 60s) on connection-level errors, since a shared MySQL
 server can refuse one briefly mid-run; the final error names the database.
 `wn-backup.php keygen|verify|restore` run anywhere with php + sodium, no app config. Runs log to
@@ -906,12 +905,11 @@ DO NOT:
 - Add business domain logic (plans, billing, coaching) to this repo
 - Create a new $db PDO connection — use the global $db set in common.php
 - Store credentials anywhere except admin/config/config.php (gitignored), or a p3sig
-  bundle in key-server mode (include/common/runtimeSecretFunctions.php; owner 2026-10-19)
+  bundle in key-server mode (include/common/runtimeSecretFunctions.php)
 - Create new API endpoint files — use action files instead
 - Edit existing migration files — always create a new version
 - Manually update the db_version table — the migration system handles it
 - Set $_SESSION['error'] immediately on first validation failure (collect all errors first)
-- Use JavaScript, computed styles, or DOM inspection to confirm visual fixes — trust screenshots as source of truth
 
 ## Template pattern
 <?php if ($someCondition) { ?>

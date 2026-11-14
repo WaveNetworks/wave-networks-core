@@ -230,7 +230,7 @@ if [[ ! "$LU_APP_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 elif [[ "$PUSH" != "--push" ]]; then
     echo "   skipped — dry run (re-run with --push to publish to $LU_CHANNEL)"
 elif [[ -z "${CAPAWESOME_TOKEN:-}" ]]; then
-    echo "   ! CAPAWESOME_TOKEN unset — cannot publish. Source it from ~/.openclaw/secrets.env" >&2
+    echo "   ! CAPAWESOME_TOKEN unset — cannot publish. Export it in the environment first." >&2
 else
     # The CLI reads CAPAWESOME_TOKEN from the ENVIRONMENT. Only `login` takes --token;
     # every other command rejects it outright ("Unknown option: --token"). Exporting it

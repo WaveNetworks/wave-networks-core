@@ -7,7 +7,8 @@
  * resolves the app from the site URL we send — so no app needs config. Drafts and internal
  * entries never leave the control plane. Cached per site for 10 minutes (a failed fetch too, so a slow or
  * down control plane costs one request per 10 minutes, never one per page). Override the endpoint
- * with NOKEMO_CHANGELOG_URL in config if it ever moves.
+ * with $whats_new_feed_url in config. With no feed configured the app simply
+ * shows no "What's new" entries.
  */
 
 if (!function_exists('whats_new_site')) {
@@ -27,14 +28,15 @@ if (!function_exists('whats_new_entries')) {
      */
     function whats_new_entries(int $days = 90, int $limit = 30): array
     {
+        global $whats_new_feed_url;
+        $url  = trim((string) ($whats_new_feed_url ?? ''));
         $site = whats_new_site();
-        if ($site === '') { return []; }
+        if ($site === '' || $url === '') { return []; }
         $cache = sys_get_temp_dir() . '/wn_whats_new_' . md5($site . '|' . $days) . '.json';
         if (is_file($cache) && filemtime($cache) > time() - 600) {
             $hit = json_decode((string) @file_get_contents($cache), true);
             if (is_array($hit)) { return array_slice($hit, 0, $limit); }
         }
-        $url = defined('NOKEMO_CHANGELOG_URL') ? NOKEMO_CHANGELOG_URL : 'https://nokemo.com/nokemo/api/index.php';
         $entries = [];
         $ch = curl_init($url);
         curl_setopt_array($ch, [

@@ -2,9 +2,10 @@
 /**
  * views/use_cases.php
  * Admin-only browser for the use_case + use_case_test_run tables.
- * Lets us verify what derive_use_cases.py has produced before turning
+ * Lets us verify what the use-case pipeline has produced before turning
  * the Playwright runner loose against prod.
  */
+global $use_case_refresh_script;
 if (!has_role('admin')) {
     $_SESSION['error'] = 'Admin access required.';
     header('Location: index.php?page=dashboard');
@@ -52,9 +53,11 @@ $page_title = 'Use Cases';
 
                 <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search slug / name..." style="width: 200px;" onkeyup="debounceSearch()">
 
+                <?php if (!empty($use_case_refresh_script)): ?>
                 <button class="btn btn-sm btn-outline-primary" id="refreshBtn" onclick="refreshUseCases()" title="Re-derive use_cases from the latest test-user action log + regenerate Playwright specs">
                     <i class="bi bi-arrow-clockwise"></i> Refresh
                 </button>
+                <?php endif; ?>
             </div>
         </div>
     </div>

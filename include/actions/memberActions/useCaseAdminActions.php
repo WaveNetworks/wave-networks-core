@@ -204,9 +204,9 @@ if (($_POST['action'] ?? '') == 'getUseCaseDetail') {
 
 // ─── refreshUseCases — admin trigger for derive + spec generation ──────────
 //
-// Replaces the "SSH in and run admin/scripts/derive_use_cases.py" empty-state
+// Replaces an "SSH in and run the derive script" empty-state
 // hint with an in-UI button. Runs the same wrapper the daily cron uses
-// (refresh_use_case_specs_all.sh), which loops every configured deployment
+// (named by $use_case_refresh_script in config), which loops every configured deployment
 // and re-derives use_cases from each test user's action log.
 //
 // Admin only. shell_exec'd with a 5-minute cap (the script is normally
@@ -215,8 +215,11 @@ if (($_POST['action'] ?? '') == 'refreshUseCases') {
     if (!has_role('admin')) {
         $_SESSION['error'] = 'Admin access required.';
     } else {
-        $script = '/mnt/data/nokemo/scripts/refresh_use_case_specs_all.sh';
-        if (!is_file($script) || !is_executable($script)) {
+        global $use_case_refresh_script;
+        $script = trim((string) ($use_case_refresh_script ?? ''));
+        if ($script === '') {
+            $_SESSION['error'] = 'No refresh script configured ($use_case_refresh_script in config).';
+        } elseif (!is_file($script) || !is_executable($script)) {
             $_SESSION['error'] = "refresh script not found or not executable at $script";
         } elseif (!function_exists('shell_exec')) {
             $_SESSION['error'] = 'shell_exec is disabled on this host';

@@ -76,3 +76,14 @@ $vapid_private_key = '';
 // $proxy_auth_logout_url        = '/Shibboleth.sso/Logout';
 // $proxy_auth_autocreate        = false;  // create unknown users (still obeys registration_mode)
 // $proxy_auth_required          = true;   // false = the password form stays as a second door
+
+// ─── Optional: monitoring and testing hooks ────────────────────────────────
+// All unset by default; the app works without them.
+// The account automated tests sign in as (is_test_account = 1).
+// $test_account_email = 'test@temporarydemo.com';
+// Where the in-app "What's new" entries come from (an API that answers changelogPublicFeed).
+// $whats_new_feed_url = 'https://your-control-plane.example.com/api/index.php';
+// Extra error-log URL patterns cron auto-resolves as noise (SQL LIKE patterns).
+// $noise_url_patterns = ['%/some/other/app/api%'];
+// A script the Use cases page's Refresh button runs (only shown when set).
+// $use_case_refresh_script = '/path/to/refresh_use_cases.sh';

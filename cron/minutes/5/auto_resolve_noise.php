@@ -39,8 +39,13 @@ $noisePatterns = [
     '%favicon.ico%',
     '%favicon.svg%',
     '%/admin/api/index.php%',
-    '%/nokemo/api/index.php%',
 ];
+// Host-specific noise (e.g. another app's API path on a shared host) comes
+// from config: $noise_url_patterns = ['%/some/path%', ...];
+global $noise_url_patterns;
+foreach ((array) ($noise_url_patterns ?? []) as $p) {
+    if (is_string($p) && $p !== '') { $noisePatterns[] = $p; }
+}
 
 $noise_resolved = 0;
 $stale_resolved = 0;

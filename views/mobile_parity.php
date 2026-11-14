@@ -2,7 +2,7 @@
 /**
  * views/mobile_parity.php
  * Admin-only browser for the mobile_parity inventory.
- * Populated by audit_mobile_parity.py (nightly via cron, or manual), or by a child
+ * Populated by a monitoring pipeline through the API, or by a child
  * app that registers its own catalog with mobile_parity_sync() (mobileParityFunctions.php).
  */
 if (!has_role('admin')) {
@@ -126,8 +126,7 @@ $page_title = 'Mobile Parity';
 
             if (items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-body-secondary p-3">'
-                    + 'No rows. Run <code>admin/scripts/audit_mobile_parity.py</code> + '
-                    + '<code>admin/scripts/diff_view_contract.py</code> to populate, or have the app call '
+                    + 'No rows. A monitoring pipeline fills this through the API, or have the app call '
                     + '<code>mobile_parity_sync()</code> from its cron.</td></tr>';
                 return;
             }
