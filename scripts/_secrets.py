@@ -1,4 +1,4 @@
-"""Load credentials from the gitignored ~/.openclaw/secrets.env.
+"""Load credentials from the gitignored secrets.env on the ops box (SECRETS_PATH).
 
 Why this exists: until 2026-08-03 the scripts in this directory carried live
 `wn_sk_...` service keys as hardcoded `os.environ.get("WN_API_KEY", "<literal>")`

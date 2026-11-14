@@ -1,5 +1,5 @@
 -- Migration 3.5 for Main Database
--- Add resolution_reason + resolution_notes to error_log so the nokemo builder
+-- Add resolution_reason + resolution_notes to error_log so the control plane's builder
 -- (and humans) can record why an error was closed: fixed, already_fixed,
 -- cant_fix, noise, wont_fix. Enables the autonomous agent to move on cleanly
 -- when a fix isn't possible instead of churning on the same error forever.

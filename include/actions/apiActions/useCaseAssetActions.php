@@ -147,7 +147,7 @@ if (($action ?? null) == 'apiListUseCaseAssets') {
     }
 }
 
-// ── Drift report for the monitoring poll (nokemo files a task off this) ───────
+// ── Drift report for the monitoring poll (the control plane files a task off this) ───────
 if (($action ?? null) == 'apiGetUseCaseAssetReview') {
     if (require_api_scope('monitoring:read')) {
         $count = use_case_asset_review_sweep();

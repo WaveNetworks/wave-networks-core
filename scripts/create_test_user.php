@@ -2,8 +2,10 @@
 /**
  * create_test_user.php — Phase1-T6 seed script.
  *
- * Ensures the canonical test user (nokemo@nokemo.com, is_test_account=1)
- * exists on this admin host. CLI-only and idempotent: safe to re-run.
+ * Ensures the test user (is_test_account=1) exists on this admin host.
+ * The address is $test_account_email from config, else TEST_ACCOUNT_EMAIL
+ * from the environment, else test@temporarydemo.com.
+ * CLI-only and idempotent: safe to re-run.
  *
  * Usage:
  *   php admin/scripts/create_test_user.php
@@ -23,7 +25,9 @@ $dry_run = in_array('--dry-run', $argv, true);
 
 require __DIR__ . '/../include/common_readonly.php';
 
-$test_email = 'nokemo@nokemo.com';
+global $test_account_email;
+$test_email = !empty($test_account_email) ? (string) $test_account_email
+            : (getenv('TEST_ACCOUNT_EMAIL') ?: 'test@temporarydemo.com');
 $s_email    = sanitize($test_email, SQL);
 
 // 1. Check if user already exists
@@ -83,7 +87,7 @@ prime_shard($shard_id);
 db_query_shard(
     $shard_id,
     "INSERT INTO user_profile (user_id, first_name, last_name, created)
-     VALUES ('$new_id', 'Nokemo', 'Test', NOW())"
+     VALUES ('$new_id', 'Test', 'User', NOW())"
 );
 
 // 4. Homedir (create_home_dir_id reads $_SESSION['shard_id'])

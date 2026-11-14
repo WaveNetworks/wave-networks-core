@@ -1,7 +1,7 @@
 <?php
 /**
  * loginCodeFunctions.php
- * "Email me a sign-in code" — sign in without a password (ContactSwipe task #2389).
+ * "Email me a sign-in code" — sign in without a password.
  *
  * A 6-digit code, emailed through the core mailer, valid 10 minutes, single use,
  * stored only as a password_hash(). At most 5 tries per code; requests are rate

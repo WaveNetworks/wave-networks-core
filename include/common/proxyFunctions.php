@@ -2,7 +2,7 @@
 /**
  * proxyFunctions.php
  * Running behind a reverse proxy: TLS ends at the proxy, and optionally sign-in does too
- * (a Shibboleth SP on the proxy, as UW/ITHS run TRU and RISE).
+ * (a Shibboleth SP on the proxy, as some university deployments run).
  *
  * Both halves are OFF until configured, so a host without a proxy is unchanged.
  *
@@ -26,7 +26,7 @@
  *    $proxy_auth_autocreate (create unknown users, honouring registration_mode),
  *    $proxy_auth_required (default on: no identity = no way in, no password form).
  *
- * What we learned doing this for TRU (crctest/crcdev/tru.rit.uw.edu, 2026-10):
+ * What we learned doing this for one app's test, dev and production hosts (2026-10):
  *  - The same attribute arrives under different names depending on WHERE the SP is.
  *    SP on this server: an Apache env var ('eppn'). SP on a proxy: a request header, which
  *    PHP sees as HTTP_<NAME> ('RequestHeader set EduPersonPrincipalName ...' →

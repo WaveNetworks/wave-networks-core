@@ -9,13 +9,13 @@
  *   • A stored datetime is therefore always UTC, whoever wrote it, and a comparison
  *     between a value PHP computed and NOW() is meaningful.
  *   • Local time exists only at the edges: what a person is shown, and what a person
- *     typed (contactswipe's csTimezone.php converts those per user).
+ *     typed (a child app converts those per user).
  *
  * Why (2026-09-18): PHP defaulted to UTC while MySQL used the server's local zone
  * (Europe/London, so UTC+1 in summer). Every column written by SQL was an hour ahead of
  * every value PHP wrote, in the same table — an error's resolved_at (NOW()) read an hour
  * after the app's own clock, queued email compared a PHP scheduled_at against NOW(), and
- * ContactSwipe's reminders, which are deliberately stored in UTC, were swept by
+ * One app's reminders, which are deliberately stored in UTC, were swept by
  * "due_at <= NOW()" and so fired up to an hour early all summer. Local time also jumps
  * twice a year: an hour repeats in October and an hour does not exist in March, which no
  * amount of care in application code can make safe to order or compare by.

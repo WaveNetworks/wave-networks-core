@@ -20,8 +20,8 @@ Pipeline per source_app:
                                   source_app+slug
 
 Usage:
-  derive_use_cases.py --apps nokemo,elevateher,pwt
-  derive_use_cases.py --apps nokemo --since 2026-04-20  --dry-run
+  derive_use_cases.py --apps app1,app2
+  derive_use_cases.py --apps app1 --since 2026-04-20  --dry-run
 
 The script is read-mostly safe: --dry-run skips the UPSERT step and
 just prints what it would emit.
@@ -43,7 +43,7 @@ WN_API_URL = os.environ.get(
     "WN_API_URL",
     "https://nokemo.com/admin/api/index.php",
 )
-# Credentials come from the gitignored ~/.openclaw/secrets.env — never
+# Credentials come from the gitignored secrets.env on the ops box — never
 # hardcoded here. They were, and were committed in plaintext, until 2026-08-03.
 # refresh_use_case_specs.sh already passes WN_API_KEY through `env`; the
 # secrets.env fallback is only so a standalone run still works.
@@ -238,7 +238,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--apps", required=True,
-                    help="Comma-separated source_app slugs (e.g. nokemo,elevateher,pwt)")
+                    help="Comma-separated source_app slugs (e.g. app1,app2)")
     ap.add_argument("--since", default=None, metavar="YYYY-MM-DD[ HH:MM:SS]",
                     help="Earliest action log timestamp to consider.")
     ap.add_argument("--email", default=None,

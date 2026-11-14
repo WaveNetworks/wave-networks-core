@@ -11,7 +11,7 @@ APPPHP() { $P exec -T app php -r "$1" 2>/dev/null; }
 
 curl -s -o /dev/null -w "first request (runs migrations): %{http_code}\n" "$B/auth/login.php"
 $P exec -T app php /var/www/public_html/admin/scripts/create_test_user.php 2>&1 | tail -1
-EMAIL=nokemo@nokemo.com; PW='Correct-Horse-1!'
+EMAIL=test@temporarydemo.com; PW='Correct-Horse-1!'
 LEGACY=$(APPPHP "echo password_hash('$PW' . getenv('HIDDEN_HASH'), PASSWORD_BCRYPT);")
 SQL "UPDATE user SET password='$LEGACY', is_confirmed=1, totp_enabled=0 WHERE email='$EMAIL'"
 echo "stored before: $(SQL "SELECT LEFT(password,8) FROM user WHERE email='$EMAIL'")"

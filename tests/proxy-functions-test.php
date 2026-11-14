@@ -30,7 +30,7 @@ check('v4 vs v6 list',    wn_ip_in_cidr('10.0.0.1', '::1/128'), false);
 check('garbage',          wn_ip_in_cidr('nope', '10.0.0.0/8'), false);
 
 $fwd = ['REMOTE_ADDR' => '10.1.1.5', 'HTTP_HOST' => 'backend:8444', 'HTTP_X_FORWARDED_PROTO' => 'https',
-        'HTTP_X_FORWARDED_HOST' => 'tru.rit.uw.edu', 'HTTP_X_FORWARDED_FOR' => '6.6.6.6, 128.95.1.2', 'HTTP_X_FORWARDED_PORT' => '443'];
+        'HTTP_X_FORWARDED_HOST' => 'app.temporarydemo.com', 'HTTP_X_FORWARDED_FOR' => '6.6.6.6, 128.95.1.2', 'HTTP_X_FORWARDED_PORT' => '443'];
 
 // Off by default: headers ignored
 request($fwd);
@@ -41,7 +41,7 @@ check('off: host kept',         $_SERVER['HTTP_HOST'], 'backend:8444');
 // From a trusted proxy: applied; the visitor is the right-most untrusted hop, not the spoofable left one
 request($fwd, ['trusted_proxies' => '10.1.1.0/24']);
 check('trusted: HTTPS on',      $_SERVER['HTTPS'] ?? null, 'on');
-check('trusted: host',          $_SERVER['HTTP_HOST'], 'tru.rit.uw.edu');
+check('trusted: host',          $_SERVER['HTTP_HOST'], 'app.temporarydemo.com');
 check('trusted: port',          $_SERVER['SERVER_PORT'], '443');
 check('trusted: visitor IP',    $_SERVER['REMOTE_ADDR'], '128.95.1.2');
 check('trusted: peer kept',     $_SERVER['WN_PEER_ADDR'], '10.1.1.5');
@@ -65,20 +65,20 @@ request([], ['trusted_proxies' => '10.1.1.0/24']);
 check('cli untouched', isset($_SERVER['WN_PEER_ADDR']), false);
 
 // ── Identity ──
-$shib = ['REMOTE_ADDR' => '10.1.1.5', 'HTTP_EDUPERSONPRINCIPALNAME' => 'pat@uw.edu;pat2@uw.edu'];
+$shib = ['REMOTE_ADDR' => '10.1.1.5', 'HTTP_EDUPERSONPRINCIPALNAME' => 'pat@temporarydemo.com;pat2@temporarydemo.com'];
 
 request($shib, ['trusted_proxies' => '10.1.1.0/24', 'proxy_auth_user_header' => 'EduPersonPrincipalName']);
 $who = wn_proxy_auth_identity();
-check('header from proxy: id (first of multi)', $who['id'] ?? null, 'pat@uw.edu');
-check('eppn doubles as email', $who['email'] ?? null, 'pat@uw.edu');
+check('header from proxy: id (first of multi)', $who['id'] ?? null, 'pat@temporarydemo.com');
+check('eppn doubles as email', $who['email'] ?? null, 'pat@temporarydemo.com');
 
 request($shib, ['proxy_auth_user_header' => 'EduPersonPrincipalName']);
 check('header from non-proxy: refused', wn_proxy_auth_identity(), null);
 
-request(['REMOTE_ADDR' => '127.0.0.1', 'eppn' => 'local@uw.edu'], ['proxy_auth_user_header' => 'eppn']);
-check('same-box SP env var',   wn_proxy_auth_identity()['id'] ?? null, 'local@uw.edu');
-request(['REMOTE_ADDR' => '127.0.0.1', 'REDIRECT_eppn' => 'r@uw.edu'], ['proxy_auth_user_header' => 'eppn']);
-check('REDIRECT_ env var',     wn_proxy_auth_identity()['id'] ?? null, 'r@uw.edu');
+request(['REMOTE_ADDR' => '127.0.0.1', 'eppn' => 'local@temporarydemo.com'], ['proxy_auth_user_header' => 'eppn']);
+check('same-box SP env var',   wn_proxy_auth_identity()['id'] ?? null, 'local@temporarydemo.com');
+request(['REMOTE_ADDR' => '127.0.0.1', 'REDIRECT_eppn' => 'r@temporarydemo.com'], ['proxy_auth_user_header' => 'eppn']);
+check('REDIRECT_ env var',     wn_proxy_auth_identity()['id'] ?? null, 'r@temporarydemo.com');
 request(['REMOTE_ADDR' => '10.1.1.5', 'HTTP_EPPN' => '(null)'], ['trusted_proxies' => '10.1.1.5', 'proxy_auth_user_header' => 'eppn']);
 check('(null) = no identity',  wn_proxy_auth_identity(), null);
 
@@ -91,9 +91,9 @@ check('required can be turned off', wn_proxy_auth_required(), false);
 
 // Session made by someone else
 request($shib, ['trusted_proxies' => '10.1.1.0/24', 'proxy_auth_user_header' => 'EduPersonPrincipalName']);
-$_SESSION = ['user_id' => 7, 'proxy_auth_id' => 'other@uw.edu'];
+$_SESSION = ['user_id' => 7, 'proxy_auth_id' => 'other@temporarydemo.com'];
 check('mismatch detected', wn_proxy_auth_session_mismatch(), true);
-$_SESSION['proxy_auth_id'] = 'pat@uw.edu';
+$_SESSION['proxy_auth_id'] = 'pat@temporarydemo.com';
 check('same person ok',    wn_proxy_auth_session_mismatch(), false);
 $_SESSION = ['user_id' => 7];
 check('password session untouched', wn_proxy_auth_session_mismatch(), false);

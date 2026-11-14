@@ -177,9 +177,9 @@ async function client() {
     check('late answer is dropped', b.w.wnT('greet', 'Hello'), 'Hallo');
 
     // Where it asks.
-    b = browser({ env: { BUNDLED: true, API_BASE: 'https://contactsweep.com/contactsweep/api/' } });
+    b = browser({ env: { BUNDLED: true, API_BASE: 'https://example.com/myapp/api/' } });
     await b.w.wnI18n.ready;
-    check('phone asks the server, not the bundle', b.calls[0].url, 'https://contactsweep.com/admin/i18n.php?locale=es-MX');
+    check('phone asks the server, not the bundle', b.calls[0].url, 'https://example.com/admin/i18n.php?locale=es-MX');
 }
 
 function get(port, url, headers = {}, method = 'GET') {

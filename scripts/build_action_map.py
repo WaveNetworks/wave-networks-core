@@ -22,14 +22,14 @@ Output:
   - Stable across runs as long as source code is stable.
 
 Usage:
-    build_action_map.py --source-app nokemo \\
-        --source-roots /mnt/data/nokemo,/mnt/data/nokemo/admin \\
-        --wn-api-url https://nokemo.com/admin/api/index.php \\
+    build_action_map.py --source-app app1 \\
+        --source-roots ~/src/app1,~/src/app1/admin \\
+        --wn-api-url https://example.com/admin/api/index.php \\
         --wn-api-key wn_sk_...
 
-    build_action_map.py --source-app elevateher \\
-        --source-roots /mnt/data/nokemo/.tmp-elevateher,/mnt/data/nokemo/admin \\
-        --wn-api-url https://dswa.org/admin/api/index.php \\
+    build_action_map.py --source-app app2 \\
+        --source-roots ~/src/app2,~/src/app1/admin \\
+        --wn-api-url https://app2.example.com/admin/api/index.php \\
         --wn-api-key wn_sk_...
 
 Re-runs are idempotent: apiUpsertUseCase keys on (source_app, slug).
@@ -283,7 +283,7 @@ def main():
                     help="The source_app slug to register use_cases under.")
     ap.add_argument("--source-roots", required=True,
                     help="Comma-separated source tree roots to scan, e.g. "
-                         "/mnt/data/nokemo/.tmp-elevateher,/mnt/data/nokemo/admin")
+                         "~/src/myapp,~/src/myapp/admin")
     ap.add_argument("--wn-api-url",
                     default=os.environ.get("WN_API_URL"))
     ap.add_argument("--wn-api-key",

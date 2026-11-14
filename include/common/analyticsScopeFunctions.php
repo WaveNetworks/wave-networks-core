@@ -16,7 +16,7 @@
  *
  * Child apps wire their domain-specific concepts (companies, coaches, key
  * activation events, cohort splits) via the register_* and set_*_resolver
- * hooks during bootstrap. The admin core does NOT know about elevateHER
+ * hooks during bootstrap. The admin core does NOT know about any one app
  * or any other child app.
  */
 

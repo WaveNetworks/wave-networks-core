@@ -2,7 +2,7 @@
 /**
  * brandingValidation.php — compliance checks for branding + store assets.
  *
- * See docs/Branding.md. The short version: pwt shipped a PWA icon that was a blank
+ * See docs/Branding.md. The short version: one app shipped a PWA icon that was a blank
  * white square — a valid 512x512 PNG, HTTP 200, correct filename, ONE unique colour —
  * and every check it had passed. So the useful rules here are SEMANTIC, not structural.
  * Dimensions and file types matter only because stores hard-reject on them.
@@ -180,7 +180,7 @@ function branding_distinct_on($path, $hex, $grid = 24) {
 /**
  * Does this SVG paint text through a font? Glyphs then depend on a font the renderer may
  * not have — and the server, the phone and the CI box are three different renderers. This
- * is the check that would have caught pwt's monogram rendering as a fallback serif
+ * is the check that would have caught one app's monogram rendering as a fallback serif
  * everywhere, in a file that was otherwise perfectly valid.
  */
 function branding_svg_has_text($path) {

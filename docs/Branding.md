@@ -1,11 +1,11 @@
 # App Branding & Store Assets
 
-Status: **SPEC — not built.** Written 2026-08-28 after a run of brand bugs in pwt that
+Status: **SPEC — not built.** Written 2026-08-28 after a run of brand bugs in one app that
 every existing check passed. Review before implementing.
 
 ## Why this exists
 
-pwt shipped a PWA icon that was a **blank white square**: a valid 512×512 PNG, served
+One app shipped a PWA icon that was a **blank white square**: a valid 512×512 PNG, served
 HTTP 200, correct dimensions, correct filename. Nothing downstream noticed for months.
 It had one unique colour.
 
@@ -57,8 +57,8 @@ Assets live in the **app repo** under `assets/brand/`, not in server-side
 
 Note the last point is deliberately *not* "cloud agents cannot reach the API". Cloud agents
 do reach their app's admin API; the one blocked host is `subtheme.com`, most likely rate
-limited from LLM crawler traffic (it serves `llms.txt`, as does `nokemo.com`;
-`playwithtarot.com` does not). Repo storage is chosen here for durability, parity and
+limited from LLM crawler traffic (it serves `llms.txt`, as does the control plane's
+site; an app site without one is not blocked). Repo storage is chosen here for durability, parity and
 reviewability — not to work around a reachability limit.
 
 The admin UI writes through the same API, so "upload in admin" and "agent commits a file"
@@ -183,7 +183,7 @@ branding_validate(app_id)
 branding_regenerate_derived(app_id)
 ```
 
-Routed through the existing `monitor_call_app_admin` proxy so nokemo decrypts the target
+Routed through the existing `monitor_call_app_admin` proxy so the control plane decrypts the target
 app's key server-side and it never enters the agent's context.
 
 ⚠️ **Tools take a PATH or URL, never inline base64.** A 2MB screenshot is ~2.7MB of base64
@@ -217,10 +217,10 @@ self-service. That raises the bar in three ways:
 - **Role gating.** `saveBranding` has no role check today. Branding must be restricted to
   the app's owner/admin, not any member.
 
-### 2. nokemo.com markets them as a portfolio
+### 2. The control plane's site markets them as a portfolio
 
 The same assets — icon, feature graphic, screenshots, name, description — are exactly what
-a portfolio page needs. nokemo already holds every app in `registered_app` and can already
+a portfolio page needs. The control plane already holds every app in `registered_app` and can already
 reach each one's admin API.
 
 ⚠️ **Publishing is opt-in and needs real consent.** These are *customers'* apps. Requirements:
@@ -236,11 +236,11 @@ reach each one's admin API.
 **Mirror the assets; do not fetch live.** On 2026-08-28 three apps on this host returned
 503 for ~20 minutes. A portfolio that pulls each app's assets at page render breaks
 whenever any app is down, leaks that outage to a marketing page, and is slow even when
-healthy. nokemo should copy assets into its own storage when they change (the API can
+healthy. The control plane should copy assets into its own storage when they change (the API can
 report an asset hash so it only re-pulls on change).
 
 **The portfolio raises the stakes on compliance**: a showcase is only as good as its worst
-icon, and the blank-icon failure mode becomes publicly visible on nokemo's own marketing.
+icon, and the blank-icon failure mode becomes publicly visible on the control plane's own marketing.
 
 ## Open questions
 
@@ -253,5 +253,5 @@ icon, and the blank-icon failure mode becomes publicly visible on nokemo's own m
    Map them into the new slots, or require a one-time re-declaration per app?
 5. Portfolio consent: one opt-in per app, or per asset? Screenshots carry the data-leak
    risk, so per-asset is safer — but it is more friction for the customer.
-6. Where do mirrored portfolio assets live on nokemo, and what invalidates the cache —
+6. Where do mirrored portfolio assets live on the control plane, and what invalidates the cache —
    an asset hash returned by `apiGetBranding`, or a push on save?

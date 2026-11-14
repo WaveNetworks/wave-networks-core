@@ -19,8 +19,8 @@
  * `retire p1 --force` lists them, it never changes anything itself.
  *
  * Child apps: values they keep in their own DB count only if they register the column
- * (wn_register_sealed_column()). Code with its own crypto off $app_secret (brand-compiler
- * bc_encrypt) must move to wn_secret_encrypt() before a new key is made current.
+ * (wn_register_sealed_column()). Code with its own crypto off $app_secret (e.g. an
+ * app's own encrypt helper) must move to wn_secret_encrypt() before a new key is made current.
  */
 
 if (php_sapi_name() !== 'cli') { http_response_code(403); exit('CLI only.'); }

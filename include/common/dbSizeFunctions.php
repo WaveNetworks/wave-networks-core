@@ -3,7 +3,7 @@
  * dbSizeFunctions.php
  * Shard / database size monitoring.
  *
- * On shared hosting (makershost.io) every admin DB, shard DB, and child-app DB
+ * On shared hosting every admin DB, shard DB, and child-app DB
  * is a separate MySQL schema on the same server. A single information_schema
  * query therefore reports the size of every database this host can see. If any
  * one schema approaches the ~1GB shared-hosting ceiling the platform can break,
@@ -221,7 +221,7 @@ function db_size_measure_one($schema, $conn) {
 function db_size_tables_one($schema, $conn, $limit = 15, $count_table = '') {
     /**
      * The largest tables of one schema. $conn null means the connection we are already on. `rows`
-     * is InnoDB's estimate and can be off by double (ContactSwipe shard2: 3.9M reported, 2.1M
+     * is InnoDB's estimate and can be off by double (one app's shard2: 3.9M reported, 2.1M
      * real), so a table named in $count_table also gets `exact_rows`, a real COUNT(*). The name
      * is only used after information_schema has returned it. Returns null when unreachable.
      */

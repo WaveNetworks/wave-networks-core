@@ -380,7 +380,7 @@ your-app/adoption.json      <- git-tracked, required
 ```json
 {
   "schema_version": "1.0",
-  "app": "hireasupport",
+  "app": "acme",
 
   "metaphor": "A market stall. Sellers set out gigs; buyers pick one up and pay.",
 
@@ -500,7 +500,7 @@ The schema above is normative as of schema_version 1.0. The core runtime that
 consumes it — `adoptionSync.php`, the checklist tables, the stall-detection
 cron, and the CI completeness scanner — is being built. Until it lands, seed the
 layer by hand from the same JSON using the primitives in the table above
-(`elevateher/include/common/dswaOnboardingSeed.php` is a worked example). The
+(`acme/include/common/acmeOnboardingSeed.php` would be a typical example). The
 file is required either way, so the cutover is mechanical rather than a rewrite.
 
 ## Docker development

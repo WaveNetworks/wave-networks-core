@@ -2,7 +2,7 @@
 /**
  * twofaEmailFunctions.php
  * "Can't use any of these?" — a code to your VERIFIED email as the LAST-RESORT second
- * factor (ContactSwipe task #2660, part 2 of #2658). Without it, a lost phone meant a
+ * factor. Without it, a lost phone meant a
  * locked-out account.
  *
  * Same mechanics as the emailed sign-in code (loginCodeFunctions.php): 6 digits, valid

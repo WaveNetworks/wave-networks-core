@@ -6,7 +6,7 @@ use_case rows.
 For each use_case row in the admin-core DB:
   - read its action_path JSON (one record per step the user took)
   - filter to navigation steps (action='view' on a known page)
-  - emit a TypeScript spec that logs in as nokemo@nokemo.com,
+  - emit a TypeScript spec that logs in as the test user,
     visits each page in order, screenshots before+after, and
     asserts no console errors or 5xx responses
 
@@ -31,9 +31,9 @@ with the deploy actions"):
 
 Usage:
     generate_playwright_specs.py \\
-        --source-app nokemo \\
-        --output-dir /mnt/data/nokemo \\
-        --base-url https://nokemo.com
+        --source-app myapp \\
+        --output-dir ~/src/myapp \\
+        --base-url https://myapp.example.com
 
 The output-dir is the CHILD APP'S repo root; the script writes
 relative to there. Re-running is idempotent — each spec gets
@@ -54,7 +54,7 @@ import requests
 WN_API_URL = os.environ.get(
     "WN_API_URL", "https://nokemo.com/admin/api/index.php"
 )
-# Credentials come from the gitignored ~/.openclaw/secrets.env — never
+# Credentials come from the gitignored secrets.env (see _secrets.py) — never
 # hardcoded here. They were, and were committed in plaintext, until 2026-08-03.
 # refresh_use_case_specs.sh already passes WN_API_KEY through `env`; the
 # secrets.env fallback is only so a standalone run still works.
@@ -185,7 +185,7 @@ def emit_spec(use_case: dict, source_app: str, base_url: str,
         import {{ test, expect }} from '@playwright/test';
 
         const BASE = process.env.BASE_URL || '{base_url}';
-        const TEST_EMAIL = process.env.TEST_USER_EMAIL || 'nokemo@nokemo.com';
+        const TEST_EMAIL = process.env.TEST_USER_EMAIL || 'test@temporarydemo.com';
         const TEST_PASSWORD = process.env.TEST_USER_PASSWORD || '';
         const runId = process.env.TEST_RUN_ID || new Date()
             .toISOString().replace(/[:T]/g, '-').slice(0, 19);
@@ -300,7 +300,7 @@ def main() -> int:
                          "writes into {repo}/tests/use-cases/.")
     ap.add_argument("--base-url", required=True,
                     help="Public base URL of the deployed child app, "
-                         "e.g. https://nokemo.com")
+                         "e.g. https://myapp.example.com")
     ap.add_argument("--limit", type=int, default=1000)
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()

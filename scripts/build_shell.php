@@ -31,7 +31,7 @@
 $coreRoot = dirname(__DIR__);
 require_once($coreRoot . '/include/mobile/split_view.php');
 $appRoot = getcwd();
-$appOrigin = '';   // the app's API/media origin, e.g. https://vivajee.com — for the CSP
+$appOrigin = '';   // the app's API/media origin, e.g. https://example.com — for the CSP
 foreach ($argv as $a) {
     if (strpos($a, '--app-root=')   === 0) $appRoot   = rtrim(substr($a, 11), '/');
     if (strpos($a, '--app-origin=') === 0) $appOrigin = rtrim(substr($a, 13), '/');
@@ -151,7 +151,7 @@ $assetMap = [
 $html = preg_replace('/(\.(?:css|js))\?[^"\'\s>]*/', '$1', $html);
 
 // An app may load its OWN copy of core's chrome JS from assets/js/vendor/ instead of reaching
-// into ../../admin (pwt does). Same file, same fate — bs-init.js must still be dropped — so fold
+// into ../../admin (some apps do). Same file, same fate — bs-init.js must still be dropped — so fold
 // each such reference onto core's key and let the map below decide.
 foreach ($assetMap as $from => $to) {
     if (strpos($from, '../../admin/assets/js/') !== 0) continue;
@@ -178,11 +178,11 @@ foreach ($assetMap as $from => $to) {
 // Without this the reference survives as "../assets/js/X.js": a path that resolves in the
 // web app's tree and 404s on the device. Silently, and with no build error to catch it —
 // the completeness assert runs from m/, where ../assets/js IS the app repo, so every one of
-// those escapes reads as present. contactswipe's shell referenced twenty of them, the map
+// those escapes reads as present. one app's shell referenced twenty of them, the map
 // engine (circles.js) among them, and built clean.
 $html = preg_replace('#(["\'])\.\./assets/js/(?:vendor/)?([A-Za-z0-9._-]+\.js)#', '$1js/vendor/$2', $html);
 
-// The app's own stylesheets (pwt: panorama, oracle-chat, illuminated-reading) keep their
+// The app's own stylesheets (e.g. panorama, oracle-chat, illuminated-reading) keep their
 // place under assets/css/ — release-mobile.sh step 3 copies each one the shell references,
 // and their url(../img/…) then still lands on the assets/img/ it already vendors.
 $html = preg_replace('#(["\'])\.\./assets/css/([A-Za-z0-9._-]+\.css)#', '$1assets/css/$2', $html);
@@ -219,7 +219,7 @@ $html = preg_replace_callback(
 $html = preg_replace('#<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>#i', '', $html);
 // app-fonts.css is only produced when the app ships self-hosted brand fonts:
 // release-mobile.sh copies assets/fonts/app-fonts.css → m/assets/app-fonts.css inside a
-// `compgen -G assets/fonts/*.woff2` guard. Apps without brand fonts (e.g. pwt) never get
+// `compgen -G assets/fonts/*.woff2` guard. Apps without brand fonts never get
 // the file, so referencing it unconditionally is a guaranteed 404 on every shell load.
 // Link it only when the app ships woff2s — the exact condition under which the CSS lands.
 $fontLink = glob($appRoot . '/assets/fonts/*.woff2')
@@ -245,7 +245,7 @@ $html = str_replace('../../admin/branding/', 'assets/img/', $html);
 // The template points at the server's ../../admin/manifest.php. Two problems in a
 // bundle: it is a cross-repo server path that does not exist offline, and its icons
 // are the branding pwa_icon_*.png, which are generated server-side and can be wrong
-// (pwt's were a blank white square — a valid PNG, HTTP 200, one unique colour).
+// (one app's were a blank white square — a valid PNG, HTTP 200, one unique colour).
 //
 // That matters more than a favicon: for install and home-screen purposes the MANIFEST
 // icons win over <link rel="icon">, so a good tile in the head is still overridden by a
@@ -336,7 +336,7 @@ $shellHtml = preg_replace(
 // app's own origin is allowed for connect/img/media so the bundle can reach its API and
 // render user media; it comes from --app-origin (the same domain env.js uses).
 // 'wasm-unsafe-eval' lets bundled WebAssembly compile (it allows no JS eval): an app's
-// lazy assets/lazy/ may ship a wasm module (ContactSwipe's face finder, task #2293), and
+// lazy assets/lazy/ may ship a wasm module (e.g. a face finder), and
 // without it WebAssembly.instantiate is refused under script-src 'self'.
 $o = $appOrigin !== '' ? ' ' . $appOrigin : '';
 $csp = '<meta http-equiv="Content-Security-Policy" content="'

@@ -1,12 +1,12 @@
 <?php
 /**
- * whatsNewFunctions.php — in-app "What's new" (nokemo task #2316).
+ * whatsNewFunctions.php — in-app "What's new".
  *
- * nokemo owns one changelog for every monitored app; the owner publishes it there. This reads
- * that app's PUBLISHED, user-facing entries from nokemo's no-key `changelogPublicFeed`, which
+ * The control plane owns one changelog for every monitored app; the owner publishes it there. This reads
+ * that app's PUBLISHED, user-facing entries from the control plane's no-key `changelogPublicFeed`, which
  * resolves the app from the site URL we send — so no app needs config. Drafts and internal
- * entries never leave nokemo. Cached per site for 10 minutes (a failed fetch too, so a slow or
- * down nokemo costs one request per 10 minutes, never one per page). Override the endpoint
+ * entries never leave the control plane. Cached per site for 10 minutes (a failed fetch too, so a slow or
+ * down control plane costs one request per 10 minutes, never one per page). Override the endpoint
  * with NOKEMO_CHANGELOG_URL in config if it ever moves.
  */
 
@@ -23,7 +23,7 @@ if (!function_exists('whats_new_site')) {
 if (!function_exists('whats_new_entries')) {
     /**
      * Published user-facing entries for this app, newest first: [{entry_date, week, kind, title, body}].
-     * Empty when nokemo has published nothing, does not know this site, or is unreachable.
+     * Empty when the control plane has published nothing, does not know this site, or is unreachable.
      */
     function whats_new_entries(int $days = 90, int $limit = 30): array
     {

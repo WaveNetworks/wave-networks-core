@@ -1,7 +1,7 @@
 <?php
 /**
  * passkeyFunctions.php
- * Passkeys (WebAuthn) — ContactSwipe task #2661, part 3 of #2658. Library: lbuchs/webauthn.
+ * Passkeys (WebAuthn). Library: lbuchs/webauthn.
  *
  * Two uses, both with user verification REQUIRED (Face ID / fingerprint / device PIN):
  *   - password-less sign-in: "Sign in with a passkey" on the sign-in page. Discoverable
@@ -17,7 +17,7 @@
  *
  * OPT-IN PER APP, like WN_LOGIN_CODE: the app defines WN_PASSKEY in its bootstraps
  * (common_auth.php for the sign-in pages, common.php + common_api.php for account security).
- * The relying party id is this request's host (passkeys made on contactsweep.com work only
+ * The relying party id is this request's host (passkeys made on example.com work only
  * there); WN_PASSKEY_RP_ID overrides it, e.g. to share across subdomains.
  *
  * Platform authenticators only (the phone or computer itself, synced by iCloud Keychain /

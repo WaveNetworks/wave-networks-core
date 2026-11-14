@@ -12,7 +12,7 @@ if (!function_exists('wn_email_html_to_text')) {
     /**
      * The plain-text alternative of an HTML email. A bare strip_tags() ran every block together,
      * so a link was glued to the next sentence ("…reset.php?token=abcThis link expires…") and a
-     * plain-text client opened a broken URL (ContactSwipe task #2467). Blocks become blank lines,
+     * plain-text client opened a broken URL. Blocks become blank lines,
      * <br> a newline, and a link whose text is not its URL keeps the URL in brackets.
      */
     function wn_email_html_to_text($html) {

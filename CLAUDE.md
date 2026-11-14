@@ -80,8 +80,8 @@ legacy_runner_skipped.
   legacy_runner_skipped = statements the PRE-5.0 run_migration() silently skipped
   because their text, COMMENTS INCLUDED, contained COMMIT / ROLLBACK / START
   TRANSACTION (e.g. "autocommit", "committed", a column `committed_count`) while
-  the ledger still bumped. This is what dropped ContactSwipe cs_import_batch and
-  cs_reminder.origin. Drift rows they explain carry legacy_runner_skipped: true.
+  the ledger still bumped. This is what dropped one app's import-batch table and
+  a reminder column. Drift rows they explain carry legacy_runner_skipped: true.
   Fixed in core 5.0 (runner skips only exact transaction control, logged);
   repair already-migrated DBs with a new idempotent migration (core: main/5.0).
   runner_skipped = what the CURRENT runner skips beyond transaction control;
@@ -227,7 +227,7 @@ Each day/week/month period runs once (cron_once(): a marker per schedule in
 $files_location/cron_state/, taken under a lock so overlapping minute runs never double up).
 Until 2026-10-20 days/{N} meant "day N of the month" and re-ran on every minute that day: the
 "daily" cleanups ran ~1440 times on the 1st and never otherwise, and the action-log roll-up
-inserted the same day 1440 times (ContactSwipe: 8.6M user_action_summary rows for 321 facts,
+inserted the same day 1440 times (one app: 8.6M user_action_summary rows for 321 facts,
 removed by cron/minutes/60/repair_action_summary.php). A job that must not double-count still
 guards itself; the runner's guarantee is "once per period", not "exactly at midnight".
 
@@ -445,9 +445,9 @@ last_used_at updated on each successful validation.
 Scopes: JSON array of scope strings. get_available_scopes() = core_available_scopes()
   (scopes every app can use) + child_declared_scopes(). Do NOT add an app-specific
   scope to core_available_scopes(): the app declares it in `api-scopes.json` at its
-  repo root, e.g. {"scopes": {"elevateher_debug:read": "Read elevateHER diagnostics"}}.
+  repo root, e.g. {"scopes": {"myapp_debug:read": "Read myapp diagnostics"}}.
   Core scopes win on a name collision; names must match `word:word`.
-  nokemo's monitoring key (the one holding monitoring:write) is kept at
+  The monitoring server's key (the one holding monitoring:write) is kept at
   monitor_key_scopes() automatically on each validation — add a pipeline scope
   THERE, never by hand-editing keys per deployment. An APP-specific pipeline scope
   goes in the app's api-scopes.json as `"monitor_key": ["scope:name"]` (must also be
@@ -461,7 +461,7 @@ Scopes: JSON array of scope strings. get_available_scopes() = core_available_sco
 Authentication: Bearer token in Authorization header. common_api.php extracts
   the token, calls validate_service_api_key(), populates global $_SERVICE_API_KEY.
   A service-key call with no device cookie / X-Wn-Device header creates NO device row (a
-  server is not a device; nokemo's monitor minted ~18k anonymous devices a day before 2026-10-20).
+  server is not a device; the monitoring server minted ~18k anonymous devices a day before 2026-10-20).
 
 Admin view: views/api_keys.php (admin-only, page=api_keys).
   Lists keys with name, prefix, scopes, created/last-used timestamps, status.
@@ -537,7 +537,7 @@ but are not wired into server.php. Add handlers to server.php as needed.
   }}
 
   Replace YOUR_HOST with whichever deployment you're targeting
-  (e.g. nokemo.com, dswa.org, hireasupport.com — each has its own
+  (e.g. app1.example.com, app2.example.com — each has its own
   admin DB and its own service_api_key table).
 
 Logs to stderr via mcp_log(). Warns if WN_API_KEY is unset.
@@ -722,7 +722,7 @@ More documents (2026-10-20): an app or sub-admin declares them in its legal.json
 (tab shown for that app only) and served at <mount>/<path> exactly like the core two, but NOT account
 documents (wn_legal_account_types() = privacy + terms only): never in sign-up, the notice or the gate;
 the declaring app asks for it where it applies. wn_legal_app()'s fallback skips sub-admins (beta/ sorted
-before contactsweep/ and became "the app" for admin pages and the device API).
+before the app's own folder and became "the app" for admin pages and the device API).
 
 ### Child app usage
 Child apps get all GDPR functions for free via common.php include chain.
@@ -744,12 +744,12 @@ and `common_readonly.php`) and every database connection is opened with
 `PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"`, so `NOW()`, `CURRENT_TIMESTAMP`,
 every `DEFAULT CURRENT_TIMESTAMP` column and every `date('Y-m-d H:i:s')` mean the same thing. A
 stored datetime is UTC whoever wrote it; a person's own zone is applied only when showing or
-reading a time (see ContactSwipe's `csTimezone.php`). `include/common/clockFunctions.php` holds the
+reading a time (see an app's own timezone helper). `include/common/clockFunctions.php` holds the
 helpers (`wn_clock_init_pdo`, `wn_clock_pdo_options`, `wn_clock_check`) and
 `scripts/clock-probe.php` (in the deploy, and portable with `--root`) fails the build on a
 connection opened without it. Until 2026-09-18 MySQL used the host's local zone while PHP used
 UTC: in one table, SQL-written timestamps sat an hour ahead of PHP-written ones, queued email
-compared a PHP `scheduled_at` against `NOW()`, and ContactSwipe's UTC reminders were swept by
+compared a PHP `scheduled_at` against `NOW()`, and one app's UTC reminders were swept by
 `due_at <= NOW()` and fired an hour early through British Summer Time. Rows written before the
 change are in the old local zone and were left alone, so timestamps from 2026-09-18 until the
 next DST end read an hour earlier than the rows above them.
@@ -768,7 +768,7 @@ count, ciphertext sha256, no user data) so a puller checks it without decrypting
 lives with the owner only (p3sig vault + offline copy) — never on a host, never on a key server.
 `wn-backup.php stream --pub B64` writes the same encrypted stream to STDOUT (manifest as the last
 STDERR line, "WNBK-MANIFEST {json}") and nothing to the host's disk: the backup box starts it over
-SSH on hosts whose cron kills long jobs (StackCP killed the cron-started run ~3 min in, 2026-10-20).
+SSH on hosts whose cron kills long jobs (the shared host killed the cron-started run ~3 min in, 2026-10-20).
 Each database's connection is retried (5s, 20s, 60s) on connection-level errors, since a shared MySQL
 server can refuse one briefly mid-run; the final error names the database.
 `wn-backup.php keygen|verify|restore` run anywhere with php + sodium, no app config. Runs log to
@@ -808,7 +808,7 @@ Admin UI: views/user_edit.php — 5-tab compliance dashboard (Profile, Consent,
   Login History, Sessions, Data & Deletion) accessed from Users list.
 
 ## Test account
-Canonical cross-host test user: **nokemo@nokemo.com** (`user.is_test_account = 1`).
+Test user: the account named by `$test_account_email` in config (or `TEST_ACCOUNT_EMAIL`), default **test@temporarydemo.com** (`user.is_test_account = 1`). An install that already has a flagged test account keeps using it.
 
 Seed script: `admin/scripts/create_test_user.php` (idempotent, CLI-only, bootstraps
 via `common_readonly.php`). Run once per deployed admin host after migration 3.4

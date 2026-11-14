@@ -44,7 +44,7 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'login'          => ['email'],                   // not password, not 2fa code
     'adminResetFactor' => ['user_id', 'factor', 'passkey_id'],  // support reset of a sign-in factor (task #2663); not the reason text
 
-    // ── elevateHER canonical progression events (Task #533) ──
+    // ── One app's canonical progression events ──
     // These are stable analytics names. Param keys are IDs/enums only —
     // no free text, no PII. Add here when wiring a new progression event.
     'assessment_started'   => ['resuming'],          // 0|1, was the session resumed
@@ -76,7 +76,7 @@ const ACTION_LOG_PARAM_ALLOWLIST = [
     'experiment_concluded' => ['slug', 'variant', 'result'],
     'experiment_baked_in'  => ['slug', 'variant'],
 
-    // ── primodollar canonical analytics events (Task #1032, spec 11) ──
+    // ── One app's canonical analytics events ──
     // First-party funnel/rung derivation. Param keys are numeric IDs/positions
     // only — no PII, no free text. saveFind / shareDrop are name-only (captured
     // by the auto action logger) so they need no allowlist entry.

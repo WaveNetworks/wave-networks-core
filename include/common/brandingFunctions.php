@@ -87,7 +87,7 @@ function generate_pwa_icons($source_path, $uploads_dir) {
                 // canvas by default, which silently destroys any icon drawn in white
                 // or in strokes on transparency — the result is a uniform white square
                 // that still writes a valid PNG and still serves HTTP 200, so nothing
-                // downstream notices. pwt shipped exactly that: a 512x512 icon with
+                // downstream notices. One app shipped exactly that: a 512x512 icon with
                 // ONE unique colour. Reproduced with `convert in.svg out.png` (blank)
                 // vs `convert -background none in.svg out.png` (256 colours).
                 $im->setBackgroundColor(new ImagickPixel('transparent'));
@@ -126,7 +126,7 @@ function generate_pwa_icons($source_path, $uploads_dir) {
     // A PWA icon must be OPAQUE. iOS flattens home-screen icons onto white, and
     // Android draws them on whatever the launcher uses — so a transparent icon is
     // at the mercy of the surface. A brand mark drawn in white then disappears
-    // completely, which is what pwt shipped: its favicon is the DARK-MODE logo
+    // completely, which is what one app shipped: its favicon is the DARK-MODE logo
     // (fill:#fff), so the icon was white-on-white. Measured on the real assets:
     //
     //     branding_logo.svg      (fill #231f20) on light -> 245 colours

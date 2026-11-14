@@ -253,7 +253,7 @@ if (($action ?? null) == 'apiBulkUpdateChangeRequests') {
             $affected = $r ? $r->rowCount() : 0;
 
             // Same feedback cascade as update_change_request(). This is the path
-            // nokemo's CR sync uses, so without it shipped feedback sat on 'grouped'.
+            // the control plane's CR sync uses, so without it shipped feedback sat on 'grouped'.
             if ($r) {
                 if ($status === 'completed') {
                     $fb_from = "'grouped','new','reviewed'";
@@ -322,7 +322,7 @@ if (($action ?? null) == 'apiBulkCascadeFeedbackFromCR') {
 
 // ── Mark feedback shipped (reconcile-on-ship) ───────────────
 //
-// Nokemo's reconcile-on-ship pass (feedback pipeline, task #2244 part 3) calls
+// The control plane's reconcile-on-ship pass (feedback pipeline) calls
 // this when an EARLIER piece of feedback is judged to ask for the same thing a
 // now-shipped change request delivered. One atomic remote step: link the
 // feedback to the shipped CR, flip it to 'resolved', and notify the submitter
@@ -330,8 +330,8 @@ if (($action ?? null) == 'apiBulkCascadeFeedbackFromCR') {
 // every monitored app's feedback author gets the credit notification for free.
 //
 // Never closes feedback without a link — change_request_id is required and the
-// CR must exist and be completed (a low-confidence match is parked in nokemo's
-// owner queue instead, and never reaches here).
+// CR must exist and be completed (a low-confidence match is parked in the control
+// plane's owner queue instead, and never reaches here).
 if (($action ?? null) == 'apiMarkFeedbackShipped') {
     if (require_api_scope('feedback:admin')) {
         $errs = [];
@@ -382,7 +382,7 @@ if (($action ?? null) == 'apiMarkFeedbackShipped') {
 
 // ── Correct a feedback entry's type ─────────────────────────
 // feedback_id, feedback_type (bug|suggestion|general), source (ai|admin, default ai), note (the reason).
-// The nokemo ops box's classifier reads entries still type_source=user (apiListFeedback type_source=user)
+// The ops server's classifier reads entries still type_source=user (apiListFeedback type_source=user)
 // and sends one call each. An admin-set type is never overridden by source=ai.
 if (($action ?? null) == 'apiSetFeedbackType') {
     if (require_api_scope('feedback:admin')) {

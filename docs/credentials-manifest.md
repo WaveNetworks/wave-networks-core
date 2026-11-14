@@ -1,8 +1,8 @@
 # Pasteable App Credentials
 
 A seamless-build primitive: an app declares **what credentials it needs**, and
-the owner pastes them in from nokemo (or the provisioning wizard) without
-touching the server. The app is authoritative about what's missing; nokemo never
+the owner pastes them in from the control plane (or the provisioning wizard) without
+touching the server. The app is authoritative about what's missing; the control plane never
 stores the secrets — it passes them straight to the app.
 
 ## 1. The manifest (`credentials.json`) — the app emits this
@@ -21,7 +21,7 @@ of `admin/`). The builder generates it from the spec's configuration doc
       "secret": false,
       "required": true,
       "validate": "^[a-z0-9-]+-2[0-9]$",
-      "howto": "Associates Central → Account → Manage Tracking IDs (e.g. primodollar-20). Register primodollar.com as a property first."
+      "howto": "Associates Central → Account → Manage Tracking IDs (e.g. myapp-20). Register myapp.example.com as a property first."
     },
     {
       "key": "PAAPI_ACCESS_KEY",
@@ -66,21 +66,21 @@ Exposed by `include/actions/apiActions/credentialsApiActions.php`:
 
 - **`apiGetCredentialStatus`** — scope `credentials:read`. Returns the manifest
   annotated with `satisfied` per key, plus a `missing` list and `missing_count`.
-  **Never returns values.** This is what nokemo polls to render the card and to
+  **Never returns values.** This is what the control plane polls to render the card and to
   know what to ask for.
 - **`apiSetCredential`** — scope `credentials:write`. Body `key`, `value`.
   Validates against the manifest regex and persists. Returns `{key, satisfied}`.
 
 Mint a per-app key with both scopes via the admin API-Keys screen (or
-`createServiceApiKey`); nokemo stores it like any other monitored-app key.
+`createServiceApiKey`); the control plane stores it like any other monitored-app key.
 
 ## 4. The loop
 
 1. Builder writes `credentials.json` from the spec.
 2. App reports `missing` via `apiGetCredentialStatus`.
-3. nokemo surfaces a **Credentials** card on the monitored app; owner pastes a
+3. The control plane surfaces a **Credentials** card on the monitored app; owner pastes a
    value.
-4. nokemo POSTs `apiSetCredential` to the app; the value lands in the store and
+4. The control plane POSTs `apiSetCredential` to the app; the value lands in the store and
    the next status poll shows it satisfied.
 
 Same mechanism, two entry points: the monitoring dashboard (any app, any time)

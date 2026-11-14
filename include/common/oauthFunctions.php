@@ -465,7 +465,7 @@ function oauth_redirect_uri() {
     return $base_url . dirname(dirname($_SERVER['SCRIPT_NAME'])) . '/auth/oauth_callback.php';
 }
 
-// ── Sign in with Apple (nokemo task #2462) ───────────────────────────────────
+// ── Sign in with Apple ───────────────────────────────────
 // Admin › OAuth providers › Apple: Client ID = the Services ID; the secret is sealed JSON
 // {team_id, key_id, private_key (.p8)} (oauthActions.php builds it from three fields).
 // The client secret Apple wants is a short-lived ES256 JWT signed with that key.

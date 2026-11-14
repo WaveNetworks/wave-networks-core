@@ -14,7 +14,7 @@
 # Config (env vars; a child app's thin wrapper sets these):
 #   APP_ROOT     the child app repo            (default: cwd)
 #   ADMIN_ROOT   wave-networks-core checkout   (default: $APP_ROOT/../admin)
-#   APP_ORIGIN   API/media origin for the CSP  (required, e.g. https://vivajee.com)
+#   APP_ORIGIN   API/media origin for the CSP  (required, e.g. https://example.com)
 #   APP_SLUG     short name                    (default: basename of APP_ROOT)
 #   THEME_SCSS   the app's theme entry scss    (default: assets/themes/glassmorphism/custom.scss)
 #   BRAND_TILE   the app's icon svg            (default: assets/img/<slug>-tile.svg)
@@ -94,7 +94,7 @@ fi
 # Brand tile → standard bundle name the engine's login screen references.
 [[ -f "$BRAND_TILE" ]] && cp "$BRAND_TILE" m/assets/img/app-tile.svg || echo "   ! BRAND_TILE $BRAND_TILE missing" >&2
 # Raster brand art too, not just svg. An app icon is often a PNG on purpose:
-# pwt's mark is <text> in a custom font (MonogramWorld5Regular), so as an SVG it
+# One app's mark is <text> in a custom font (MonogramWorld5Regular), so as an SVG it
 # renders in whatever the device falls back to. Rasterised once, it is identical
 # everywhere. Copying only *.svg meant template.php could reference
 # ../assets/img/<tile>.png, build_shell would rewrite it to assets/img/<tile>.png,
@@ -107,7 +107,7 @@ if compgen -G "assets/fonts/*.woff2" > /dev/null; then
     cp assets/fonts/app-fonts.css m/assets/ 2>/dev/null || true
 fi
 # Lazily loaded app assets (wasm, models, big vendor code a screen fetches on demand —
-# ContactSwipe's face finder, task #2293). The shell references none of them, so the
+# e.g. a face finder). The shell references none of them, so the
 # ref-derived vendor step above never sees them. Copied whole to the SAME relative path the
 # web serves (assets/lazy/), and the size is printed because it all ships in the bundle.
 if [[ -d assets/lazy ]]; then

@@ -5,7 +5,7 @@
  *
  * Structural gap fix (2026-05-31): admin core had NO retention for `device`.
  * Anonymous bot/crawler traffic accumulates 100K+ rows/month per deployment
- * with no bound (pwt hit 707MB/1024MB cap on 2.25M device rows).
+ * with no bound (one app hit 707MB/1024MB cap on 2.25M device rows).
  *
  * Conservative policy:
  *   - Anonymous devices (user_id NULL or 0): prune when last_used (falling
@@ -41,7 +41,7 @@ $device_deleted = 0;
 // ── 1b. Prune signed-in devices (task #2422) ──
 // Step 1 never touches a user's devices, so a client that logs in fresh every
 // time (authed-probe.py, a script, a browser that drops cookies) adds a row per
-// login forever: the vivajee test user reached 25,115 rows and ?page=profile
+// login forever: one app's test user reached 25,115 rows and ?page=profile
 // rendered all of them (28 MB). A device row is only a session if it is used,
 // so: (a) drop signed-in devices idle longer than SIGNED_IN_DEVICE_CLEANUP_DAYS
 // (default 180, never under 30 — remember-me cookies live 30 days), and
@@ -76,7 +76,7 @@ $prune_ids($ids);
 // The cap counts and prunes only devices WITHOUT a login token. A token (phone app, AI
 // assistant / MCP, OAuth) does not touch its device's last_used when it is used, so by
 // last_used a token in daily use looks idle: on 2026-10-20, the first daily run (cron.php used
-// to run this only on the 1st) signed the owner's ContactSwipe assistant token out by pruning
+// to run this only on the 1st) signed the owner's assistant token out by pruning
 // its device. Tokens expire on their own (cleanup_expired_tokens.php, key_born + 90 days).
 $no_token = "NOT EXISTS (SELECT 1 FROM api_key k WHERE k.device_id = device.device_id)";
 $over = db_query_prepared(

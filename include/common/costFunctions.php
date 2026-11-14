@@ -9,15 +9,14 @@
  * Schema backstop: guarantee the `vendor` and `metadata` columns exist on
  * cost_entry and cost_recurring even when the migration runner dropped the DDL.
  *
- * makershost runs MariaDB, where the admin-core migration runner wraps each
+ * The shared host runs MariaDB, where the admin-core migration runner wraps each
  * migration in a transaction and DDL implicit-commits can non-deterministically
  * DROP an ALTER (migration 3.0 adds cost_entry.vendor, 4.6 adds
  * cost_recurring.vendor + cost_recurring.metadata, 2.7 creates cost_entry with
  * metadata). When that drop happens on a deployed host, every
  * record_cost()/ensure_subscription_recurring() INSERT hits
  * "Unknown column 'vendor'/'metadata' in 'INSERT INTO'" and the whole TTS/cost
- * write 500s (nokemo tasks #806, #807 for vendor; #808, #809 for metadata —
- * observed on dswa.org/elevateher). This idempotent autocommit ensure repairs
+ * write 500s (seen for both vendor and metadata on a deployed app). This idempotent autocommit ensure repairs
  * the columns on the fly. `ADD COLUMN IF NOT EXISTS` is MariaDB-native and a
  * cheap no-op once the column is present, so we run it at most once per request
  * behind a static guard.
@@ -39,7 +38,7 @@ function ensure_cost_schema() {
  * backstop can't repair it (e.g. the DB user lacks ALTER privilege on the
  * deployed host), we still want the INSERT to succeed by simply omitting the
  * missing column rather than 500ing with "Unknown column ... in 'INSERT INTO'".
- * That recurring INSERT error is what spawned nokemo tasks #806–#809 and #825.
+ * That recurring INSERT error is what this guards against.
  */
 function cost_table_has_column($table, $column) {
     static $cache = [];
@@ -536,7 +535,7 @@ function ensure_subscription_recurring($vendor, $monthly_amount, $description, $
     // the key is missing, ON DUPLICATE KEY UPDATE never fires, so this function
     // inserts a fresh row on EVERY request and the vendor's card multiplies on
     // ?page=costs (reported as "unrealspeech basic plan subscription is repeated a
-    // bunch of times" on dswa.org). So dedupe by hand instead of trusting the key:
+    // bunch of times" on one app). So dedupe by hand instead of trusting the key:
     // keep the oldest row, update it in place, delete any duplicates.
     $sel = db_query(
         "SELECT recurring_id FROM cost_recurring

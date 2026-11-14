@@ -10,13 +10,13 @@
  *     a few thousand a day, and nothing ever removed them.
  *
  * This used to be one DELETE each in the daily jobs. On a host where cron had never run that
- * meant millions of rows in one statement (2026-11-07: pwt 6.4M + 6.4M, ElevateHER 1.1M + 1.2M),
+ * meant millions of rows in one statement (2026-11-07: one app 6.4M + 6.4M, another 1.1M + 1.2M),
  * which a shared host kills partway and rolls back, every day, so the backlog could never clear.
  * In batches it drains over a few runs and then costs one short pass a day: after a pass that
  * finds nothing, it sleeps until the next UTC day. When a backlog of 10,000+ rows has gone, both
  * tables are rebuilt once (OPTIMIZE) to give the disk back.
  *
- * Where a full batch takes over 15s (pwt's host: 5,000 rows per 40s run), device and
+ * Where a full batch takes over 15s (one app's host: 5,000 rows per 40s run), device and
  * device_action_log are REBUILT instead: the rows worth keeping are copied into <table>__keep in
  * primary-key ranges over several runs, rows added meanwhile are carried over, and the two are
  * swapped with one atomic RENAME. An update to an already-copied row during the copy (a
@@ -54,7 +54,7 @@ if (!isset($db)) { include(__DIR__ . '/../../../include/common_readonly.php'); }
     ];
 
     // What a REBUILD keeps (the opposite of what the deletes remove). On a host where deleting is
-    // slow (pwt 2026-11-07: one 5,000-row batch took the whole 40s, so 12.8M rows meant weeks),
+    // slow (one app, 2026-11-07: one 5,000-row batch took the whole 40s, so 12.8M rows meant weeks),
     // copying the few rows worth keeping into a fresh table and swapping it in is far cheaper.
     $keep = [
         'device' => ['pk' => 'device_id', 'cond' => "NOT ((user_id IS NULL OR user_id = 0)

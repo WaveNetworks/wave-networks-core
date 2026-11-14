@@ -6,12 +6,12 @@
  *   apiGetAdminUsers  (monitoring:read)  — who the admins of THIS deployment are,
  *                                          so alerts can reach a human.
  *
- * Why this exists: nokemo's admin-sync (sync_app_admins -> fetch_remote_admins)
+ * Why this exists: the control plane's admin-sync (sync_app_admins -> fetch_remote_admins)
  * has called `apiGetAdminUsers` on every registered app since it was written,
  * and no deployment ever implemented it. Every sync therefore returned 0 admins,
  * every app_admin row stayed absent, and the alerts and digests for all 9 active
  * apps were dropped silently — the platform was telling nobody. Found 2026-09-19
- * by proxying the call to ContactSwipe: "Unknown action 'apiGetAdminUsers'".
+ * by proxying the call to one app: "Unknown action 'apiGetAdminUsers'".
  *
  * Deliberately minimal: identity and role only. No password material, no session
  * data, no profile beyond a name, because the caller needs an address to mail and
@@ -58,7 +58,7 @@ if (($action ?? null) == 'apiGetAdminUsers') {
 /**
  * apiGetStaffSignIns (monitoring:read) days (1-90, default 7) — how this deployment's admins and
  * owner signed in lately, so a sign-in method can be confirmed from its logs ("did the owner's
- * Continue with Google work on the web AND in the phone app?", nokemo task #2461) without anyone
+ * Continue with Google work on the web AND in the phone app?") without anyone
  * opening Admin › Users. Staff accounts only, like apiGetAdminUsers. Per sign-in: method, status,
  * browser, a coarse platform, time — never the IP or the raw user agent. phone_handoffs = the
  * one-time codes a phone-app sign-in hands back to the app (oauth_handoff; used_at set = the app

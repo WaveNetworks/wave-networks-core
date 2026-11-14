@@ -2,8 +2,8 @@
 /**
  * runtimeApiActions.php
  * Public API action, authenticated via service API key (Bearer token).
- * What this app actually runs on, so nokemo's daily security feed (openclaw-ops
- * scripts/security-feed.py, nokemo task #2566) can match PHP advisories against
+ * What this app actually runs on, so the control plane's daily security feed
+ * can match PHP advisories against
  * the real serving version instead of guessing from a header.
  * Action: apiGetRuntime (scope: error_log:read — the scope every monitoring key already holds)
  *   -> php_version, php_major_minor, sapi, os_family, extensions[]

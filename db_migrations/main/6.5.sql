@@ -4,7 +4,7 @@
 -- migration 3.7 all write status = 'resolved', but the column (main 2.8) was
 -- ENUM('new','reviewed','grouped','dismissed'). Outside strict mode MySQL stored
 -- the empty string instead, so shipped feedback showed no status at all and fell
--- out of every status count (nokemo feedback #11 and #13; task #2539).
+-- out of every status count.
 -- 'resolved' is appended LAST so the MODIFY is a metadata-only change and the
 -- blanked rows survive it as they are. Only those rows are then repaired: the
 -- status their change request implies, or 'reviewed' when they have none.

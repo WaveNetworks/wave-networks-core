@@ -8,7 +8,8 @@ action includes) and must be run on the deployed admin host (where
 
 ## create_test_user.php
 
-Seeds the canonical test user (`nokemo@nokemo.com`, `is_test_account=1`) on a
+Seeds the test user (`$test_account_email` from config, else `TEST_ACCOUNT_EMAIL`,
+else `test@temporarydemo.com`; `is_test_account=1`) on a
 deployed admin host. Idempotent: if the user exists, the script verifies the
 flag and exits; if the flag is missing it fixes it.
 
@@ -42,13 +43,7 @@ Test user existed, flag fixed: user_id=<id>, shard_id=<shard>, is_test_account=1
 
 ### Hosts to run on (Phase 1 rollout)
 
-Run once per deployed admin host after migration 3.4 has reached it:
-
-- subtheme.com
-- dswa.org
-- playwithtarot.com
-- p3sig.com
-- nokemo.com
+Run once per deployed admin host after migration 3.4 has reached it.
 
 ### Notes
 

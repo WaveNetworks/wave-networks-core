@@ -1,6 +1,6 @@
 <?php
 /**
- * What's new (authenticated users) — nokemo task #2316
+ * What's new (authenticated users)
  * Action: getWhatsNew -> entries[] (this app's published, user-facing changelog; newest first)
  * Read by assets/js/notifications.js, which every app's template already loads.
  */

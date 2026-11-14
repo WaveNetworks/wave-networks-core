@@ -1,5 +1,5 @@
 -- Migration 5.7 for Main Database
--- Sign in with an emailed code instead of a password (ContactSwipe task #2389)
+-- Sign in with an emailed code instead of a password
 --
 --   1. login_code — one row per "email me a sign-in code" request. The 6-digit code
 --      is stored only as a password_hash(). Rows are written for unknown emails too

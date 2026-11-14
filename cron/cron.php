@@ -13,7 +13,7 @@
  * Until 2026-10-20 days/{N} meant "day N of the month" and ran on EVERY minute's run that
  * day: the "daily" cleanups in days/1 ran ~1440 times on the 1st and never otherwise, so
  * logs were trimmed once a month, and the action-log roll-up inserted the same day 1440
- * times (ContactSwipe: 8.6M summary rows holding 321 facts). Every job in days/1 was
+ * times (one app: 8.6M summary rows holding 321 facts). Every job in days/1 was
  * written as daily, so days/{N} now means "every N days", like minutes/{N}, and each
  * period runs once (cron_once, a marker per schedule under $files_location/cron_state/).
  */

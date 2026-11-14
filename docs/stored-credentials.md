@@ -50,4 +50,4 @@ Key ring, no downtime: docs/core-secret-rotation.md. In short: add `'k2' => …`
 `php scripts/rotate-secret-key.php sweep`, then `retire k1` (refuses while anything is left on
 it) and remove k1 from config. Child apps with their own sealed columns register them with
 `wn_register_sealed_column()` so the counts include them; code with its own crypto off
-`$app_secret` (brand-compiler `bc_encrypt`) must move to `wn_secret_encrypt()` first.
+`$app_secret` (for example a `bc_encrypt()`) must move to `wn_secret_encrypt()` first.

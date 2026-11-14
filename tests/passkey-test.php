@@ -15,7 +15,7 @@ define('SQL', 'sql');
 define('WN_PASSKEY', true);
 require __DIR__ . '/../vendor/autoload.php';
 $_SESSION = [];
-$_SERVER  = ['REMOTE_ADDR' => '203.0.113.9', 'HTTP_USER_AGENT' => 'Mozilla/5.0 (iPhone)', 'HTTP_HOST' => 'contactsweep.com'];
+$_SERVER  = ['REMOTE_ADDR' => '203.0.113.9', 'HTTP_USER_AGENT' => 'Mozilla/5.0 (iPhone)', 'HTTP_HOST' => 'temporarydemo.com'];
 
 // ── in-memory user_passkey ───────────────────────────────────────────────────
 $PK = []; $NEXT = 1; $SENT = []; $NOTES = []; $LOGINS = []; $USERS = [];
@@ -60,7 +60,7 @@ function send_email_now($to, $n, $subject, $body, $o = []) { global $SENT; $SENT
 function send_notification($uid, $shard, $cat, $title, $body, $o = []) { global $NOTES; $NOTES[] = "$uid:$title"; }
 function record_login($uid, $method, $status) { global $LOGINS; $LOGINS[] = "$uid:$method:$status"; }
 function get_user($id) { global $USERS; return $USERS[(int)$id] ?? null; }
-function get_branding() { return ['site_name' => 'ContactSwipe']; }
+function get_branding() { return ['site_name' => 'Acme']; }
 
 require __DIR__ . '/../include/common/totpFunctions.php';
 require __DIR__ . '/../include/common/passkeyFunctions.php';
@@ -87,7 +87,7 @@ function cbor($v) {
 }
 class SoftKey {
     public $key; public $cred; public $handle; public $count = 0; public $origin;
-    function __construct($origin = 'https://contactsweep.com') {
+    function __construct($origin = 'https://temporarydemo.com') {
         $this->key = openssl_pkey_new(['curve_name' => 'prime256v1', 'private_key_type' => OPENSSL_KEYTYPE_EC]);
         $this->cred = random_bytes(32); $this->origin = $origin;
     }
@@ -115,9 +115,9 @@ class SoftKey {
 }
 
 $USERS = [
-    1 => ['user_id' => 1, 'email' => 'passkey-a@nokemo.com', 'is_confirmed' => 1, 'shard_id' => 's1', 'first_name' => 'Pat', 'last_name' => 'Key'],
-    2 => ['user_id' => 2, 'email' => 'passkey-b@nokemo.com', 'is_confirmed' => 0, 'shard_id' => 's1'],
-    3 => ['user_id' => 3, 'email' => 'passkey-c@nokemo.com', 'is_confirmed' => 1, 'shard_id' => 's1'],
+    1 => ['user_id' => 1, 'email' => 'passkey-a@temporarydemo.com', 'is_confirmed' => 1, 'shard_id' => 's1', 'first_name' => 'Pat', 'last_name' => 'Key'],
+    2 => ['user_id' => 2, 'email' => 'passkey-b@temporarydemo.com', 'is_confirmed' => 0, 'shard_id' => 's1'],
+    3 => ['user_id' => 3, 'email' => 'passkey-c@temporarydemo.com', 'is_confirmed' => 1, 'shard_id' => 's1'],
 ];
 
 // Enrol: an unverified email gets no options.
@@ -130,7 +130,7 @@ $o = json_decode(json_encode($r['options']), true)['publicKey'];
 check('options: UV required', ($o['authenticatorSelection']['userVerification'] ?? '') === 'required');
 check('options: resident key required', ($o['authenticatorSelection']['residentKey'] ?? '') === 'required');
 check('options: platform authenticator', ($o['authenticatorSelection']['authenticatorAttachment'] ?? '') === 'platform');
-check('options: rp id is the host', $o['rp']['id'] === 'contactsweep.com');
+check('options: rp id is the host', $o['rp']['id'] === 'temporarydemo.com');
 check('options: user handle is not the user id', wn_b64url_decode($o['user']['id']) !== '1' && strlen(wn_b64url_decode($o['user']['id'])) === 16);
 
 // A device that did not verify the person (UP only) is refused, nothing saved.
@@ -141,7 +141,7 @@ check('enrol without user verification refused', !empty($f['error']) && !$PK, $f
 
 // Wrong origin refused.
 $r = wn_passkey_enrol_options($USERS[1]);
-$evil = new SoftKey('https://contactsweep.com.evil.test');
+$evil = new SoftKey('https://temporarydemo.com.evil.test');
 [$c, $att] = $evil->create($r['options']);
 $f = wn_passkey_enrol_finish($USERS[1], $c, $att, 'Evil');
 check('enrol from another origin refused', !empty($f['error']) && !$PK, $f['error'] ?? '');
@@ -187,7 +187,7 @@ check('second step lists the account\'s passkey', count($allow) === 1);
 $v = wn_passkey_signin_verify($a->get($opts), 1);
 check('second step with own passkey', ($v['user_id'] ?? 0) === 1, json_encode($v));
 $_SESSION['wn_pk_signin'] = ['challenge' => wn_b64url_encode('x'), 'user_id' => 3, 'at' => time()];
-$opts = (object)['publicKey' => (object)['rpId' => 'contactsweep.com', 'challenge' => wn_b64url_encode('x')]];
+$opts = (object)['publicKey' => (object)['rpId' => 'temporarydemo.com', 'challenge' => wn_b64url_encode('x')]];
 $v = wn_passkey_signin_verify($a->get($opts), 3);
 check('second step for another account refuses this passkey', !empty($v['error']));
 

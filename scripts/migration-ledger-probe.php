@@ -5,7 +5,7 @@
  * keeps db_migrations/{main,shard}/<version>.sql plus a declared target version, so the guard
  * is the same everywhere and lives here rather than being re-written per app.
  *
- * ContactSwipe, 2026-09-18: two agents both took main/8.1. A rebase dropped one .sql with no
+ * One app, 2026-09-18: two agents both took main/8.1. A rebase dropped one .sql with no
  * conflict (a file only one side has produces none), the ledger still read 8.1, and the deploy
  * failed much later and far away ("csChangeRelationWord is dispatched but has no
  * cs_api_surface row") without ever naming the migration.

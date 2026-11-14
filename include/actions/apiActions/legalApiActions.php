@@ -13,7 +13,7 @@
  *                                       document's history is replaced by a single 1.0
  *                                       (wn_legal_reset_history; acceptances stay)
  *
- * app_slug is the child app (e.g. contactsweep); '' = the whole-site document (read and drafts
+ * app_slug is the child app (e.g. myapp); '' = the whole-site document (read and drafts
  * only — its history is never reset). Both scopes are on the monitoring key (monitor_key_scopes).
  */
 

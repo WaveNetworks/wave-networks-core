@@ -13,7 +13,7 @@
 --                               build per user".
 --   3. use_case health/flag   — columns on use_case recording the latest computed
 --                               health and a 'needs attention' regression flag.
---   4. use_case_regression_event — a durable, idempotent queue nokemo's monitoring
+--   4. use_case_regression_event — a durable, idempotent queue the monitoring server's
 --                               cron polls to file a fix task linking the use case,
 --                               the build and the comments. Same poll model as
 --                               error_fixed_event / user_deletion_event.
@@ -73,7 +73,7 @@ ALTER TABLE use_case
 ALTER TABLE use_case
     ADD COLUMN flagged_at DATETIME NULL DEFAULT NULL AFTER flag_build;
 
--- 4. Durable regression queue nokemo polls. One row per (use_case_id, build) —
+-- 4. Durable regression queue the monitoring server polls. One row per (use_case_id, build) —
 --    idempotent per build so re-computing never double-files a task.
 CREATE TABLE IF NOT EXISTS use_case_regression_event (
     event_id       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -4,7 +4,7 @@
  * schema its migration files say it should have. STRICTLY READ-ONLY.
  *
  * WHY: the db_version ledger records that a migration file RAN, not that its
- * statements took. ContactSwipe shard 2.1 stamped the ledger while
+ * statements took. One app's shard 2.1 stamped the ledger while
  * cs_reminder.origin stayed ENUM('typed','cadence'), and shard 2.0 stamped it
  * without creating cs_import_batch. Nothing noticed until users hit errors.
  *

@@ -16,7 +16,7 @@
  * everything off them (scripts/rotate-secret-key.php status).
  *
  * $app_secret / $hiddenhash stay defined as the CURRENT raw values for code that reads
- * them directly. Child code with its own crypto off $app_secret (brand-compiler's
+ * them directly. Child code with its own crypto off $app_secret (for example a
  * bc_encrypt) must move to wn_secret_encrypt() before a new key is made current.
  */
 

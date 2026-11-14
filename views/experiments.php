@@ -301,7 +301,7 @@ else:
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label">Source app</label>
-            <input name="source_app" class="form-control" placeholder="elevateher" required>
+            <input name="source_app" class="form-control" placeholder="myapp" required>
           </div>
           <div class="col-md-6 mb-3">
             <label class="form-label">Slug</label>

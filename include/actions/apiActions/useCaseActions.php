@@ -19,6 +19,34 @@
  * the main `user` row before querying.
  */
 
+// ── Which account is the test account ──────────────────────────────────
+// Set $test_account_email in config/config.php (or TEST_ACCOUNT_EMAIL in the
+// environment) to name it. Without either, an install that already has a
+// flagged test account keeps using it, and a fresh one gets the default.
+// The address never comes from the request: a tests:write key must not be
+// able to turn a real account into a test account and then reset its password.
+if (!function_exists('_uc_test_account_email')) {
+    function _uc_test_account_email(): string {
+        global $test_account_email;
+        if (!empty($test_account_email)) {
+            return (string) $test_account_email;
+        }
+        $env = getenv('TEST_ACCOUNT_EMAIL');
+        if ($env) {
+            return (string) $env;
+        }
+        $r = db_query_prepared(
+            "SELECT email FROM `user` WHERE is_test_account = 1 ORDER BY user_id ASC LIMIT 1",
+            []
+        );
+        $row = $r ? $r->fetch(PDO::FETCH_ASSOC) : null;
+        if ($row && (string) $row['email'] !== '') {
+            return (string) $row['email'];
+        }
+        return 'test@temporarydemo.com';
+    }
+}
+
 // ── Bootstrap-only self-scope grant ────────────────────────────────────
 // Reason: when a new admin instance comes online, its existing service
 // keys don't yet have the actions:read / tests:write scopes the test
@@ -84,15 +112,16 @@ if (($action ?? null) == 'apiAdminSetTestUserPassword') {
             $errs[] = 'password must be at least 16 chars (use a random secret).';
         }
         if (empty($errs)) {
+            $test_email = _uc_test_account_email();
             $r = db_query_prepared(
                 "SELECT user_id, email, is_test_account, shard_id
                  FROM `user`
-                 WHERE email = 'nokemo@nokemo.com' LIMIT 1",
-                []
+                 WHERE email = ? LIMIT 1",
+                [$test_email]
             );
             $row = $r ? $r->fetch(PDO::FETCH_ASSOC) : null;
             if (!$row) {
-                $_SESSION['error'] = 'Test user nokemo@nokemo.com not found '
+                $_SESSION['error'] = 'Test user ' . $test_email . ' not found '
                                    . '(call apiAdminEnsureTestUser first).';
             } elseif ((int)$row['is_test_account'] !== 1) {
                 $_SESSION['error'] = 'Refusing to set password — user is not '
@@ -119,18 +148,18 @@ if (($action ?? null) == 'apiAdminSetTestUserPassword') {
 }
 
 // ── Idempotent test-user seed (mirrors create_test_user.php) ───────────
-// Per `admin/CLAUDE.md` the canonical cross-host test user is
-// nokemo@nokemo.com with is_test_account=1. The CLI seed script
-// (admin/scripts/create_test_user.php) only runs on hosts where the
-// admin/operator has shell access; this HTTP twin lets nokemo bootstrap
-// the test user across every registered app it administers.
+// The test user is the account named by _uc_test_account_email(), with
+// is_test_account=1. The CLI seed script (admin/scripts/create_test_user.php)
+// only runs on hosts where the admin/operator has shell access; this HTTP twin
+// lets a monitoring server bootstrap the test user across every app it
+// administers.
 //
 // Idempotent: if the user already exists with the flag set, returns
 // the existing row. If it exists without the flag, sets it. Safe to
 // re-run.
 if (($action ?? null) == 'apiAdminEnsureTestUser') {
     if (require_api_scope('tests:write')) {
-        $email     = 'nokemo@nokemo.com';
+        $email     = _uc_test_account_email();
         $s_email   = sanitize($email, SQL);
         $existing  = db_fetch(db_query(
             "SELECT user_id, shard_id, is_test_account
@@ -177,7 +206,7 @@ if (($action ?? null) == 'apiAdminEnsureTestUser') {
                 prime_shard($shard_id);
                 db_query_shard($shard_id,
                     "INSERT INTO user_profile (user_id, first_name, last_name, created)
-                     VALUES ('$new_id', 'Nokemo', 'Test', NOW())"
+                     VALUES ('$new_id', 'Test', 'User', NOW())"
                 );
                 // create_home_dir_id reads $_SESSION['shard_id']
                 $_SESSION['shard_id'] = $shard_id;
@@ -199,15 +228,15 @@ if (($action ?? null) == 'apiAdminEnsureTestUser') {
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 function _uc_test_user(): ?array {
-    // Conventionally nokemo@nokemo.com; fall back to any is_test_account
+    // Prefer the configured test account; fall back to any is_test_account
     // user if that exact account doesn't exist on this install.
     $r = db_query_prepared(
         "SELECT user_id, email, shard_id
          FROM `user`
          WHERE is_test_account = 1
-         ORDER BY (email = 'nokemo@nokemo.com') DESC, user_id ASC
+         ORDER BY (email = ?) DESC, user_id ASC
          LIMIT 1",
-        []
+        [_uc_test_account_email()]
     );
     if (!$r) return null;
     $row = $r->fetch(PDO::FETCH_ASSOC);
@@ -236,7 +265,7 @@ if (($action ?? null) == 'apiListTestSessionActions') {
         $limit = max(1, min(2000, (int)($_POST['limit'] ?? 500)));
         // Optional: derive from a specific user instead of the canonical
         // test account. Useful while bootstrapping when nobody has been
-        // logging in as nokemo@nokemo.com yet but real admins have
+        // logging in as the test account yet but real admins have
         // generated organic action history under their own user_id.
         $email_filter = trim((string)($_POST['email'] ?? ''));
 

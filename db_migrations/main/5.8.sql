@@ -1,5 +1,5 @@
 -- Migration 5.8 for Main Database
--- Sign in on a computer by approving it from the signed-in phone app (ContactSwipe task #2391)
+-- Sign in on a computer by approving it from the signed-in phone app
 --
 --   login_approval — one row per "sign in with your phone" request from a web sign-in
 --   page. The QR carries a random token (stored as sha256 only); the browser that asked

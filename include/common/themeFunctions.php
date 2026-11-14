@@ -84,7 +84,7 @@ function get_deployment_registered_theme() {
      *
      * Returns the theme row, or false. A false here means the deployment has no
      * declared identity at all, which is worth SAYING rather than silently
-     * dressing admin in a stock theme — that is how vivajee, pwt and elevateher
+     * dressing admin in a stock theme — that is how several apps
      * drifted for months without anyone being told.
      */
     static $cached = null;

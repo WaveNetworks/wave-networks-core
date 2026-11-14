@@ -8,7 +8,7 @@
  * have at its ledger version. See include/common/schemaAuditFunctions.php.
  *
  * Params (optional):
- *   only         — substring filter on the database label, e.g. "contactsweep/shard"
+ *   only         — substring filter on the database label, e.g. "myapp/shard"
  *   include_info — 0 to omit informational findings (extra tables/columns, wider types)
  *
  * A database whose migration loop stopped at a failed file carries

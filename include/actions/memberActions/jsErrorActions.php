@@ -27,7 +27,7 @@ if (($_POST['action'] ?? '') == 'logJsError') {
         // field device on an older binary opened a screen whose server-side view JS has
         // moved on. It is EXPECTED, the app handles it gracefully (renders the bundled
         // copy + "This screen needs an app update"), and it clears only when a new store
-        // binary ships — never through a code change. Logged as ERROR it made the nokemo
+        // binary ships — never through a code change. Logged as ERROR it made the control plane's
         // monitor file un-actionable "Fix:" tasks forever, once per device/screen. Keep
         // it visible as WARNING (monitoring excludes WARNING/INFO from tasks); leave real
         // breakage — 'no-handler' (a dead control) and 'fetch-fail' (a server/endpoint

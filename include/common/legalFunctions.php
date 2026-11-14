@@ -135,7 +135,7 @@ function wn_legal_app() {
         if (isset($apps[$first])) return $first;
     }
     // The deployment's child app, never a mounted sub-admin (beta/, helpdesk/ also have an app/,
-    // and 'beta' sorts before 'contactsweep'): the same rule as get_post_login_home().
+    // and 'beta' sorts before 'myapp'): the same rule as get_post_login_home().
     foreach ($apps as $slug => $_) {
         if (!is_file(wn_legal_webroot() . '/' . $slug . '/subadmin.json')) return $slug;
     }

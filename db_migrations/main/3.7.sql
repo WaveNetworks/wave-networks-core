@@ -1,8 +1,8 @@
 -- Migration 3.7 for Main Database
--- Backfill: close feedback rows that were addressed via nokemo mcp_task
+-- Backfill: close feedback rows that were addressed via control-plane task
 -- work instead of admin change requests. Feedback #11 was shipped as
--- nokemo task 86 (pagination/sorting on tasks list, completed 2026-04-11).
--- Feedback #13 was shipped as nokemo task 84 (notification dropdown
+-- a control-plane task (pagination/sorting on tasks list, completed 2026-04-11).
+-- Feedback #13 was shipped as a control-plane task (notification dropdown
 -- navigates to notifications page, completed 2026-04-11). Neither row is
 -- linked to a change_request, so the existing CR→feedback cascade
 -- (apiBulkCascadeFeedbackFromCR) can't reach them. Mark them resolved so
@@ -19,7 +19,7 @@ UPDATE feedback
        context_json = JSON_SET(
            COALESCE(context_json, JSON_OBJECT()),
            '$.resolved_by_task_id', 86,
-           '$.resolved_note', 'Shipped as nokemo task 86 (pagination and sorting on tasks list), completed 2026-04-11.'
+           '$.resolved_note', 'Shipped (pagination and sorting on tasks list), completed 2026-04-11.'
        )
  WHERE feedback_id = 11
    AND status IN ('new','reviewed','grouped');
@@ -29,7 +29,7 @@ UPDATE feedback
        context_json = JSON_SET(
            COALESCE(context_json, JSON_OBJECT()),
            '$.resolved_by_task_id', 84,
-           '$.resolved_note', 'Shipped as nokemo task 84 (notification dropdown navigates to notifications page), completed 2026-04-11.'
+           '$.resolved_note', 'Shipped (notification dropdown navigates to notifications page), completed 2026-04-11.'
        )
  WHERE feedback_id = 13
    AND status IN ('new','reviewed','grouped');

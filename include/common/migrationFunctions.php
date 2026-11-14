@@ -410,7 +410,7 @@ function wn_migration_failure($scope) {
  * Optional pre-step sidecar: <version>.pre.sql beside <version>.sql, executed in
  * autocommit immediately before that file, only when that file is about to run.
  * For a migration that assumes an object which, historically, only PHP setup code
- * created (e.g. Primo Dollar main/1.7 alters primodollar_email_subscribers), so a
+ * created (e.g. an app's main/1.7 alters acme_email_subscribers), so a
  * FRESH database can replay the set without rewriting an already-applied file.
  * Must be idempotent (CREATE TABLE IF NOT EXISTS …). Not a ledger entry: the
  * name does not match /^\d+\.\d+\.sql$/, so the older loops and the audit ignore it.
@@ -498,7 +498,7 @@ function wn_migrate_pending($conn, $db_type, $current, $target_version, $base_di
  * Flag/failure scope for one child database. Keyed on the app's migrations
  * directory (realpath), not its slug: the schema audit discovers apps by
  * webroot directory and must derive the same key, and the slug and the
- * webroot can differ (ContactSwipe = contactswipe served from contactsweep/).
+ * webroot can differ (e.g. app slug `acme` served from `acme-web/`).
  */
 function wn_child_migration_scope($base_dir, $db_type, $shard_id = null) {
     $real = realpath($base_dir);

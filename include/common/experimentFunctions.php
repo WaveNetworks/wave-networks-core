@@ -24,7 +24,7 @@
  * unique_devices dedup across the anonymous -> registered boundary.
  *
  * Tables are created via ensure_experiment_tables() in autocommit — NOT the
- * migration runner — because makershost runs MariaDB and the runner's per-migration
+ * migration runner — because the shared host runs MariaDB and the runner's per-migration
  * transaction non-deterministically drops DDL. Mirrors ensure_acquisition_tables()
  * and ensure_media_table().
  */

@@ -83,7 +83,7 @@ foreach ($views as $page => $meta) {
     // silent: no warning, no error, and a `?` . `?` fallback downstream turns the
     // missing value into an empty payload the JS then dies on.
     //
-    // pwt shipped three of these in one commit (oracle, journey, journey-node), each
+    // One app shipped three of these in one commit (oracle, journey, journey-node), each
     // introducing the view's own JS config block. Users saw raw PHP at the bottom of
     // the page and the screens' behavior quietly degraded. Caught by tokenising:
     // a T_COMMENT that starts // or # and is immediately followed by T_CLOSE_TAG.
@@ -336,7 +336,7 @@ foreach ($screens as $page => $s) {
 // Screens with no behavior of their own still need a file, so the shell can load
 // one script per screen without special-casing. ALWAYS (re)written: until 2026-10-05 this
 // skipped an existing file, so a screen that LOST its behavior kept shipping the old script
-// from any persistent checkout (contactswipe universes kept calling the retired
+// from any persistent checkout (one app's universes kept calling the retired
 // startOurFamilies and crashed). Files for screens that no longer exist are removed too.
 foreach (glob("$outDir/*.js") ?: [] as $f) {
     if (!isset($manifest['screens'][basename($f, '.js')])) { unlink($f); }

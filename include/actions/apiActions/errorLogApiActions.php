@@ -72,7 +72,7 @@ if (($action ?? null) == 'apiResolveErrorLog') {
     }
 }
 
-// ---- LIST FIXED-ERROR ANNOUNCEMENTS (for nokemo / child apps to credit users) ----
+// ---- LIST FIXED-ERROR ANNOUNCEMENTS (for the control plane / child apps to credit users) ----
 // Poll with a cursor: pass the highest event_id you've seen as since_event_id.
 // Returns a privacy-safe projection — date + page + a ready-to-show message, plus
 // the affected user ids to credit — and NEVER the stack trace, file, or line.

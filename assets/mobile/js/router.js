@@ -18,7 +18,7 @@ window.WnRouter = (function () {
     var stack = [];
 
     // The screen a bare launch / a fresh login lands on. Most apps have a `dashboard`
-    // view; an app whose home is something else (ContactSwipe's is `map`) names it as
+    // view; an app whose home is something else (one app's is `map`) names it as
     // HOME_PAGE in its env.js. Hard-coding dashboard sent such an app to a screen its
     // bundle does not have: refused as "needs an app update", and the home screen's own
     // code never ran.
@@ -438,7 +438,7 @@ window.WnRouter = (function () {
             var a = e.target.closest('a[href]');
             if (!a || a.hasAttribute('data-no-route')) return;
             // target="_blank" to a web page: the iOS WebView has no second window, so the tap did
-            // nothing ("Your beta page doesn't go anywhere", ContactSwipe task #2740). In the app,
+            // nothing ("Your beta page doesn't go anywhere"). In the app,
             // open it in the system browser; on the web the browser opens the new tab itself.
             if (a.getAttribute('target') === '_blank') {
                 if (window.WN_ENV && window.WN_ENV.BUNDLED && /^https?:/i.test(a.href || '')) {

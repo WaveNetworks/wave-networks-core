@@ -5,7 +5,7 @@
  * 2026-09-18: PHP ran in UTC while MySQL ran in the server's local zone (UTC+1 in summer),
  * so in one table an SQL-written column (NOW(), DEFAULT CURRENT_TIMESTAMP) sat an hour ahead
  * of a PHP-written one. An error's resolved_at read an hour after the app's own clock, queued
- * email compared a PHP scheduled_at against NOW(), and ContactSwipe's reminders — stored in
+ * email compared a PHP scheduled_at against NOW(), and one app's reminders — stored in
  * UTC on purpose — were swept with "due_at <= NOW()" and fired an hour early all summer.
  *
  * The convention is in include/common/clockFunctions.php: PHP is UTC, every connection is

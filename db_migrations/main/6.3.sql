@@ -1,7 +1,7 @@
 -- Migration 6.3 for Main Database
 -- oauth_token: a provider refresh token per user, sealed (secretFunctions.php), kept ONLY so that
 -- deleting the account can revoke it — Apple requires apps offering Sign in with Apple to revoke
--- the user's tokens on account deletion (nokemo task #2462). oauth_revoke_user_tokens() runs as a
+-- the user's tokens on account deletion. oauth_revoke_user_tokens() runs as a
 -- delete_user_data() hook and removes the rows.
 -- ⚠️ REMINDER: Update admin/include/bootstrap.php $db_version = 6.3;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";

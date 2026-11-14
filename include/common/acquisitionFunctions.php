@@ -18,7 +18,7 @@
  * wrapper and A/B (_experiments) layer arrive with task #795.
  *
  * Tables are created via ensure_acquisition_tables() in autocommit, NOT the
- * migration runner — makershost runs MariaDB and the runner's per-migration
+ * migration runner — the shared host runs MariaDB and the runner's per-migration
  * transaction non-deterministically drops DDL. This mirrors ensure_media_table().
  */
 
@@ -71,7 +71,7 @@ function ensure_acquisition_tables(): void
 /**
  * Upsert an app's ordered funnel stages into acquisition_funnel_def.
  *
- * @param string $source_app App slug (e.g. 'elevateher', 'nokemo').
+ * @param string $source_app App slug (e.g. 'acme', 'myapp').
  * @param array  $stages     Ordered list of stage definitions. Each entry:
  *                             [
  *                               'stage_key'      => string  (required; the log_user_action name),

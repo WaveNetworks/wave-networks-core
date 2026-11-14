@@ -382,7 +382,7 @@
     });
 
     // ─── WHAT'S NEW ─────────────────────────────────────────────────────────
-    // The app's published changelog from nokemo (getWhatsNew). A megaphone next to the bell,
+    // The app's published changelog from the control plane (getWhatsNew). A megaphone next to the bell,
     // shown only when there is something published; a dot until the newest entry is seen.
 
     var WN_SEEN_KEY = 'wn_whats_new_seen';

@@ -89,7 +89,7 @@ if (php_sapi_name() !== 'cli' && function_exists('wn_mobile_form_support')) { wn
 
 // 6b. Device tracking — identify all visitors via persistent cookie. Not for a cron or CLI
 // script: there is no visitor, and each run minted a blank device plus a 'view' log row
-// (ElevateHER, 2026-11-07: one per minute once cron was installed).
+// (one app, 2026-11-07: one per minute once cron was installed).
 if (php_sapi_name() !== 'cli' && function_exists('get_or_create_device')) {
     try { get_or_create_device(); } catch (Exception $e) { /* graceful */ }
 }

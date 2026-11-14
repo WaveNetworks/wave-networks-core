@@ -123,7 +123,7 @@ if (($action ?? null) == 'saveBranding') {
     }
 
     // ── Compliance (docs/Branding.md) ────────────────────────────────────────
-    // The checks above ask "is this a plausible image file?". That is not enough: pwt
+    // The checks above ask "is this a plausible image file?". That is not enough: one app
     // shipped a favicon that was a valid PNG of the right size, HTTP 200, and a blank
     // white square, and it passed every one of them. Validate the actual pixels before
     // anything is written, while the upload is still a temp file.
@@ -223,7 +223,7 @@ if (($action ?? null) == 'saveBranding') {
 
         // Regenerate the PWA icons on EVERY save that has a favicon, not only when a
         // new one is uploaded. Gating on the upload meant a bad set of icons could
-        // never be repaired from the UI: pwt's were a blank white square (Imagick
+        // never be repaired from the UI: one app's were a blank white square (Imagick
         // renders SVG on opaque white — see generate_pwa_icons) and the only way to
         // refresh them was to re-upload an identical favicon. Rasterising is cheap
         // and idempotent, so "Save" is now the repair path.

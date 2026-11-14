@@ -1,6 +1,6 @@
 -- Migration 6.2 for Main Database
 -- oauth_handoff: one-time codes that carry a "Continue with Google" sign-in made in the phone's
--- browser back into the app (nokemo task #2461). The browser finishes the provider sign-in, a code
+-- browser back into the app. The browser finishes the provider sign-in, a code
 -- is minted here (stored as sha256 only) and handed to the app's own URL scheme; the app trades it,
 -- with the verifier only it holds (PKCE-style: challenge = sha256 hex of the verifier), for a
 -- device token via the deviceOAuthExchange API action. Single use, 5-minute life.

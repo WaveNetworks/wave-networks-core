@@ -10,7 +10,7 @@
  *
  * Plus the in-flow rating-prompt budget (shared with any future survey via
  * engagement_prompt_log) and the regression detector that flags a use case
- * 'needs attention' and queues a use_case_regression_event for nokemo to poll.
+ * 'needs attention' and queues a use_case_regression_event for the monitoring server to poll.
  *
  * All tables live on the admin MAIN DB. These helpers are glob-included and so
  * are available to every child app for free (the in-flow prompt + rating path)
@@ -177,7 +177,7 @@ function uc_compute_health(int $use_case_id): ?array {
  *   - the flow's error rate rose by >= UC_REGRESSION_ERROR_RISE vs the previous
  *     build's window.
  * On a hit: set use_case.health_status='needs_attention' + flag_* and INSERT an
- * idempotent use_case_regression_event (UNIQUE use_case_id+build) for nokemo to
+ * idempotent use_case_regression_event (UNIQUE use_case_id+build) for the monitoring server to
  * poll. Returns the reason string, or null when healthy.
  */
 function uc_detect_regression(int $use_case_id): ?array {
@@ -257,7 +257,7 @@ function uc_detect_regression(int $use_case_id): ?array {
     return ['reason' => $reason, 'build' => $cur['build'], 'metric' => $metric];
 }
 
-/** Regression events since a cursor, for nokemo's monitoring cron to poll. */
+/** Regression events since a cursor, for the monitoring server's cron to poll. */
 function uc_regression_events_since(int $since_event_id = 0, ?string $source_app = null, int $limit = 100): array {
     $since = max(0, $since_event_id);
     $limit = max(1, min(500, $limit));

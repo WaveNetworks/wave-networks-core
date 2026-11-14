@@ -3,7 +3,7 @@
  * loginApproveFunctions.php
  * "Sign in with your phone" — a web sign-in page shows a QR; the signed-in phone app
  * opens it, shows which browser is asking, and Approve signs that browser in as the
- * phone's account (ContactSwipe task #2391).
+ * phone's account.
  *
  * Security: the QR token and the browser's cookie nonce are random and stored only as
  * sha256. Two minutes, single use, and only the browser holding the nonce can collect

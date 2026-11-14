@@ -1,4 +1,4 @@
-# Core sub-admins — the contract (nokemo task #2396)
+# Core sub-admins — the contract
 
 A **sub-admin** is a reusable admin module with an admin dependency: help-desk (#2395, the first
 full implementation), multi-lingual, social-media, beta-testing. One shared contract, not four
@@ -21,13 +21,13 @@ one-offs.
   "mount": "social",                 // public_html/<mount>/
   "icon": "bi-megaphone",            // bootstrap-icons class for its admin footer pill
   "requires_core": ">=main",         // admin core version it needs
-  "db": "none",                      // none | single | sharded  (drives nokemo's onboarding)
+  "db": "none",                      // none | single | sharded  (drives the control plane's onboarding)
   "scopes": [],                      // API scopes it adds
   "cron": [],                        // [{"path":"cron/x.php","every":"1m"}]
   "settings": {},                    // settings schema: key => {type,label,default}
   "hooks": "include/hooks.php",      // optional: registers its wn_hook_provide() providers
   "extension_points": [],            // the hooks it offers: [{name, payload, result}]
-  "onboarding": []                   // ordered steps nokemo's Sub-admins panel runs
+  "onboarding": []                   // ordered steps the control plane's Sub-admins panel runs
 }
 ```
 `db`: `none` = stub/skeleton. `single` = one DB per app, never sharded (multi-lingual,

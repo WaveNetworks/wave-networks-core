@@ -1,6 +1,6 @@
 <?php
 /**
- * subadminFunctions.php — registry of mounted core sub-admins (nokemo task #2396).
+ * subadminFunctions.php — registry of mounted core sub-admins.
  *
  * A sub-admin (help-desk, multi-lingual, social-media, beta-testing, ...) is its own repo,
  * depends on this core and never duplicates it, and is deployed by the app's deploy.yml to

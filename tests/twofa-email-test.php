@@ -65,9 +65,9 @@ function check($label, $got, $want) {
 function code_in_last_mail() { global $SENT; $m = end($SENT); return preg_match('/^(\d{6}) /', $m['subject'], $x) ? $x[1] : ''; }
 
 $USERS = [
-    1 => ['user_id' => 1, 'email' => 'twofa-a@nokemo.com', 'is_confirmed' => 1, 'shard_id' => 's1', 'password' => 'pw', 'totp_enabled' => 1],
-    2 => ['user_id' => 2, 'email' => 'twofa-b@nokemo.com', 'is_confirmed' => 0, 'shard_id' => 's1', 'password' => 'pw', 'totp_enabled' => 0],
-    3 => ['user_id' => 3, 'email' => 'twofa-c@nokemo.com', 'is_confirmed' => 1, 'shard_id' => 's1', 'password' => 'pw', 'totp_enabled' => 1],
+    1 => ['user_id' => 1, 'email' => 'twofa-a@temporarydemo.com', 'is_confirmed' => 1, 'shard_id' => 's1', 'password' => 'pw', 'totp_enabled' => 1],
+    2 => ['user_id' => 2, 'email' => 'twofa-b@temporarydemo.com', 'is_confirmed' => 0, 'shard_id' => 's1', 'password' => 'pw', 'totp_enabled' => 0],
+    3 => ['user_id' => 3, 'email' => 'twofa-c@temporarydemo.com', 'is_confirmed' => 1, 'shard_id' => 's1', 'password' => 'pw', 'totp_enabled' => 1],
 ];
 
 // The rule: only after a password (or a passkey).
@@ -87,7 +87,7 @@ check('…and no code row exists',                count($ROWS), 0);
 
 // The happy path: send, verify once, spent.
 check('send to verified email',                 wn_2fa_email_request($USERS[1], 'password'), '');
-check('sent to the account address',            end($SENT)['to'], 'twofa-a@nokemo.com');
+check('sent to the account address',            end($SENT)['to'], 'twofa-a@temporarydemo.com');
 $code = code_in_last_mail();
 check('stored hashed, never plain',             strpos($ROWS[1]['code_hash'], $code) === false && password_verify($code, $ROWS[1]['code_hash']), true);
 $wrong = $code === '000000' ? '111111' : '000000';

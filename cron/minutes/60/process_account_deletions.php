@@ -23,7 +23,7 @@ if (!isset($db)) {
 global $db;
 
 // Pull in sibling child apps so they can register their delete_user_data
-// hooks (e.g. pwt_delete_user_data). Each child opt-ins via a small
+// hooks (e.g. myapp_delete_user_data). Each child opt-ins via a small
 // include/admin_hooks.php file — keeping this lightweight (no migrations,
 // no session, no action glob).
 $adminRoot = realpath(__DIR__ . '/../../..');

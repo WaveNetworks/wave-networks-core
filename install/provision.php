@@ -2,11 +2,12 @@
 /**
  * install/provision.php — token-gated WEB provisioning endpoint.
  *
- * Called ONCE over HTTPS by the openclaw provisioning runner after deploy, to
+ * Called ONCE over HTTPS by the provisioning runner after deploy, to
  * finish app setup with NO CLI PHP:
  *   1. runs DB migrations in a WEB context (so $db_version is set — the CLI
  *      /common_readonly path leaves it null and check_and_migrate no-ops),
- *   2. ensures the monitoring admin user (default nokemo@nokemo.com),
+ *   2. ensures the monitoring admin user (the `email` sent, else
+ *      $test_account_email from config, else test@temporarydemo.com),
  *   3. mints a scoped monitoring service_api_key,
  *   4. returns { userid, key } as JSON.
  *
@@ -19,7 +20,7 @@
 header('Content-Type: application/json');
 
 require __DIR__ . '/../include/common_readonly.php';
-global $db, $db_version, $shard_version, $shardConfigs, $provision_token;
+global $db, $db_version, $shard_version, $shardConfigs, $provision_token, $test_account_email;
 
 function _prov_fail($code, $msg) { http_response_code($code); echo json_encode(['error' => $msg]); exit; }
 
@@ -44,8 +45,8 @@ $t = db_fetch(db_query("SHOW TABLES LIKE 'user'"));
 if (!$t) { _prov_fail(500, 'migrations did not create the user table (check DB/migration runner)'); }
 
 // ── Ensure the monitoring admin user ─────────────────────────────────────────
-$email = trim($_POST['email'] ?? $_GET['email'] ?? 'nokemo@nokemo.com');
-$label = trim($_POST['label'] ?? 'nokemo monitoring');
+$email = trim($_POST['email'] ?? $_GET['email'] ?? (!empty($test_account_email) ? $test_account_email : 'test@temporarydemo.com'));
+$label = trim($_POST['label'] ?? 'monitoring');
 if ($email === '') { _prov_fail(400, 'email required'); }
 
 $s_email = sanitize($email, SQL);
@@ -73,12 +74,12 @@ if ($row) {
 }
 
 // ── Mint the scoped monitoring service key ───────────────────────────────────
-// The nokemo monitor needs the FULL set: error_log:write to resolve remote
+// The monitoring server needs the FULL set: error_log:write to resolve remote
 // errors, and feedback:read/write/admin to poll feedback, open change requests
 // from it, and auto-approve them into builder tasks. Minting only read+monitoring
 // scopes (the original set) silently broke error auto-resolve AND the whole
 // feedback→change-request→task pipeline on every provisioned app (found on
-// vivajee 2026-07-10: "Missing required scope: error_log:write", zero feedback
+// one app 2026-07-10: "Missing required scope: error_log:write", zero feedback
 // tasks). Keep this in sync with get_available_scopes().
 //
 // tests:write + actions:read added 2026-08-30 — the SAME omission one pipeline

@@ -13,7 +13,7 @@
  * apiGetDeviceStats: why the device / device_action_log tables are growing. Counts (signed-in,
  * anonymous, past the 30-day cleanup), new rows per day for 14 days, the top user agents and
  * IPs of the last day's new devices, the action log's expiry state, and each cron job's last
- * run, so a host whose cron never fires shows up from nokemo without SSH. No cookies or keys.
+ * run, so a host whose cron never fires shows up from the control plane without SSH. No cookies or keys.
  */
 
 if (($action ?? null) == 'apiGetDbSizes') {
@@ -37,8 +37,8 @@ if (($action ?? null) == 'apiGetDbSizes') {
         $data['limit_mb']       = DB_SIZE_LIMIT_MB;
         $data['warn_mb']        = DB_SIZE_WARN_MB;
         $data['critical_mb']    = DB_SIZE_CRITICAL_MB;
-        // Whether this host's cron runs at all. Without it nothing is ever pruned (pwt and
-        // ElevateHER grew to millions of rows with an empty cron_log). Newest row by primary key.
+        // Whether this host's cron runs at all. Without it nothing is ever pruned (two apps
+        // grew to millions of rows with an empty cron_log). Newest row by primary key.
         $last = db_query_prepared("SELECT ran_at FROM cron_log ORDER BY log_id DESC LIMIT 1", []);
         $last = $last ? $last->fetchColumn() : false;
         $data['cron_last_ran'] = $last ?: null;
@@ -72,7 +72,7 @@ if (($action ?? null) == 'apiGetDeviceStats') {
         };
         $anon = '(user_id IS NULL OR user_id = 0)';
         // quick=1: only the newest 20,000 devices, by primary key, so a table of millions answers
-        // inside a proxy timeout (pwt: 6.4M rows, the full counts took over 30s).
+        // inside a proxy timeout (one app: 6.4M rows, the full counts took over 30s).
         if (!empty($_POST['quick'] ?? $_GET['quick'] ?? '')) {
             $tail = "device_id > (SELECT m FROM (SELECT COALESCE(MAX(device_id), 0) - 20000 AS m FROM device) x)";
             $data['tail'] = $q("SELECT COUNT(*) AS rows_, MIN(created) AS from_, MAX(created) AS to_, SUM($anon) AS anonymous,

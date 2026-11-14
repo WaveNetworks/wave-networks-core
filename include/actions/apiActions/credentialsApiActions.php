@@ -2,7 +2,7 @@
 /**
  * credentialsApiActions.php — service-API surface for pasteable credentials.
  *
- * nokemo (monitoring paste-in) and the provisioning wizard use these:
+ * The control plane (monitoring paste-in) and the provisioning wizard use these:
  *   apiGetCredentialStatus (credentials:read)  — what the app needs + what's
  *                                                 still missing. NEVER values.
  *   apiSetCredential       (credentials:write) — paste one value in; validated

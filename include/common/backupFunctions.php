@@ -242,7 +242,7 @@ function wn_backup_sql_value(PDO $pdo, $v) {
 /**
  * Open a connection, waiting out a shared MySQL server that briefly refuses it. A backup opens
  * one connection per database over several minutes, so one refusal must not cost the whole run
- * (contactswipe 2026-11-05: [2002] on a later database, the same server fine again moments
+ * (seen 2026-11-05: [2002] on a later database, the same server fine again moments
  * later). Nothing has been written for this database yet, so waiting here is safe. Only
  * connection-level errors are retried; a bad password fails at once. The final error names the
  * database, because the driver's message does not.
@@ -440,8 +440,8 @@ function wn_backup_run($keep = 3) {
 /**
  * Stream one backup to STDOUT, encrypted to $pk_raw, and return the plain manifest (the
  * caller prints it on STDERR). Nothing touches the host's disk. For hosts whose cron kills a
- * long job (StackCP: the cron-started run died ~3 min in): the backup box starts this over
- * SSH and keeps the stream (openclaw-ops scripts/backup-pull.py, mode "stream").
+ * long job (on the shared host the cron-started run died ~3 min in): the backup box starts this over
+ * SSH and keeps the stream (the ops box's backup-pull script, mode "stream").
  */
 function wn_backup_stream($pk_raw) {
     @set_time_limit(0);

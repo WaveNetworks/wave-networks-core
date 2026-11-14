@@ -36,10 +36,10 @@ Categories:
 Usage:
 
   python3 audit_mobile_parity.py \\
-    --source-app pwt \\
-    --desktop-root /home/jeevan/Desktop/pwt \\
-    --mobile-root  /home/jeevan/Desktop/pwt/mobile \\
-    --wn-api-url   https://playwithtarot.com/admin/api/index.php \\
+    --source-app myapp \\
+    --desktop-root ~/src/myapp \\
+    --mobile-root  ~/src/myapp/mobile \\
+    --wn-api-url   https://myapp.example.com/admin/api/index.php \\
     --wn-api-key   wn_sk_...
 """
 import argparse, os, re, json, sys, urllib.request, urllib.parse, glob

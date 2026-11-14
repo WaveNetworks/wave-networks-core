@@ -5,7 +5,7 @@
  * Bearer-token API over the use-case health & rating data:
  *   apiListUseCaseRatings        — ratings for a use case / app (scope actions:read)
  *   apiGetUseCaseHealth          — computed health for a use case (scope actions:read)
- *   apiListUseCaseRegressionsSince — regression event feed nokemo's monitoring cron
+ *   apiListUseCaseRegressionsSince — regression event feed the control plane's monitoring cron
  *                                   polls to file a fix task (scope monitoring:read,
  *                                   falls back to actions:read)
  *   apiAckUseCaseRegression      — mark a regression event acknowledged once the
@@ -66,8 +66,8 @@ if (($action ?? null) == 'apiGetUseCaseHealth') {
     }
 }
 
-// ── Regression feed for nokemo's monitoring cron ──────────────────────────────
-// Prefer monitoring:read (nokemo's monitoring key), fall back to actions:read.
+// ── Regression feed for the control plane's monitoring cron ───────────────────
+// Prefer monitoring:read (the control plane's monitoring key), fall back to actions:read.
 if (($action ?? null) == 'apiListUseCaseRegressionsSince') {
     $has = false;
     $key = $_SERVICE_API_KEY ?? null;

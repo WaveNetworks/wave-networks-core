@@ -19,10 +19,10 @@ PHP/JS placeholders so `#card-{$index}` (desktop) matches `#card-{n}`
 Usage:
 
   python3 diff_view_contract.py \\
-    --source-app pwt \\
-    --desktop-views /home/jeevan/Desktop/pwt/views \\
-    --mobile-root  /home/jeevan/Desktop/pwt/mobile \\
-    --wn-api-url   https://playwithtarot.com/admin/api/index.php \\
+    --source-app myapp \\
+    --desktop-views ~/src/myapp/views \\
+    --mobile-root  ~/src/myapp/mobile \\
+    --wn-api-url   https://myapp.example.com/admin/api/index.php \\
     --wn-api-key   wn_sk_...
 
   Add --dry-run to print the diff without posting to admin.
@@ -93,7 +93,7 @@ def scan_v2_aliases(desktop_root: str) -> dict:
     Read every v2 action file and return a mapping:
         v2_path  ->  set of v1 action names the resource ultimately runs.
 
-    pwt's v2 wrappers either:
+    one app's v2 wrappers either:
       1. set $_POST['action']='someV1Name' and include the v1 handler, or
       2. handle the work inline keyed on $v2_action === 'kebab-case-name'.
 
@@ -381,8 +381,8 @@ def main():
     mobile_js = scan_js_selectors(args.mobile_root)
 
     # Build the v2 alias mapping (mobile_root's parent is the desktop root
-    # for pwt, since /home/jeevan/Desktop/pwt/mobile is the mobile root and
-    # /home/jeevan/Desktop/pwt is where include/actions/apiActions/v2 lives)
+    # for an app whose mobile root is ~/src/myapp/mobile and
+    # whose ~/src/myapp is where include/actions/apiActions/v2 lives)
     desktop_root_for_v2 = os.path.dirname(os.path.abspath(args.mobile_root))
     v2_aliases = scan_v2_aliases(desktop_root_for_v2)
     mobile_action_index = build_mobile_action_index(args.mobile_root, v2_aliases)

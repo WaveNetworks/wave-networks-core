@@ -122,14 +122,14 @@ if (!extension_loaded('pdo_sqlite')) {
 
     // Drafts never publish.
     $n = $count();
-    wn_legal_save_draft('privacy_policy', 'probeapp', ['content' => "# Draft\n\nNot yet.", 'summary' => 'x'], 1, 'admin@nokemo.com');
-    wn_legal_save_draft('privacy_policy', 'probeapp', ['content' => "# Draft\n\nStill not.", 'summary' => 'y'], 1, 'admin@nokemo.com');
+    wn_legal_save_draft('privacy_policy', 'probeapp', ['content' => "# Draft\n\nNot yet.", 'summary' => 'x'], 1, 'admin@temporarydemo.com');
+    wn_legal_save_draft('privacy_policy', 'probeapp', ['content' => "# Draft\n\nStill not.", 'summary' => 'y'], 1, 'admin@temporarydemo.com');
     ($count() === $n && wn_legal_draft('privacy_policy', 'probeapp')['content'] === "# Draft\n\nStill not.") ? ok('saving a draft (twice) creates no version') : bad('a draft created or lost a version');
 
     // Publish 1.0 for the app (no re-acceptance).
-    $r1 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.", 'summary' => 'First version.', 'requires_reacceptance' => 0], 1, 'admin@nokemo.com');
+    $r1 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.", 'summary' => 'First version.', 'requires_reacceptance' => 0], 1, 'admin@temporarydemo.com');
     $v1 = !empty($r1['version_id']) ? $row($r1['version_id']) : null;
-    ($v1 && $v1['version_label'] === '1.0' && $v1['app_slug'] === 'probeapp' && $v1['published_by_name'] === 'admin@nokemo.com' && $v1['published_at'])
+    ($v1 && $v1['version_label'] === '1.0' && $v1['app_slug'] === 'probeapp' && $v1['published_by_name'] === 'admin@temporarydemo.com' && $v1['published_at'])
         ? ok('publishing creates a new version 1.0 with who and when') : bad('first publish: ' . json_encode($r1));
     wn_legal_draft('privacy_policy', 'probeapp') === null ? ok('publishing clears the draft') : bad('the draft survived publishing');
     (wn_legal_current('privacy_policy')['version_id'] ?? 0) == ($r1['version_id'] ?? -1) ? ok("the app's own version replaces the whole-site one") : bad('the app version is not in force');
@@ -141,7 +141,7 @@ if (!extension_loaded('pdo_sqlite')) {
     wn_legal_gate_needed(7) === [] ? ok("the sign-in gate does not block on a 'first' acceptance (the in-app notice asks)") : bad('the sign-in gate blocks a first acceptance');
     $fa = wn_legal_accept(7, (string) $r1['version_id'], 'notice_app');
     (($fa['accepted']['privacy_policy'] ?? 0) == $r1['version_id'] && wn_legal_pending(7) === []) ? ok('one Accept records 1.0 (notice_app) and nothing is owed after') : bad('first accept: ' . json_encode($fa));
-    $r1b = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.\n\nTypo fixed.", 'summary' => 'Typo.', 'requires_reacceptance' => 0], 1, 'admin@nokemo.com');
+    $r1b = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.\n\nTypo fixed.", 'summary' => 'Typo.', 'requires_reacceptance' => 0], 1, 'admin@temporarydemo.com');
     (($r1b['version_label'] ?? '') === '1.1' && wn_legal_pending(7) === []) ? ok('a version published without re-acceptance (1.1) asks nobody') : bad('a minor version made users accept again: ' . json_encode($r1b));
     // Sign-up records what the form showed (legal_version_ids), else what is in force.
     (wn_legal_signup_version_id('privacy_policy', $r1['version_id'] . ',999') === (int) $r1['version_id']
@@ -153,7 +153,7 @@ if (!extension_loaded('pdo_sqlite')) {
 
     // Publish 2.0 with re-acceptance: a NEW row; 1.0 untouched.
     $before = $v1;
-    $r2 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.\n\nAnd now photos.", 'summary' => 'Adds photos.', 'requires_reacceptance' => 1], 1, 'admin@nokemo.com');
+    $r2 = wn_legal_publish('privacy_policy', 'probeapp', ['content' => "# Privacy\n\nWe keep **your** contacts.\n\nAnd now photos.", 'summary' => 'Adds photos.', 'requires_reacceptance' => 1], 1, 'admin@temporarydemo.com');
     $v2 = !empty($r2['version_id']) ? $row($r2['version_id']) : null;
     ($v2 && (int) $v2['version_id'] !== (int) $v1['version_id'] && $v2['version_label'] === '2.0')
         ? ok('publishing again creates a NEW row numbered 2.0 (re-acceptance = major)') : bad('second publish: ' . json_encode($r2));
@@ -260,12 +260,12 @@ $sk = (string) @file_get_contents($root . '/include/common/serviceApiKeyFunction
 
 // ── 7. declared documents + the app fallback, in a throwaway deployment ──────
 // legalFunctions.php finds apps from its own location, so it runs in a fresh PHP process from a
-// temp public_html: contactsweep/ (an app), beta/ + helpdesk/ (sub-admins), beta declaring a document.
+// temp public_html: myapp/ (an app), beta/ + helpdesk/ (sub-admins), beta declaring a document.
 if (extension_loaded('pdo_sqlite')) {
     $tmp = sys_get_temp_dir() . '/legal-probe-' . getmypid();
-    foreach (['admin/include/common', 'contactsweep/app', 'beta/app', 'beta/legal', 'helpdesk/app'] as $d) @mkdir("$tmp/public_html/$d", 0777, true);
+    foreach (['admin/include/common', 'myapp/app', 'beta/app', 'beta/legal', 'helpdesk/app'] as $d) @mkdir("$tmp/public_html/$d", 0777, true);
     copy($root . '/include/common/legalFunctions.php', "$tmp/public_html/admin/include/common/legalFunctions.php");
-    foreach (['contactsweep', 'beta', 'helpdesk'] as $a) touch("$tmp/public_html/$a/app/index.php");
+    foreach (['myapp', 'beta', 'helpdesk'] as $a) touch("$tmp/public_html/$a/app/index.php");
     touch("$tmp/public_html/beta/subadmin.json"); touch("$tmp/public_html/helpdesk/subadmin.json");
     file_put_contents("$tmp/public_html/beta/legal.json", json_encode(['name' => 'Beta', 'documents' => ['beta_agreement' =>
         ['title' => 'Beta Testing Agreement', 'word' => 'beta-agreement', 'path' => 'agreement', 'default' => 'legal/beta_agreement.md']]]));
@@ -278,14 +278,14 @@ $db->exec("CREATE TABLE user_consent (consent_id INTEGER PRIMARY KEY AUTOINCREME
 require __DIR__ . "/public_html/admin/include/common/legalFunctions.php";
 $c = wn_legal_current("beta_agreement", "beta");
 echo json_encode(["app" => wn_legal_app(), "declared" => isset(wn_legal_types()["beta_agreement"]) && !wn_legal_types()["beta_agreement"]["account"],
-  "tabs" => !isset(wn_legal_types("contactsweep")["beta_agreement"]) && isset(wn_legal_types("beta")["beta_agreement"]),
+  "tabs" => !isset(wn_legal_types("myapp")["beta_agreement"]) && isset(wn_legal_types("beta")["beta_agreement"]),
   "account" => array_keys(wn_legal_account_types()), "seeded" => $c ? $c["version_label"] : null,
   "url" => wn_legal_public_url("beta_agreement", "beta"), "word" => wn_legal_type_from_word("beta-agreement"),
   "kept_out" => !isset(wn_legal_pending(5, "beta")["beta_agreement"]) && !isset(wn_legal_signup_versions("beta")["beta_agreement"])]);
 ');
     $r = json_decode((string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg("$tmp/run.php") . ' 2>&1'), true);
     exec('rm -rf ' . escapeshellarg($tmp));
-    ($r && $r['app'] === 'contactsweep') ? ok("with no request context the app is the child app, never a sub-admin (beta/ sorts first)") : bad('fallback app: ' . json_encode($r['app'] ?? $r));
+    ($r && $r['app'] === 'myapp') ? ok("with no request context the app is the child app, never a sub-admin (beta/ sorts first)") : bad('fallback app: ' . json_encode($r['app'] ?? $r));
     ($r && $r['declared'] && $r['tabs'] && $r['account'] === ['privacy_policy', 'terms_of_service'] && $r['seeded'] === '1.0'
         && $r['url'] === '/beta/agreement' && $r['word'] === 'beta_agreement' && $r['kept_out'])
         ? ok('a document declared in legal.json "documents" is versioned (default seeded as 1.0), served at its own path, and kept out of account sign-up and the notice')

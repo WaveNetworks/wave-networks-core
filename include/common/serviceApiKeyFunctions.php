@@ -91,7 +91,7 @@ function core_available_scopes() {
         'tests:read'      => 'Read use_case rows, test runs, and linked graphics/assets',
         'media:read'      => 'Read media library assets (URLs, metadata) — for builder/agent embedding',
         'media:write'     => 'Upload media assets (e.g. archived source documents) — for builder/agent use',
-        'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (openclaw runner only)',
+        'provisioning:admin' => 'Claim and execute app provisioning jobs — decrypt creds, update status, register apps (provisioning runner only)',
         'credentials:read'  => 'Read which app credentials the app declares and which are still missing (never values)',
         'credentials:write' => 'Paste in / update app credential values (Amazon keys, API tokens, affiliate IDs, etc.)',
         'finds:write'       => 'Ingest candidate product finds into the Curate queue (external deal-finder bridge until PA-API)',
@@ -104,7 +104,7 @@ function core_available_scopes() {
 }
 
 /**
- * The scopes nokemo's monitoring key needs on every app.
+ * The scopes the monitoring server's key needs on every app.
  *
  * install/provision.php mints the key with this set, and validate_service_api_key()
  * tops up an existing monitoring key (identified by holding monitoring:write) when
@@ -129,10 +129,10 @@ function monitor_key_scopes() {
 }
 
 /**
- * App-specific scopes a child app wants nokemo's monitoring key to hold, declared in the
+ * App-specific scopes a child app wants the monitoring server's key to hold, declared in the
  * same api-scopes.json as {"monitor_key": ["myapp_queue:read", ...]}. Only scopes that file
  * also declares under "scopes" count, so an app can never hand the key a core scope (or
- * another app's) this way. Without this, an app pipeline nokemo drives (e.g. ContactSwipe's
+ * another app's) this way. Without this, an app pipeline the control plane drives (e.g. one app's
  * integration request gate) needed a key minted by hand on that deployment.
  *
  * @return string[]

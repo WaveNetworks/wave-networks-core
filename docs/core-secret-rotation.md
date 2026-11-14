@@ -141,16 +141,16 @@ local scripts). Docker compose files already set both env values.
 ## 4b. Child apps
 
 - Columns a child fills with `wn_secret_encrypt()` / `wn_secret_seal()` in its own DB
-  (contactswipe `cs_integration_test.credential_encrypted`, help-desk `hd_mailbox.imap_pass_enc`)
+  (for example `cs_integration_test.credential_encrypted`, help-desk `hd_mailbox.imap_pass_enc`)
   keep opening after any rotation as long as their key is in the ring. To be counted by
   `status` / `retire` and moved by the sweep, the child registers them:
   `wn_register_sealed_column('cs_integration_test', 'request_id', 'credential_encrypted')`
   (kind `cbc` = pre-ring values are `wn_secret_encrypt()` output) and runs the sweep from its
   own cron with its `$child_db`.
-- brand-compiler `bc_encrypt()` uses its own AES off the raw `$app_secret`. `$app_secret` is
+- A child with its own crypto (for example a `bc_encrypt()`) that uses its own AES off the raw `$app_secret`. `$app_secret` is
   the CURRENT key, so its stored values break the moment a new key is made current: move it
   to `wn_secret_encrypt()` before the first promotion.
-- contactswipe `cs_list_key()` HMACs list cursors with `$app_secret`: a promotion only
+- A child that HMACs list cursors (for example `cs_list_key()`) with `$app_secret`: a promotion only
   invalidates open cursors (harmless).
 
 ## 5. Tests (deploy gate, SQLite like `stored-secrets-probe.php`)

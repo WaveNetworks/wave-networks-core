@@ -18,7 +18,7 @@
 </Files>
 
 # provision.php is the token-gated web provisioning endpoint (inert without the
-# per-deployment $provision_token). Allow it so the openclaw runner can reach it.
+# per-deployment $provision_token). Allow it so the provisioning runner can reach it.
 <Files "provision.php">
     <IfModule mod_authz_core.c>
         Require all granted

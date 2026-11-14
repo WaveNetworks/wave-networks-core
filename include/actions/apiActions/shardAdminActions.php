@@ -5,7 +5,7 @@
  * Scope: shards:admin
  *
  * These run in the ADMIN context on whichever host owns the app, and are what
- * nokemo's shard console drives through monitorCallAppAdmin — so nokemo never
+ * the control plane's shard console drives through monitorCallAppAdmin — so it never
  * holds a shard's database password, and the operator never edits config.php on
  * a server.
  *

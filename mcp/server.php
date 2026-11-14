@@ -546,7 +546,7 @@ if (empty($MCP_API_KEY)) {
     mcp_log("WARNING: WN_API_KEY is not set. API calls will fail with 401.");
 }
 
-// Node-based clients (OpenClaw, Claude Code) hand us stdin as a socket, so PHP
+// Node-based clients (agent runners, Claude Code) hand us stdin as a socket, so PHP
 // applies default_socket_timeout (60 s) to it: fgets() returns false after a
 // minute of silence and we used to exit as if stdin had closed. The client then
 // got "Not connected" on its next call. Never time out; stop only on real EOF.

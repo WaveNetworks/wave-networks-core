@@ -185,7 +185,7 @@ $big_tables = array_slice($big_tables, 0, 10);
 
 <div class="mt-3 text-muted small">
     <strong>Provisioning a new shard:</strong> create the database on the host, then
-    register it from the shard console (nokemo &rarr; Shards), which stores it in
+    register it from the control plane's shard console, which stores it in
     <code>shard_config</code>, migrates it, and activates it. Editing
     <code>$shardConfigs</code> in <code>admin/config/config.php</code> by hand is no
     longer required &mdash; that array is only the seed. New registrations go to the

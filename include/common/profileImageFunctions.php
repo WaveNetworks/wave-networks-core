@@ -102,7 +102,7 @@ function upload_profile_image($user_id, $shard_id, $file) {
 
 /**
  * Set a user's profile photo from image bytes rather than an upload — for a child app
- * that keeps the same person's photo somewhere else (ContactSwipe's own contact card,
+ * that keeps the same person's photo somewhere else (a child app's own contact card,
  * task #2656: "these should be one and the same") and mirrors it here. Same storage,
  * thumbnail and DB update as upload_profile_image(); the homedir comes from the
  * profile row first, so it works on a device (Bearer) request with no web session.

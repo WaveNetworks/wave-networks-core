@@ -5,7 +5,7 @@
  * Until 2026-10-20 two bugs together filled this table with copies: the "daily" roll-up in
  * cron/days/1 ran on every minute of the 1st (cron.php read days/1 as "day 1 of the month"),
  * and a row with a NULL page or action never matched uq_user_action_day (NULLs never collide
- * in a unique key), so each run inserted the same day again. ContactSwipe's shards held 8.6M
+ * in a unique key), so each run inserted the same day again. One app's shards held 8.6M
  * rows for 321 facts. Both causes are fixed; this removes the copies already there.
  *
  * A copy is an EXACT duplicate (same user, device, app, page, action, day, counts and
