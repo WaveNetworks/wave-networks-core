@@ -51,3 +51,20 @@ Run once per deployed admin host after migration 3.4 has reached it.
   only reached via Phase 3 service-impersonation tokens, never a real login.
 - See `CLAUDE.md` → **Test account** for the policy (infinite action log TTL,
   re-consent exemption, no real PII).
+
+## set-owner.php
+
+The only way to set `user.is_owner` and `user.is_agent` (main/7.2, task #2779). Run over SSH on
+the app's host; there is deliberately no admin-UI toggle and no API action for either.
+
+```
+php admin/scripts/set-owner.php --list                 # owners, admins, agents
+php admin/scripts/set-owner.php owner@nokemo.com       # make the owner (also admin)
+php admin/scripts/set-owner.php --revoke <email>
+php admin/scripts/set-owner.php --agent <email>        # automation account: never owner, never a human gate
+php admin/scripts/set-owner.php --not-agent <email>
+```
+
+Add `--dry-run` to see the change. It refuses to make an agent account or the test account the
+owner. Gates use `wn_is_owner_session()` / `wn_is_human_session()` (include/common/ownerFunctions.php),
+which read the DB, refuse any service-key request and any agent account; `php tests/owner-gate-test.php`.

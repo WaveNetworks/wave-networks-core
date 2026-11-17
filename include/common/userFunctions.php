@@ -85,7 +85,7 @@ function load_user_session($user) {
     $_SESSION['email']       = $user['email'];
     $_SESSION['shard_id']    = $user['shard_id'];
     $_SESSION['is_admin']    = $user['is_admin'];
-    $_SESSION['is_owner']    = $user['is_owner'];
+    $_SESSION['is_owner']    = empty($user['is_agent']) ? $user['is_owner'] : 0;  // an agent account is never owner (#2779)
     $_SESSION['is_manager']  = $user['is_manager'];
     $_SESSION['is_employee'] = $user['is_employee'];
 

@@ -93,6 +93,13 @@ legacy_runner_skipped.
   wn_child_migrate()/wn_child_migrate_shards() and declare targets once in
   include/migration_versions.php (the audit reads that file first).
 
+## Owner and agent accounts (task #2779)
+`user.is_owner` / `user.is_agent` (main/7.2) are set ONLY by `php admin/scripts/set-owner.php` over SSH —
+never an admin-UI toggle, never an API action. An agent (automation) account is never owner. A gate that
+needs a person calls `wn_is_human_session()`; owner-only calls `wn_is_owner_session()`
+(include/common/ownerFunctions.php): both read the DB, and refuse service-key requests and agent accounts.
+Test: `php tests/owner-gate-test.php`.
+
 ## Shard routing architecture
 Main DB (wncore_main): auth only. user table holds user_id, email,
   password, shard_id, role flags. Never holds profile or app data.
