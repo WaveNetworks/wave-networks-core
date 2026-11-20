@@ -325,6 +325,10 @@ Member actions (include/actions/memberActions/errorLogActions.php):
 
 API actions (include/actions/apiActions/errorLogApiActions.php):
   Authenticated via service API key (Bearer token). Scope-gated.
+  apiGetEmailSettings / apiSetEmailSettings (scope: email:admin, on the monitoring key) — the admin
+    outbound mail account over the API (emailSettingsApiActions.php, task #2809): smtp_host/port/user/
+    pass (empty = keep, sealed at rest)/encryption, from_email (added as the default allowed sender),
+    from_name, reply_to. Get never returns the password (has_password only).
   apiGetErrorLogs     — list (scope: error_log:read)
   apiGetErrorLog      — single entry (scope: error_log:read)
   apiResolveErrorLog  — resolve (scope: error_log:write). Accepts resolution_reason,

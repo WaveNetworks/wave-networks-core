@@ -100,6 +100,7 @@ function core_available_scopes() {
         'shards:admin'      => 'List, register, test, migrate and retire shard databases (shard registry)',
         'legal:read'        => 'Read Privacy Policy / Terms versions, the text in force and the draft',
         'legal:write'       => 'Save Privacy Policy / Terms drafts for staff to publish, and start one app\'s document over as 1.0',
+        'email:admin'       => 'Set the admin outbound mail account (SMTP host/user/password, From) and read it back without the password (provisioning, task #2809)',
     ];
 }
 
@@ -124,6 +125,7 @@ function monitor_key_scopes() {
         'media:read', 'media:write',
         'legal:read', 'legal:write',
         'system:read',
+        'email:admin',
     ];
     return array_values(array_unique(array_merge($core, child_monitor_key_scopes())));
 }
