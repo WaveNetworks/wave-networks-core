@@ -101,6 +101,7 @@ function core_available_scopes() {
         'legal:read'        => 'Read Privacy Policy / Terms versions, the text in force and the draft',
         'legal:write'       => 'Save Privacy Policy / Terms drafts for staff to publish, and start one app\'s document over as 1.0',
         'email:admin'       => 'Set the admin outbound mail account (SMTP host/user/password, From) and read it back without the password (provisioning, task #2809)',
+        'branding:admin'    => 'Read and set Admin › Branding (site name, short name, colours, logo, dark logo, favicon) — provisioning seeds new apps (nokemo task #2816)',
     ];
 }
 
@@ -126,6 +127,7 @@ function monitor_key_scopes() {
         'legal:read', 'legal:write',
         'system:read',
         'email:admin',
+        'branding:admin',
     ];
     return array_values(array_unique(array_merge($core, child_monitor_key_scopes())));
 }

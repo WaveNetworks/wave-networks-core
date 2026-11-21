@@ -886,7 +886,15 @@ Form field names (important for programmatic updates):
   site_description — Site description for meta tags
   theme_color   — Hex color for PWA manifest and browser chrome
 
-Storage: auth_settings table in main DB (key-value pairs).
+Storage: auth_settings table in main DB (row setting_id = 1).
+API (scope branding:admin, on the monitoring key; brandingApiActions.php, nokemo task #2816):
+  apiGetBranding — the row (no files) + is_default (site_name still core's 'Admin').
+  apiSetBranding — site_name, site_short_name, site_description, theme_color (= light),
+    theme_color_dark, background_color_light/dark; files as base64 logo_b64+logo_name,
+    logo_dark_b64+logo_dark_name, favicon_b64+favicon_name (same 2 MB / type /
+    branding_validate_asset rules as saveBranding; PWA icons regenerated). Omitted = kept.
+    only_if_default=1 changes nothing once an admin has named the site (data.skipped).
+  nokemo's provisioning runner seeds every new app from its repo (scripts/app_branding.py).
 Access: get_branding() returns all values. Available to child apps and
   websites via common_auth.php (no session required).
 
