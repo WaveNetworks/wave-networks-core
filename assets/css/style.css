@@ -219,10 +219,9 @@
         -webkit-backdrop-filter: none !important;
     }
 
-    [data-bs-theme="light"] body #sidebar {
-        background: #f0f0f3 !important;
-        background-color: #f0f0f3 !important;
-    }
+    /* No light-mode variant: the sidebar stays dark in both modes, as on
+       desktop. Its nav text, icons and brand are white, so a light background
+       here made the phone menu unreadable (nokemo task #2817). */
 
     body.sidebar-visible #sidebar {
         left: 0;
