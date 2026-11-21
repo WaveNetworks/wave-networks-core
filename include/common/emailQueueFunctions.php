@@ -168,6 +168,23 @@ function get_allowed_senders() {
 }
 
 /**
+ * Append the child app's email footer, if it set one. A child app sets
+ * $GLOBALS['wn_email_footer_html'] in its bootstrap (e.g. its logo lockup), so every
+ * email queued or sent while that app is running carries it: its own mail and the
+ * core auth mail (confirm, reset) sent from its auth pages. Applied once per body.
+ *
+ * @param string $body_html
+ * @return string
+ */
+function wn_email_app_footer($body_html) {
+    $footer = $GLOBALS['wn_email_footer_html'] ?? '';
+    if (!is_string($footer) || $footer === '' || strpos((string)$body_html, 'data-wn-email-footer') !== false) {
+        return $body_html;
+    }
+    return $body_html . '<div data-wn-email-footer="1">' . $footer . '</div>';
+}
+
+/**
  * Queue an email for delivery. Primary function for child apps.
  *
  * @param string $to_email
@@ -233,6 +250,9 @@ function queue_email($to_email, $to_name, $subject, $body_html, $opts = []) {
         $reply_to = $settings['default_reply_to'];
     }
 
+    // Child app's brand footer (wn_email_app_footer), before the text part is derived from it
+    $body_html = wn_email_app_footer($body_html);
+
     // Body text fallback
     $body_text = $opts['body_text'] ?? wn_email_html_to_text($body_html);
 
@@ -289,6 +309,8 @@ function queue_email($to_email, $to_name, $subject, $body_html, $opts = []) {
  */
 function send_email_now($to_email, $to_name, $subject, $body_html, $opts = []) {
     global $db;
+
+    $body_html = wn_email_app_footer($body_html);
 
     $settings = get_email_settings();
 
