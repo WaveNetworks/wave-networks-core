@@ -204,12 +204,32 @@ git -C "$SHELL_REPO" add -A
 # git state and Capawesome state are independent, so an identical bundle can still be
 # unpublished — which is exactly the case the first time an app id is filled in. Skip the
 # commit, fall through to step 8, and let its own guards decide.
+# Every build gets its OWN tag, v<version>-build<N> (N = one past the highest such tag here or on
+# origin). Builds of one version used to share "v<version>", moved with tag -f and pushed with
+# push -f: a force push, which a safe setup refuses (and should), leaving origin's tag on an old
+# build. A tag that never moves never needs forcing. Tags are only made at --push, so a local
+# dry run does not use up a number.
 if git -C "$SHELL_REPO" diff --cached --quiet; then
     echo "   nothing changed"
 else
-git -C "$SHELL_REPO" commit -q -m "m/ sync $VERSION"
-git -C "$SHELL_REPO" tag -f "v$VERSION"
-if [[ "$PUSH" == "--push" ]]; then git -C "$SHELL_REPO" push origin HEAD && git -C "$SHELL_REPO" push -f origin "v$VERSION"; echo "   pushed v$VERSION"; else echo "   committed + tagged v$VERSION (re-run with --push)"; fi
+    git -C "$SHELL_REPO" commit -q -m "m/ sync $VERSION"
+    echo "   committed m/ sync $VERSION"
+fi
+if [[ "$PUSH" == "--push" ]]; then
+    # Push whenever asked, even with nothing new to commit: a dry run's commit is still unpushed.
+    git -C "$SHELL_REPO" push -q origin HEAD
+    if git -C "$SHELL_REPO" tag --points-at HEAD | grep -qE "^v$VERSION-build[0-9]+$"; then
+        echo "   HEAD already tagged $(git -C "$SHELL_REPO" tag --points-at HEAD | grep -E "^v$VERSION-build[0-9]+$" | head -1)"
+    else
+        N=$( { git -C "$SHELL_REPO" tag -l "v$VERSION-build*"
+               git -C "$SHELL_REPO" ls-remote --tags origin "v$VERSION-build*" 2>/dev/null | sed 's|.*refs/tags/||; s|\^{}$||'; } \
+             | sed -nE "s/^v$VERSION-build([0-9]+)$/\1/p" | sort -n | tail -1)
+        TAG="v$VERSION-build$(( ${N:-0} + 1 ))"
+        git -C "$SHELL_REPO" tag "$TAG" && git -C "$SHELL_REPO" push -q origin "$TAG"
+        echo "   pushed $TAG"
+    fi
+else
+    echo "   not pushed or tagged (re-run with --push)"
 fi
 
 echo "── 8. live update (Capawesome) ───────────────────────────"
