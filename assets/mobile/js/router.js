@@ -240,6 +240,9 @@ window.WnRouter = (function () {
         if (!WnStore.canRender(page, json.js_hash)) {
             console.warn('[viv] ' + page + ' needs a newer build — showing the bundled version');
             if (window.WnReport) WnReport.signal('needs-build', page);
+            // live-update.js applies a staged bundle at the next screen change instead of the
+            // next launch once this has happened (contactswipe task #2862).
+            document.dispatchEvent(new CustomEvent('wn:needs-build', { detail: { page: page } }));
             if (!cached) render(page, emptyState(page, 'This screen needs an app update.'));
             toasts(json);
             return;

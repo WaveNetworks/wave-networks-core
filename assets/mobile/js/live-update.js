@@ -52,6 +52,29 @@
          * WANT ready() to go uncalled so the plugin rolls back — a timer that called it
          * anyway would convert a recoverable bad release into a bricked install.
          */
+        /*
+         * STALE CODE APPLIES SOONER (contactswipe task #2862). A staged bundle normally waits
+         * for the next launch. Two cases cannot wait:
+         *   - the app is still on the bundle BAKED into the store binary (getCurrentBundle()
+         *     → null: a fresh install). That bake is as old as the store build, and a new user
+         *     would spend the whole first session (sign-up, phone sync) on it;
+         *   - the router refused a screen as needing a newer build (wn:needs-build).
+         * Then the staged bundle is applied at the next screen change, never while a text
+         * field has focus, so nothing typed is lost. A signed-in session survives the reload.
+         */
+        var stale = false, staged = false, applying = false;
+        document.addEventListener('wn:needs-build', function () { stale = true; });
+        function typing() {
+            var a = document.activeElement;
+            return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+        }
+        function applyIfDue() {
+            if (!staged || !stale || applying || typing()) { return; }
+            applying = true;
+            LiveUpdate.reload().catch(function (err) { applying = false; report('reload')(err); });
+        }
+        document.addEventListener('wn:navigated', function () { setTimeout(applyIfDue, 0); });
+
         document.addEventListener('wn:navigated', function () {
             LiveUpdate.ready()
                 .then(function () {
@@ -59,6 +82,13 @@
                     // sync() downloads and stages it; it takes effect on the next launch,
                     // so nothing is yanked out from under the user mid-session.
                     return LiveUpdate.sync();
+                })
+                .then(function (res) {
+                    if (!res || !res.nextBundleId) { return; }
+                    staged = true;
+                    return LiveUpdate.getCurrentBundle().then(function (cur) {
+                        if (!cur || !cur.bundleId) { stale = true; }   // still the store bake
+                    }, function () {});
                 })
                 .catch(report('sync'));
         }, { once: true });
