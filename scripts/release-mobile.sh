@@ -83,6 +83,19 @@ for ref in $(grep -oE 'assets/css/[A-Za-z0-9._-]+\.css' m/index.html | sort -u);
     if [[ -f "$ref" ]]; then mkdir -p m/assets/css && cp "$ref" "m/$ref"
     else echo "   ✗ app stylesheet not found: $ref (linked by the shell)" >&2; exit 1; fi
 done
+# …and what THOSE stylesheets point at. A url(../cards/x.svg) in assets/css/X resolves to
+# assets/cards/x.svg on the web; the bundle must hold it at that same relative path, or the
+# image is silently blank on the device (pwt's card backs, 2026-11-26). Same relative path,
+# resolved from the source file's own folder.
+for ref in $(grep -oE 'assets/css/[A-Za-z0-9._-]+\.css' m/index.html | sort -u); do
+    dir=$(dirname "$ref")
+    for u in $(grep -oE "url\(['\"]?[^'\")]+" "$ref" | sed -E "s/url\(['\"]?//" | grep -vE '^(data:|https?:|//|#|/)' | sed -E 's/[?#].*$//' | sort -u); do
+        src=$(realpath -m --relative-to=. "$dir/$u")
+        [[ "$src" == ../* ]] && { echo "   ✗ $ref: url($u) escapes the app" >&2; exit 1; }
+        if [[ -f "$src" ]]; then mkdir -p "m/$(dirname "$src")" && cp "$src" "m/$src"
+        else echo "   ! $ref: url($u) → $src not found" >&2; fi
+    done
+done
 # App CSS the shell loads (real look), from core.
 cp "$ADMIN_ROOT/assets/css/style.css"              m/assets/vendor/style.css
 cp "$ADMIN_ROOT/assets/css/bs-theme-overrides.css" m/assets/vendor/bs-theme-overrides.css
