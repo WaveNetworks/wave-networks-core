@@ -67,7 +67,7 @@ window.WnRouter = (function () {
      * SPA nav fires — spa:contentLoaded — so firing it here means the views' code
      * needs no mobile-specific entry point. Same code, same signal.
      */
-    function render(page, markup) {
+    function render(page, markup, placeholder) {
         var el = section(page);
         // App hook: rewrite the fragment before it is drawn, e.g. point media the bundle
         // carries at the bundle instead of the server (pwt packages its card art). Optional;
@@ -78,6 +78,14 @@ window.WnRouter = (function () {
         el.innerHTML = markup;
         activate(page);
         document.body.classList.add('wn-ready');
+
+        // A placeholder (offline / couldn't reach the server / needs an app update) is
+        // not the view's markup, so the view's code has nothing to bind to: running it
+        // threw on the first missing element, e.g. '[viv] screen "oracle" failed to
+        // initialise: Cannot read properties of null (reading 'addEventListener')'
+        // (pwt, nokemo task #2869). Draw it and stop: no init, no deps, no
+        // spa:contentLoaded (its listeners reach for the same markup).
+        if (placeholder) return;
 
         // NOW run the screen's own code — the markup it was written against exists.
         // This is the moment a page load would have given it (see js/screens.js).
@@ -194,7 +202,7 @@ window.WnRouter = (function () {
 
         if (!Platform.online()) {
             document.body.classList.add('wn-offline');
-            if (!cached) render(page, emptyState(page, 'You\'re offline, and this screen hasn\'t been opened on this device yet.'));
+            if (!cached) renderEmpty(page, 'You\'re offline, and this screen hasn\'t been opened on this device yet.');
             return;
         }
         document.body.classList.remove('wn-offline');
@@ -223,7 +231,7 @@ window.WnRouter = (function () {
                 if (Platform.online() && window.WnReport) {
                     WnReport.signal('fetch-fail', page + ' [' + (err.message || err.name || 'error') + ', after retry]');
                 }
-                if (!cached) render(page, emptyState(page, 'Couldn\'t reach the server. Pull down to try again.'));
+                if (!cached) renderEmpty(page, 'Couldn\'t reach the server. Pull down to try again.');
                 return;
             }
 
@@ -243,7 +251,7 @@ window.WnRouter = (function () {
             // live-update.js applies a staged bundle at the next screen change instead of the
             // next launch once this has happened (contactswipe task #2862).
             document.dispatchEvent(new CustomEvent('wn:needs-build', { detail: { page: page } }));
-            if (!cached) render(page, emptyState(page, 'This screen needs an app update.'));
+            if (!cached) renderEmpty(page, 'This screen needs an app update.');
             toasts(json);
             return;
         }
@@ -418,6 +426,9 @@ window.WnRouter = (function () {
     }
 
     function reload() { go(location.hash, false); }
+
+    /** Draw an empty-state message in a screen without running the screen's code. */
+    function renderEmpty(page, msg) { render(page, emptyState(page, msg), true); }
 
     function emptyState(page, msg) {
         return '<div class="text-center text-muted py-5"><p class="mb-0">' + msg + '</p></div>';
