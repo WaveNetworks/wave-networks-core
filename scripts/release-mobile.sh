@@ -123,6 +123,15 @@ fi
 # e.g. a face finder). The shell references none of them, so the
 # ref-derived vendor step above never sees them. Copied whole to the SAME relative path the
 # web serves (assets/lazy/), and the size is printed because it all ships in the bundle.
+# Folders an app packages for use offline / without the network (MOBILE_BUNDLE_DIRS, space-
+# separated, relative to the app root), e.g. pwt's card art. Same relative path as on the web;
+# the app decides when to use the packaged copy (its wnMarkupFilter / media helper).
+for d in ${MOBILE_BUNDLE_DIRS:-}; do
+    [[ "$d" == /* || "$d" == *..* ]] && { echo "   ✗ MOBILE_BUNDLE_DIRS entry must be app-relative: $d" >&2; exit 1; }
+    [[ -d "$d" ]] || { echo "   ✗ MOBILE_BUNDLE_DIRS: $d not found" >&2; exit 1; }
+    mkdir -p "m/$(dirname "$d")" && rm -rf "m/$d" && cp -r "$d" "m/$d"
+    echo "   $d → bundle: $(du -sh "m/$d" | cut -f1)"
+done
 if [[ -d assets/lazy ]]; then
     cp -r assets/lazy m/assets/
     echo "   assets/lazy → bundle: $(du -sh m/assets/lazy | cut -f1)"

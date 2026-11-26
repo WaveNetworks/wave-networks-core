@@ -69,6 +69,12 @@ window.WnRouter = (function () {
      */
     function render(page, markup) {
         var el = section(page);
+        // App hook: rewrite the fragment before it is drawn, e.g. point media the bundle
+        // carries at the bundle instead of the server (pwt packages its card art). Optional;
+        // a filter that throws or returns nothing leaves the markup as it was.
+        if (typeof window.wnMarkupFilter === 'function') {
+            try { markup = window.wnMarkupFilter(markup, page) || markup; } catch (e) {}
+        }
         el.innerHTML = markup;
         activate(page);
         document.body.classList.add('wn-ready');
