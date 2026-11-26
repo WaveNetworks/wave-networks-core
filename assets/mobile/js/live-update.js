@@ -86,6 +86,7 @@
                 .then(function (res) {
                     if (!res || !res.nextBundleId) { return; }
                     staged = true;
+                    if (typeof LiveUpdate.getCurrentBundle !== 'function') { applyIfDue(); return; }
                     return LiveUpdate.getCurrentBundle().then(function (cur) {
                         if (!cur || !cur.bundleId) { stale = true; }   // still the store bake
                     }, function () {});
