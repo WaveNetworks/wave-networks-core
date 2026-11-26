@@ -585,3 +585,19 @@ window.WnRouter = (function () {
  * hoisted code needs no edit — it just re-fetches the fragment instead of the page.
  */
 window.reloadView = function () { window.WnRouter.reload(); };
+
+/**
+ * Same idea for spaNavigate(url), desktop spa-nav.js's "open this screen". Views call it with
+ * an "index.php?page=x&id=5" URL. Without it on the device, their `if (window.spaNavigate)`
+ * fallback did `location.href = url`, which on app://localhost / https://localhost points at a
+ * file the bundle does not have: the WebView goes nowhere, or blank. (pwt TestFlight 11-26: a
+ * three-card pull dealt the cards, then sat on the Oracle screen forever.) A URL with no
+ * page= (an outside link) still navigates the normal way.
+ */
+window.spaNavigate = function (url) {
+    var m = String(url || '').match(/[?&]page=([^&#]+)([^#]*)/);
+    if (!m) { window.location.href = url; return; }
+    var extra = (m[2] || '').replace(/^&/, '').split('&')
+        .filter(function (kv) { return kv && !/^(page|reloadView|mobile)=/.test(kv); }).join('&');
+    location.hash = '#/' + decodeURIComponent(m[1]) + (extra ? '?' + extra : '');
+};
