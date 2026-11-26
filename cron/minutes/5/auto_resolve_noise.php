@@ -39,6 +39,9 @@ $noisePatterns = [
     '%favicon.ico%',
     '%favicon.svg%',
     '%/admin/api/index.php%',
+    // Dependency-manifest probes (e.g. /nokemo/node_modules/picomatch/package.json,
+    // task #2837). Every deploy excludes node_modules, so a 404 there is always a scanner.
+    '%/node_modules/%',
 ];
 // Host-specific noise (e.g. another app's API path on a shared host) comes
 // from config: $noise_url_patterns = ['%/some/path%', ...];
