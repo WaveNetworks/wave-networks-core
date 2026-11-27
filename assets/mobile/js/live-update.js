@@ -91,7 +91,14 @@
                         if (!cur || !cur.bundleId) { stale = true; }   // still the store bake
                     }, function () {});
                 })
-                .catch(report('sync'));
+                .catch(function (err) {
+                    // "Sync is already in progress" (pwt error 1044, nokemo task #2870): another
+                    // sync — the plugin's own on start/resume, or a second boot of this file —
+                    // got there first and is staging the same bundle. Nothing failed, so it is
+                    // not an error report; that sync's result applies on the next launch.
+                    if (/already in progress/i.test(String((err && err.message) || err))) { return; }
+                    report('sync')(err);
+                });
         }, { once: true });
     }, false);
 })();
