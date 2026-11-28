@@ -43,7 +43,7 @@ window.WnRouter = (function () {
         return el;
     }
 
-    function activate(page) {
+    function activate(page, keepScroll) {
         mount.querySelectorAll('[data-screen]').forEach(function (s) {
             s.removeAttribute('data-active');
         });
@@ -52,7 +52,10 @@ window.WnRouter = (function () {
         // Login owns the whole viewport — the template chrome (sidebar/topnav) is hidden.
         document.body.classList.toggle('wn-chromeless', page === 'login');
 
-        window.scrollTo(0, 0);
+        // A new screen starts at the top. The SAME screen re-drawn (the fresh fragment replacing
+        // the cached one, or a reload after a write) keeps the reader where they were: scrolling
+        // here yanked them to the top a moment after they started reading (pwt journey, 11-28).
+        if (!keepScroll) window.scrollTo(0, 0);
         current = page;
 
         // Let shell.js reflect the active screen in the template's sidebar/topnav.
@@ -75,8 +78,15 @@ window.WnRouter = (function () {
         if (typeof window.wnMarkupFilter === 'function') {
             try { markup = window.wnMarkupFilter(markup, page) || markup; } catch (e) {}
         }
+        var same = current === page && el.hasAttribute('data-active');
+        var y = window.scrollY || window.pageYOffset || 0;
         el.innerHTML = markup;
-        activate(page);
+        activate(page, same);
+        if (same && y) {
+            window.scrollTo(0, y);
+            // The new markup's images can still be loading; hold the place once more after layout.
+            requestAnimationFrame(function () { if (Math.abs((window.scrollY || 0) - y) > 2) window.scrollTo(0, y); });
+        }
         document.body.classList.add('wn-ready');
 
         // A placeholder (offline / couldn't reach the server / needs an app update) is
