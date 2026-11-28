@@ -169,7 +169,7 @@ window.WnRouter = (function () {
             .catch(function (err) { cb(err); });
     }
 
-    function go(hash, push) {
+    function go(hash, push, fresh) {
         var r = parse(hash);
         var page = r.page;
         var params = r.params;
@@ -197,8 +197,13 @@ window.WnRouter = (function () {
 
         // Show the cached render immediately — the app should never look dead while
         // the network is thinking. It is replaced in place when the fetch lands.
+        // NOT on a reload (fresh): a reload follows a write, and the cached markup is the state
+        // from BEFORE it. Rendering it re-ran the screen's code on stale state: pwt's journey
+        // scene still said "new", started the scene again, the server answered "done" at once,
+        // the screen reloaded again, and so on ~50 times until the fetch won the race.
+        // (The screen already on show stays up meanwhile, and stays if the fetch fails.)
         var cached = WnStore.get(page, params);
-        if (cached) render(page, cached.markup);
+        if (cached && !fresh) render(page, cached.markup);
 
         if (!Platform.online()) {
             document.body.classList.add('wn-offline');
@@ -425,7 +430,7 @@ window.WnRouter = (function () {
         };
     }
 
-    function reload() { go(location.hash, false); }
+    function reload() { go(location.hash, false, true); }
 
     /** Draw an empty-state message in a screen without running the screen's code. */
     function renderEmpty(page, msg) { render(page, emptyState(page, msg), true); }
