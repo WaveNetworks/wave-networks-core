@@ -41,6 +41,12 @@ window.WnScreens = (function () {
             } catch (e) {
                 // One screen's script must not take down the shell.
                 console.error('[viv] screen "' + page + '" failed to initialise:', e);
+                // Report it: a screen that died here shows its server-drawn markup with nothing
+                // working, and the console is on a phone no one can see (pwt journey, 11-28).
+                if (window.WnReport) {
+                    var where = (e && e.stack ? String(e.stack).split('\n').slice(0, 3).join(' | ') : '');
+                    WnReport.signal('init-fail', page + ': ' + (e && e.message ? e.message : String(e)) + (where ? ' @ ' + where.slice(0, 300) : ''));
+                }
             }
         },
 
